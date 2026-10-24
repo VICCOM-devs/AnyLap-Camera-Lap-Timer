@@ -52,6 +52,6 @@ jobs:
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -configuration Debug CODE_SIGNING_ALLOWED=NO build > xcode.log 2>&1 || status=$?
           tail -80 xcode.log
-          grep -E 'error:|^e: ' xcode.log | sort -u | head -30 \
+          grep -E -A4 'error:|^e: |What went wrong' xcode.log | grep -v '^--$' | head -30 \
             | awk '{ lvl = (NR<=10) ? "error" : (NR<=20 ? "warning" : "notice"); print "::" lvl "::" $0 }' || true
           exit $status

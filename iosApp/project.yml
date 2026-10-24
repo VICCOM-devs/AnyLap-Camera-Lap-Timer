@@ -53,6 +53,8 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           cd "$SRCROOT/.."
+          # Unsigned CI builds have no signing identity; give Gradle an ad-hoc one.
+          if [ -z "$EXPANDED_CODE_SIGN_IDENTITY" ]; then export EXPANDED_CODE_SIGN_IDENTITY="-"; fi
           ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
 schemes:
   AnyLap:
