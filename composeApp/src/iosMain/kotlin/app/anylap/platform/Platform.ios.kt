@@ -41,6 +41,8 @@ import platform.UIKit.UIViewController
 import platform.UIKit.UIWindow
 import platform.UIKit.UIWindowScene
 import platform.UIKit.UIWindowSceneGeometryPreferencesIOS
+import platform.UIKit.popoverPresentationController
+import platform.UIKit.setNeedsUpdateOfSupportedInterfaceOrientations
 import platform.posix.memcpy
 
 actual object Platform {

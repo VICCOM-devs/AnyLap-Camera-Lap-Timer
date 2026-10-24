@@ -35,6 +35,16 @@ import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.get
 import kotlinx.cinterop.reinterpret
+import platform.AVFoundation.isExposureModeSupported
+import platform.AVFoundation.exposureMode
+import platform.AVFoundation.isWhiteBalanceModeSupported
+import platform.AVFoundation.whiteBalanceMode
+import platform.AVFoundation.isFocusModeSupported
+import platform.AVFoundation.focusMode
+import platform.AVFoundation.exposureDuration
+import platform.AVFoundation.ISO
+import platform.AVFoundation.defaultDeviceWithDeviceType
+import kotlinx.cinterop.plus
 import kotlinx.cinterop.useContents
 import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.flow.MutableStateFlow
