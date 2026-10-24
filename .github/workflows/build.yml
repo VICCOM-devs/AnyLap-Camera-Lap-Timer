@@ -50,7 +50,7 @@ jobs:
           status=0
           xcodebuild -project iosApp/AnyLap.xcodeproj -scheme AnyLap \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug CODE_SIGNING_ALLOWED=NO build > xcode.log 2>&1 || status=$?
+            -configuration Debug ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build > xcode.log 2>&1 || status=$?
           tail -80 xcode.log
           grep -E -A4 'error:|^e: |What went wrong' xcode.log | grep -v '^--$' | head -30 \
             | awk '{ lvl = (NR<=10) ? "error" : (NR<=20 ? "warning" : "notice"); print "::" lvl "::" $0 }' || true
