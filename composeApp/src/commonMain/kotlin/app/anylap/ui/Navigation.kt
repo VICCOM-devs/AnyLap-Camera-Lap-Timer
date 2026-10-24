@@ -1,0 +1,64 @@
+package app.anylap.ui
+
+import app.anylap.ui.LocalApp
+import app.anylap.ui.Navigator
+import app.anylap.ui.Screen
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.staticCompositionLocalOf
+import app.anylap.data.Repository
+import app.anylap.data.SessionConfig
+
+sealed interface Screen {
+    data object Home : Screen
+    data object Race : Screen
+    data object Stats : Screen
+    data object Racers : Screen
+    data object Settings : Screen
+    data object Live : Screen
+    data class RacerEdit(val id: String) : Screen
+    data class Calibrate(val id: String) : Screen
+    data class Results(val id: String) : Screen
+    data class Replay(val sessionId: String, val racerId: String, val lap: Int) : Screen
+
+    val isTab: Boolean get() = this == Home || this == Race || this == Stats || this == Racers
+}
+
+/** Tiny stack navigator: identical on Android and iOS, no extra library. */
+class Navigator {
+    val stack = mutableStateListOf<Screen>(Screen.Home)
+    val current: Screen get() = stack.last()
+
+    fun push(s: Screen) {
+        stack.add(s)
+    }
+
+    /** @return false if already at the root. */
+    fun pop(): Boolean {
+        if (stack.size <= 1) return false
+        stack.removeAt(stack.lastIndex)
+        return true
+    }
+
+    /** Switch bottom-bar tab: Home stays at the root. */
+    fun tab(s: Screen) {
+        stack.clear()
+        stack.add(Screen.Home)
+        if (s != Screen.Home) stack.add(s)
+    }
+
+    /** Replace the current screen (e.g. Live → Results). */
+    fun replace(s: Screen) {
+        stack[stack.lastIndex] = s
+    }
+}
+
+/** App-wide state shared by all screens. */
+class AppState {
+    val repo = Repository()
+
+    /** Hand-off from the setup screen to the live screen. */
+    var pendingConfig: SessionConfig? = null
+}
+
+val LocalApp = staticCompositionLocalOf<AppState> { error("No AppState") }
+val LocalNav = staticCompositionLocalOf<Navigator> { error("No Navigator") }
