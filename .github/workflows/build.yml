@@ -32,12 +32,26 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Compile shared code for iOS
-        run: ./gradlew :composeApp:compileKotlinIosSimulatorArm64 --stacktrace
+        shell: bash
+        run: |
+          status=0
+          ./gradlew :composeApp:compileKotlinIosSimulatorArm64 --continue > gradle-ios.log 2>&1 || status=$?
+          tail -60 gradle-ios.log
+          # Surface compiler errors as annotations (readable through the GitHub API).
+          # (10 errors + 10 warnings + 10 notices per step are kept by GitHub, so spread them.)
+          grep -E '^e: ' gradle-ios.log | head -30 | sed -E 's#^e: file://[^ ]*/composeApp/src/([^:]+):([0-9]+):([0-9]+) (.*)#\1:\2:\3 \4#' \
+            | awk '{ lvl = (NR<=10) ? "error" : (NR<=20 ? "warning" : "notice"); print "::" lvl "::" $0 }' || true
+          exit $status
       - name: Generate Xcode project
         run: brew install xcodegen && cd iosApp && xcodegen
       - name: Build iOS app (simulator, unsigned)
+        shell: bash
         run: |
+          status=0
           xcodebuild -project iosApp/AnyLap.xcodeproj -scheme AnyLap \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug CODE_SIGNING_ALLOWED=NO build | tail -50
-          test ${PIPESTATUS[0]} -eq 0
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build > xcode.log 2>&1 || status=$?
+          tail -80 xcode.log
+          grep -E 'error:|^e: ' xcode.log | sort -u | head -30 \
+            | awk '{ lvl = (NR<=10) ? "error" : (NR<=20 ? "warning" : "notice"); print "::" lvl "::" $0 }' || true
+          exit $status
