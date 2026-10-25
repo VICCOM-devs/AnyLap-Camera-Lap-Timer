@@ -59,6 +59,23 @@ import app.anylap.ui.components.Tag
 import app.anylap.ui.components.TileRow
 import app.anylap.ui.components.TimelineItem
 import app.anylap.ui.theme.RT
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import app.anylap.ui.components.AvatarStack
+import app.anylap.ui.components.BrandWordmark
+import app.anylap.ui.components.ChequeredMark
+import app.anylap.ui.components.StripeCard
+import app.anylap.ui.components.speedLines
+import app.anylap.ui.components.uiColor
+import app.anylap.ui.theme.Num
 
 @Composable
 fun HomeScreen() {
@@ -74,8 +91,9 @@ fun HomeScreen() {
 
     ScreenScaffold(
         title = "AnyLap",
-        subtitle = Platform.formatDate(Platform.nowMillis(), "EEEE, d MMMM"),
-        actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }) },
+        subtitle = Platform.formatDate(Platform.nowMillis(), "EEEE d MMMM"),
+        titleSlot = { BrandWordmark() },
+        actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = "Settings") },
     ) {
         item {
             PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
@@ -143,80 +161,73 @@ fun HomeScreen() {
 
 @Composable
 private fun HeroCard(sport: Sport, racerCount: Int, calibrated: Int, onStart: () -> Unit, onRacers: () -> Unit) {
-    RtCard(Modifier.fillMaxWidth(), highlight = RT.AccentDeep, padding = 18.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("READY TO RACE", style = MaterialTheme.typography.labelSmall, color = RT.Accent)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    if (sport == Sport.RC) "Line up your cars" else "Line up your runners",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "$racerCount ${sport.unitName}${if (racerCount == 1) "" else "s"} · $calibrated ready · max ${sport.maxRacers}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Icon(
-                if (sport == Sport.RC) Icons.Rounded.SportsMotorsports else Icons.Rounded.DirectionsRun,
-                null,
-                tint = RT.Accent.copy(alpha = 0.9f),
-                modifier = Modifier.padding(start = 8.dp).width(46.dp).height(46.dp),
+    val shape = RoundedCornerShape(26.dp)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(Color(0xFF5A0A0D), Color(0xFF1E0A0C), RT.Surface)))
+            .border(1.dp, RT.AccentDeep, shape),
+    ) {
+        // Backdrop: speed lines + a big chequered flag bleeding off the corner.
+        Canvas(Modifier.matchParentSize()) { speedLines(size, alpha = 0.06f) }
+        ChequeredMark(Modifier.align(Alignment.TopEnd).offset(x = 26.dp, y = (-14).dp).size(150.dp).alpha(0.22f))
+        Column(Modifier.padding(20.dp)) {
+            Text("READY TO RACE", style = MaterialTheme.typography.labelSmall, color = RT.AccentHot)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (sport == Sport.RC) "LINE UP\nYOUR CARS" else "LINE UP\nYOUR RUNNERS",
+                style = MaterialTheme.typography.displaySmall.copy(lineHeight = 34.sp),
             )
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryButton("New session", onStart, Modifier.weight(1f), icon = Icons.Rounded.Flag)
-            SecondaryButton("Racers", onRacers)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Tag("$racerCount ${sport.unitName}${if (racerCount == 1) "" else "s"}", RT.Text)
+                Tag("$calibrated ready", if (calibrated > 0) RT.Green else RT.Amber)
+                Tag("max ${sport.maxRacers}", RT.TextDim)
+            }
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PrimaryButton("New session", onStart, Modifier.weight(1f), icon = Icons.Rounded.Flag)
+                SecondaryButton("Racers", onRacers, icon = Icons.Rounded.Groups)
+            }
         }
     }
 }
 
 @Composable
 private fun SessionCard(s: Session, onClick: () -> Unit) {
-    val winner = s.order.firstOrNull()?.let { s.racer(it) }
-    val fastest = Stats.fastestLap(s)
-    RtCard(Modifier.fillMaxWidth(), onClick = onClick, padding = 14.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(s.title, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.width(8.dp))
-                    Tag(s.config.mode.short, RT.TextDim)
-                }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    Platform.formatDate(s.startedAt, "HH:mm") +
-                        " · ${s.racers.size} ${s.config.sport.unitName}${if (s.racers.size == 1) "" else "s"} · ${s.laps.size} laps",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+    val podium = remember(s.id) { s.order.take(3).mapNotNull { s.racer(it) } }
+    val fastest = remember(s.id) { Stats.fastestLap(s) }
+    val stripe = podium.firstOrNull()?.uiColor ?: RT.Accent
+    StripeCard(stripe, Modifier.fillMaxWidth(), onClick = onClick) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(s.title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Spacer(Modifier.width(8.dp))
+                Tag(s.config.mode.short, RT.TextDim)
             }
-            if (winner != null) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Box {
-                        RacerAvatar(winner, 38.dp, ring = RT.Gold)
-                        Icon(
-                            Icons.Rounded.EmojiEvents, null, tint = RT.Gold,
-                            modifier = Modifier.width(14.dp).height(14.dp).align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp),
-                        )
-                    }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                Platform.formatDate(s.startedAt, "HH:mm") +
+                    " · ${s.racers.size} ${s.config.sport.unitName}${if (s.racers.size == 1) "" else "s"} · ${s.laps.size} laps",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (fastest != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Timer, null, tint = RT.Purple, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(Format.lap(fastest.timeMs), color = RT.Purple, style = Num.style(15.sp, FontWeight.Bold))
+                    Text(" · ${s.racer(fastest.racerId)?.name ?: ""}", style = MaterialTheme.typography.bodySmall, maxLines = 1)
                 }
             }
         }
-        if (fastest != null) {
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Timer, null, tint = RT.Purple, modifier = Modifier.width(14.dp).height(14.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    "Fastest ${Format.lap(fastest.timeMs)}",
-                    color = RT.Purple, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                )
-                Text(
-                    " · ${s.racer(fastest.racerId)?.name ?: ""}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+        if (podium.isNotEmpty()) {
+            Spacer(Modifier.width(10.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Icon(Icons.Rounded.EmojiEvents, "Winner", tint = RT.Gold, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.height(4.dp))
+                AvatarStack(podium, 30.dp)
             }
         }
     }

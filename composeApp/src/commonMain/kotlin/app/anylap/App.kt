@@ -88,6 +88,11 @@ fun App() {
                     }
                 }
                 if (nav.current.isTab) {
+                    // Fade the content out under the floating bar.
+                    Box(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(130.dp)
+                            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, RT.Bg.copy(alpha = 0.92f), RT.Bg))),
+                    )
                     BottomBar(nav, Modifier.align(Alignment.BottomCenter))
                 }
             }
@@ -113,7 +118,7 @@ private fun BottomBar(nav: Navigator, modifier: Modifier = Modifier) {
             .padding(horizontal = 18.dp, vertical = 10.dp)
             .fillMaxWidth()
             .clip(shape)
-            .background(Color(0xF2141417))
+            .background(RT.Surface2)
             .border(1.dp, RT.Stroke, shape)
             .padding(6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

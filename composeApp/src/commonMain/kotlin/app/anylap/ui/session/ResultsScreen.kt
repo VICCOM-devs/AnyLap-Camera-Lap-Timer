@@ -76,6 +76,7 @@ import app.anylap.ui.components.StatTile
 import app.anylap.ui.components.Tag
 import app.anylap.ui.components.TileRow
 import app.anylap.ui.components.uiColor
+import app.anylap.ui.theme.Num
 import app.anylap.ui.theme.RT
 
 @Composable
@@ -333,7 +334,7 @@ private fun RacerSummary(s: Session, r: Racer, pos: Int, kmh: Boolean) {
 private fun MiniStat(label: String, value: String, modifier: Modifier, color: Color = RT.Text) {
     Column(modifier.clip(RoundedCornerShape(12.dp)).background(RT.Surface2).padding(10.dp)) {
         Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-        Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 15.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+        Text(value, color = color, style = Num.style(17.sp, FontWeight.Bold), maxLines = 1)
     }
 }
 
@@ -387,8 +388,7 @@ private fun LapTable(s: Session, racers: List<Racer>, onLap: (Racer, Int) -> Uni
                             ) {
                                 Text(
                                     lap?.let { Format.lap(it.timeMs) } ?: "",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 13.sp,
+                                    style = Num.style(14.sp, FontWeight.SemiBold),
                                     color = when {
                                         isFastest -> RT.Purple
                                         isPb -> RT.Green

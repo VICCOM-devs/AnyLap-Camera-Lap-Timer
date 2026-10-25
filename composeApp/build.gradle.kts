@@ -41,7 +41,24 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        val androidUnitTest by getting {
+            dependencies {
+                // Screenshot tests (Robolectric renders the real Compose UI on the JVM).
+                implementation("junit:junit:4.13.2")
+                implementation("org.robolectric:robolectric:4.16")
+                implementation("androidx.test:core:1.6.1")
+                implementation("androidx.compose.ui:ui-test-junit4:1.9.4")
+                implementation("io.github.takahirom.roborazzi:roborazzi:1.52.0")
+                implementation("io.github.takahirom.roborazzi:roborazzi-compose:1.52.0")
+            }
+        }
     }
+}
+
+compose.resources {
+    packageOfResClass = "app.anylap.resources"
+    publicResClass = false
+    generateResClass = always
 }
 
 android {
@@ -69,4 +86,17 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.systemProperty("roborazzi.test.record", "true")
+                it.maxHeapSize = "3g"
+            }
+        }
+    }
+}
+
+dependencies {
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.9.4")
 }

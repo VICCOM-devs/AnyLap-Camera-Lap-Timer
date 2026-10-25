@@ -38,6 +38,8 @@ import app.anylap.ui.components.PillTabs
 import app.anylap.ui.components.PrimaryButton
 import app.anylap.ui.components.RacerAvatar
 import app.anylap.ui.components.RtCard
+import app.anylap.ui.components.StripeCard
+import app.anylap.ui.components.uiColor
 import app.anylap.ui.components.ScreenScaffold
 import app.anylap.ui.components.SecondaryButton
 import app.anylap.ui.components.SectionLabel
@@ -95,7 +97,7 @@ fun RacersScreen(nav: Navigator) {
 
 @Composable
 private fun RacerRow(r: Racer, onClick: () -> Unit) {
-    RtCard(Modifier.fillMaxWidth(), onClick = onClick, padding = 14.dp) {
+    StripeCard(r.uiColor, Modifier.fillMaxWidth(), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RacerAvatar(r, 48.dp)
             Spacer(Modifier.width(14.dp))

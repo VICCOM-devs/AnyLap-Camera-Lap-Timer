@@ -114,6 +114,16 @@ fun LineChart(
                 pts.forEachIndexed { i, (x, y) ->
                     if (i == 0) path.moveTo(px(x), py(y)) else path.lineTo(px(x), py(y))
                 }
+                if (series.size == 1 && !invertY && pts.size > 1) {
+                    // Soft area fill under a single line.
+                    val area = Path().apply {
+                        addPath(path)
+                        lineTo(px(pts.last().first), bottom)
+                        lineTo(px(pts.first().first), bottom)
+                        close()
+                    }
+                    drawPath(area, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(s.color.copy(alpha = 0.28f), Color.Transparent), startY = top, endY = bottom))
+                }
                 drawPath(path, s.color, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                 for ((x, y) in pts) {
                     drawCircle(RT.Bg, radius = 4.dp.toPx(), center = Offset(px(x), py(y)))

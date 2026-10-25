@@ -52,6 +52,7 @@ import app.anylap.data.Racer
 import app.anylap.data.SessionConfig
 import app.anylap.data.Sport
 import app.anylap.ui.components.PillTabs
+import app.anylap.ui.components.RtSlider
 import app.anylap.ui.components.PrimaryButton
 import app.anylap.ui.components.RacerAvatar
 import app.anylap.ui.components.RtCard
@@ -177,11 +178,10 @@ fun SetupScreen(nav: Navigator) {
                     }
                     Text("${(cfg.cameraDistanceM).fixed(1)} m", style = MaterialTheme.typography.titleLarge)
                 }
-                Slider(
+                RtSlider(
                     value = cfg.cameraDistanceM,
                     onValueChange = { cfg = cfg.copy(cameraDistanceM = (kotlin.math.round(it * 2) / 2f)) },
                     valueRange = 0.5f..15f,
-                    colors = SliderDefaults.colors(thumbColor = RT.Accent, activeTrackColor = RT.Accent, inactiveTrackColor = RT.Surface3),
                 )
                 Text(
                     if (cfg.sport == Sport.RC) "Tip: 1.5–4 m works well for 1/28–1/10 cars. Point the camera across the track, square to it."

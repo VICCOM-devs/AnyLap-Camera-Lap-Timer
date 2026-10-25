@@ -49,7 +49,9 @@ import app.anylap.ui.components.CameraScreenMode
 import app.anylap.ui.components.CircleIconButton
 import app.anylap.ui.components.PillTabs
 import app.anylap.ui.components.RacerAvatar
+import app.anylap.ui.theme.Num
 import app.anylap.ui.theme.RT
+import app.anylap.ui.components.RtSlider
 import kotlin.math.abs
 
 private val SPEEDS = listOf(0.25f, 0.5f, 1f)
@@ -101,9 +103,7 @@ fun ReplayScreen(nav: Navigator, sessionId: String, racerId: String, lapNumber: 
             Text(
                 (if (rel >= 0) "+" else "") + Format.lap(rel),
                 color = if (abs(rel) < 40) RT.Accent else Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
+                style = Num.style(20.sp, FontWeight.Bold),
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).clip(RoundedCornerShape(8.dp))
                     .background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 10.dp, vertical = 4.dp),
             )
@@ -130,13 +130,13 @@ fun ReplayScreen(nav: Navigator, sessionId: String, racerId: String, lapNumber: 
             }
             PillTabs(listOf("Finish", "Whole lap"), wholeLap, { wholeLap = it; seekTo = null }, Modifier.fillMaxWidth())
             PillTabs(listOf("0.25x", "0.5x", "1x"), speedIdx, { speedIdx = it }, Modifier.fillMaxWidth())
-            Slider(
+            RtSlider(
                 value = ((positionMs - startMs).toFloat() / (endMs - startMs).coerceAtLeast(1)).coerceIn(0f, 1f),
                 onValueChange = { f ->
                     playing = false
                     seekTo = (startMs + f * (endMs - startMs)).toLong()
                 },
-                colors = SliderDefaults.colors(thumbColor = RT.Accent, activeTrackColor = RT.Accent, inactiveTrackColor = RT.Surface3),
+                valueRange = 0f..1f,
             )
             Box(
                 Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(16.dp)).background(RT.Accent)
