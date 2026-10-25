@@ -7,6 +7,11 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import app.anylap.data.Repository
 import app.anylap.data.SessionConfig
+import app.anylap.pro.Billing
+import app.anylap.pro.LocalBilling
+import app.anylap.pro.ProFeature
+import app.anylap.pro.Tier
+import kotlinx.coroutines.flow.StateFlow
 
 sealed interface Screen {
     data object Home : Screen
@@ -19,6 +24,7 @@ sealed interface Screen {
     data class Calibrate(val id: String) : Screen
     data class Results(val id: String) : Screen
     data class Replay(val sessionId: String, val racerId: String, val lap: Int) : Screen
+    data class Paywall(val feature: ProFeature? = null) : Screen
 
     val isTab: Boolean get() = this == Home || this == Race || this == Stats || this == Racers
 }
@@ -55,6 +61,8 @@ class Navigator {
 /** App-wide state shared by all screens. */
 class AppState {
     val repo = Repository()
+    val billing: Billing = LocalBilling(repo)
+    val tier: StateFlow<Tier> get() = billing.tier
 
     /** Hand-off from the setup screen to the live screen. */
     var pendingConfig: SessionConfig? = null

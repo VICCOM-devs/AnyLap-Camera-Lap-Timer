@@ -45,6 +45,9 @@ import app.anylap.ui.components.SecondaryButton
 import app.anylap.ui.components.SectionLabel
 import app.anylap.ui.components.Tag
 import app.anylap.ui.theme.RT
+import app.anylap.pro.Limits
+import app.anylap.pro.ProFeature
+import app.anylap.ui.pro.currentTier
 
 @Composable
 fun RacersScreen(nav: Navigator) {
@@ -53,13 +56,14 @@ fun RacersScreen(nav: Navigator) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val sport = if (tab == 0) Sport.RC else Sport.RUNNING
     val list = racers.filter { it.sport == sport }.sortedBy { it.number }
+    val tier = currentTier()
 
     ScreenScaffold(title = "Racers", subtitle = "Profiles, calibration and bibs") {
         item { PillTabs(listOf("RC cars", "Runners"), tab, { tab = it }, Modifier.fillMaxWidth()) }
         item {
             SectionLabel(
                 if (sport == Sport.RC) "Your cars" else "Your runners",
-                trailing = { Text("${list.size} saved · ${sport.maxRacers} per race", style = MaterialTheme.typography.bodySmall) },
+                trailing = { Text("${list.size} saved · ${Limits.maxRacers(sport, tier)} per race", style = MaterialTheme.typography.bodySmall) },
             )
         }
         if (list.isEmpty()) {
@@ -86,8 +90,8 @@ fun RacersScreen(nav: Navigator) {
                     icon = Icons.Rounded.Add,
                 )
                 if (sport == Sport.RUNNING && list.isNotEmpty()) {
-                    SecondaryButton("All bibs", onClick = {
-                        BibPdf.share(list)
+                    SecondaryButton(if (tier.isPro) "All bibs" else "Bibs · Pro", onClick = {
+                        if (tier.isPro) BibPdf.share(list) else nav.push(Screen.Paywall(ProFeature.BIBS))
                     }, icon = Icons.Rounded.Print)
                 }
             }

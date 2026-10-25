@@ -82,6 +82,8 @@ data class AllTimeStats(
     val bestLapTrend: List<Pair<Long, Long>>,
     /** (session start epoch ms, consistency %) oldest first. */
     val consistencyTrend: List<Pair<Long, Double>>,
+    /** (session start epoch ms, top speed at the line that session) oldest first. */
+    val speedTrend: List<Pair<Long, Float>> = emptyList(),
 )
 
 object Stats {
@@ -148,6 +150,7 @@ object Stats {
         var dist = 0.0
         val trend = ArrayList<Pair<Long, Long>>()
         val cons = ArrayList<Pair<Long, Double>>()
+        val speed = ArrayList<Pair<Long, Float>>()
         for (s in mine) {
             val st = forRacer(s, racer.id)
             laps += st.laps
@@ -156,7 +159,10 @@ object Stats {
                 if (best == null || it < best!!) { best = it; bestAt = s.startedAt }
             }
             st.consistencyPct?.let { cons += s.startedAt to it }
-            st.topSpeedKmh?.let { if (top == null || it > top!!) top = it }
+            st.topSpeedKmh?.let {
+                speed += s.startedAt to it
+                if (top == null || it > top!!) top = it
+            }
             st.distanceM?.let { dist += it }
             if (s.config.mode != RaceMode.PRACTICE && s.racers.size > 1) {
                 val pos = s.order.indexOf(racer.id)
@@ -164,7 +170,7 @@ object Stats {
                 if (pos in 0..2) podiums++
             }
         }
-        return AllTimeStats(racer, mine.size, laps, best, bestAt, top, wins, podiums, dist, trend, cons)
+        return AllTimeStats(racer, mine.size, laps, best, bestAt, top, wins, podiums, dist, trend, cons, speed)
     }
 
     fun totals(sessions: List<Session>, sport: Sport?): Triple<Int, Int, Long?> {

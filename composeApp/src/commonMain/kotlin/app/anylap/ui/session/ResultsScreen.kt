@@ -78,6 +78,10 @@ import app.anylap.ui.components.TileRow
 import app.anylap.ui.components.uiColor
 import app.anylap.ui.theme.Num
 import app.anylap.ui.theme.RT
+import app.anylap.pro.Limits
+import app.anylap.pro.ProFeature
+import app.anylap.ui.pro.ProLockCard
+import app.anylap.ui.pro.currentTier
 
 @Composable
 fun ResultsScreen(nav: Navigator, sessionId: String) {
@@ -94,6 +98,13 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
         }
         return
     }
+    val tier = currentTier()
+    if (!Limits.canOpenSession(s.id, sessions, tier)) {
+        ScreenScaffold(s.title, onBack = { nav.pop() }) {
+            item { ProLockCard(nav, ProFeature.HISTORY) }
+        }
+        return
+    }
     val hasVideo = s.videoPath != null && Platform.exists(s.videoPath)
     val ordered = s.order.mapNotNull { s.racer(it) } + s.racers.filterNot { it.id in s.order }
 
@@ -103,7 +114,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
             " · " + Format.duration(s.durationMs),
         onBack = { nav.tab(Screen.Home) },
         actions = {
-            CircleIconButton(Icons.Rounded.Share, { shareResults(s) })
+            CircleIconButton(Icons.Rounded.Share, { shareResults(s, branded = !tier.isPro) })
         },
         bottomPadding = 40.dp,
     ) {
@@ -438,7 +449,7 @@ private fun ReplayCard(title: String, subtitle: String, racer: Racer, highlight:
     }
 }
 
-private fun shareResults(s: Session) {
+private fun shareResults(s: Session, branded: Boolean) {
     val sb = StringBuilder()
     sb.appendLine("${s.title} – ${Platform.formatDate(s.startedAt, "d MMM yyyy HH:mm")}")
     val ordered = s.order.mapNotNull { s.racer(it) }
@@ -447,5 +458,6 @@ private fun shareResults(s: Session) {
         sb.appendLine("P${i + 1} ${r.name}: ${st.laps} laps, best ${Format.lap(st.bestMs)}, avg ${Format.lap(st.avgMs)}")
     }
     Stats.fastestLap(s)?.let { f -> sb.appendLine("Fastest lap: ${s.racer(f.racerId)?.name} ${Format.lap(f.timeMs)}") }
+    if (branded) sb.appendLine().append("Timed with AnyLap – camera lap timer · viccom.se")
     Platform.shareText(sb.toString(), "Share results")
 }

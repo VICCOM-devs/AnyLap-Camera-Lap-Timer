@@ -62,6 +62,9 @@ import app.anylap.ui.components.SectionLabel
 import app.anylap.ui.components.Stepper
 import app.anylap.ui.components.Tag
 import app.anylap.ui.theme.RT
+import app.anylap.pro.Limits
+import app.anylap.pro.ProFeature
+import app.anylap.ui.pro.currentTier
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -72,7 +75,9 @@ fun SetupScreen(nav: Navigator) {
     var cfg by remember { mutableStateOf(settings.lastConfig) }
 
     val sportRacers = allRacers.filter { it.sport == cfg.sport }.sortedBy { it.number }
-    val selected = cfg.racerIds.filter { id -> sportRacers.any { it.id == id } }
+    val tier = currentTier()
+    val maxRacers = Limits.maxRacers(cfg.sport, tier)
+    val selected = cfg.racerIds.filter { id -> sportRacers.any { it.id == id } }.take(maxRacers)
 
     fun setSport(s: Sport) {
         if (s == cfg.sport) return
@@ -121,7 +126,7 @@ fun SetupScreen(nav: Navigator) {
             SectionLabel(
                 "Racers",
                 Icons.Rounded.Groups,
-                trailing = { Tag("${selected.size}/${cfg.sport.maxRacers}", if (selected.isEmpty()) RT.Amber else RT.Green) },
+                trailing = { Tag("${selected.size}/$maxRacers", if (selected.isEmpty()) RT.Amber else RT.Green) },
             )
         }
         item {
@@ -138,12 +143,22 @@ fun SetupScreen(nav: Navigator) {
                             val isSel = r.id in selected
                             RacerChip(r, isSel) {
                                 cfg = if (isSel) cfg.copy(racerIds = selected - r.id)
-                                else if (selected.size < cfg.sport.maxRacers) cfg.copy(racerIds = selected + r.id)
-                                else cfg
+                                else if (selected.size < maxRacers) cfg.copy(racerIds = selected + r.id)
+                                else {
+                                    if (!tier.isPro && selected.size < cfg.sport.maxRacers) nav.push(Screen.Paywall(ProFeature.MORE_RACERS))
+                                    cfg
+                                }
                             }
                         }
                     }
                     Spacer(Modifier.height(12.dp))
+                    if (!tier.isPro && sportRacers.size > maxRacers) {
+                        Text(
+                            "Free races up to $maxRacers at once. Pro races the full grid of ${cfg.sport.maxRacers}.",
+                            style = MaterialTheme.typography.bodySmall, color = RT.Gold,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                     val uncalibrated = sportRacers.filter { it.id in selected && !it.isCalibrated && it.markerId == null }
                     if (selected.size > 1 && uncalibrated.isNotEmpty()) {
                         Text(
