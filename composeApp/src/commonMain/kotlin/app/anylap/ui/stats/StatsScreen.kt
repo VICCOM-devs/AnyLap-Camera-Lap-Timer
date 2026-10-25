@@ -59,11 +59,18 @@ import app.anylap.ui.components.StatTile
 import app.anylap.ui.components.TileRow
 import app.anylap.ui.components.uiColor
 import app.anylap.ui.theme.RT
+import app.anylap.pro.Limits
+import app.anylap.pro.ProFeature
+import app.anylap.ui.pro.ProLockCard
+import app.anylap.ui.pro.currentTier
 
 @Composable
 fun StatsScreen(nav: Navigator) {
     val app = LocalApp.current
-    val sessions by app.repo.sessions.collectAsState()
+    val allSessions by app.repo.sessions.collectAsState()
+    val tier = currentTier()
+    val sessions = remember(allSessions, tier) { Limits.visibleSessions(allSessions, tier) }
+    val locked = allSessions.size - sessions.size
     val racers by app.repo.racers.collectAsState()
     val settings by app.repo.settings.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -132,8 +139,18 @@ fun StatsScreen(nav: Navigator) {
                     )
                 }
             }
-            item { SectionLabel("Best lap per session") }
-            item {
+            if (!tier.isPro) {
+                item { SectionLabel("Trends") }
+                item {
+                    ProLockCard(
+                        nav, ProFeature.CHARTS,
+                        body = "Best lap, consistency and top speed per session for ${st.racer.name}" +
+                            if (locked > 0) " – plus $locked older session${if (locked == 1) "" else "s"} counted in." else ".",
+                    )
+                }
+            }
+            if (tier.isPro) item { SectionLabel("Best lap per session") }
+            if (tier.isPro) item {
                 RtCard(Modifier.fillMaxWidth()) {
                     LineChart(
                         series = listOf(ChartSeries(st.racer.name, st.racer.uiColor, st.bestLapTrend.mapIndexed { i, (_, ms) -> (i + 1).toFloat() to ms / 1000f })),
@@ -145,8 +162,8 @@ fun StatsScreen(nav: Navigator) {
                     Text("Lower is faster. Purple ring = all-time best.", style = MaterialTheme.typography.bodySmall)
                 }
             }
-            item { SectionLabel("Consistency per session") }
-            item {
+            if (tier.isPro) item { SectionLabel("Consistency per session") }
+            if (tier.isPro) item {
                 RtCard(Modifier.fillMaxWidth()) {
                     LineChart(
                         series = listOf(ChartSeries("Consistency", RT.Green, st.consistencyTrend.mapIndexed { i, (_, c) -> (i + 1).toFloat() to c.toFloat() })),
@@ -156,6 +173,28 @@ fun StatsScreen(nav: Navigator) {
                         height = 180.dp,
                     )
                     Text("How close your laps are to each other. 100 % = every lap identical.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (tier.isPro && st.speedTrend.size > 1) {
+                item { SectionLabel("Top speed per session") }
+                item {
+                    RtCard(Modifier.fillMaxWidth()) {
+                        LineChart(
+                            series = listOf(
+                                ChartSeries(
+                                    "Top speed", RT.Accent,
+                                    st.speedTrend.mapIndexed { i, (_, kmh) ->
+                                        (i + 1).toFloat() to (if (settings.speedUnitKmh) kmh else kmh / 1.609344f)
+                                    },
+                                ),
+                            ),
+                            yLabel = { "${it.fixed(0)}" },
+                            xLabel = { "#${it.toInt()}" },
+                            showLegend = false,
+                            height = 180.dp,
+                        )
+                        Text("Fastest pass over the line each session, in ${if (settings.speedUnitKmh) "km/h" else "mph"}.", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }

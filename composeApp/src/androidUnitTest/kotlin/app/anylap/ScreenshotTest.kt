@@ -9,6 +9,8 @@ import app.anylap.ui.LocalNav
 import app.anylap.ui.Navigator
 import app.anylap.ui.Screen
 import app.anylap.ui.home.HomeScreen
+import app.anylap.pro.ProFeature
+import app.anylap.ui.pro.PaywallScreen
 import app.anylap.ui.racers.RacerEditScreen
 import app.anylap.ui.racers.RacersScreen
 import app.anylap.ui.session.ResultsScreen
@@ -54,6 +56,7 @@ class ScreenshotTest {
     @Test fun results() = shot("05_results") { ResultsScreen(LocalNav.current, SampleData.SESSION_ID) }
     @Test fun stats() = shot("06_stats") { StatsScreen(LocalNav.current) }
     @Test fun settings() = shot("07_settings") { SettingsScreen(LocalNav.current) }
+    @Test fun paywall() = shot("08_paywall") { PaywallScreen(LocalNav.current, ProFeature.CHARTS) }
 
     @Test
     fun fullApp() {

@@ -29,15 +29,38 @@ import app.anylap.ui.components.ScreenScaffold
 import app.anylap.ui.components.SecondaryButton
 import app.anylap.ui.components.SectionLabel
 import app.anylap.ui.theme.RT
+import app.anylap.pro.Limits
+import app.anylap.ui.Screen
+import app.anylap.ui.pro.ProBadge
+import app.anylap.ui.pro.currentTier
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import app.anylap.vision.cameraReport
 
 @Composable
 fun SettingsScreen(nav: Navigator) {
     val app = LocalApp.current
     val settings by app.repo.settings.collectAsState()
+    val tier = currentTier()
     val report = remember { try { cameraReport() } catch (e: Throwable) { "Camera information unavailable." } }
 
     ScreenScaffold("Settings", onBack = { nav.pop() }, bottomPadding = 40.dp) {
+        item { SectionLabel("AnyLap Pro", Icons.Rounded.WorkspacePremium) }
+        item {
+            RtCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Paywall()) }, highlight = if (tier.isPro) RT.Gold.copy(alpha = 0.4f) else null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (tier.isPro) "Pro is active" else "Free plan", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (tier.isPro) "Unlimited history, full grid, charts and bibs."
+                            else "${Limits.FREE_RACERS} racers per session · last ${Limits.FREE_HISTORY} sessions. Tap to see Pro.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    ProBadge()
+                }
+            }
+        }
         item { SectionLabel("Preferences", Icons.Rounded.Tune) }
         item {
             RtCard(Modifier.fillMaxWidth()) {

@@ -118,6 +118,8 @@ data class AppSettings(
     val speedUnitKmh: Boolean = true,
     val lastConfig: SessionConfig = SessionConfig(),
     val announceLaps: Boolean = true,
+    /** Pre-release only: Pro switched on for testing (no store yet). */
+    val testingProUnlocked: Boolean = false,
 )
 
 val RacerPalette: List<Long> = listOf(

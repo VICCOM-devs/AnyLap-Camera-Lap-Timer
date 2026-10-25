@@ -61,10 +61,13 @@ import app.anylap.ui.components.SectionLabel
 import app.anylap.ui.components.Stepper
 import app.anylap.ui.components.Tag
 import app.anylap.ui.theme.RT
+import app.anylap.pro.ProFeature
+import app.anylap.ui.pro.currentTier
 
 @Composable
 fun RacerEditScreen(nav: Navigator, racerId: String) {
     val app = LocalApp.current
+    val tier = currentTier()
     val racers by app.repo.racers.collectAsState()
     val racer = racers.firstOrNull { it.id == racerId }
     if (racer == null) {
@@ -192,9 +195,10 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    SecondaryButton("Print / share bib", {
+                    SecondaryButton(if (tier.isPro) "Print / share bib" else "Print bib · Pro", {
                         save()
-                        BibPdf.share(listOf(racer.copy(name = name)))
+                        if (tier.isPro) BibPdf.share(listOf(racer.copy(name = name)))
+                        else nav.push(Screen.Paywall(ProFeature.BIBS))
                     }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Print)
                 }
             }

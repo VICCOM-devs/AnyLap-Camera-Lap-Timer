@@ -76,12 +76,19 @@ import app.anylap.ui.components.StripeCard
 import app.anylap.ui.components.speedLines
 import app.anylap.ui.components.uiColor
 import app.anylap.ui.theme.Num
+import app.anylap.pro.Limits
+import app.anylap.pro.ProFeature
+import app.anylap.ui.pro.ProLockCard
+import app.anylap.ui.pro.currentTier
 
 @Composable
 fun HomeScreen() {
     val nav = LocalNav.current
     val app = LocalApp.current
-    val sessions by app.repo.sessions.collectAsState()
+    val allSessions by app.repo.sessions.collectAsState()
+    val tier = currentTier()
+    val sessions = remember(allSessions, tier) { Limits.visibleSessions(allSessions, tier) }
+    val locked = allSessions.size - sessions.size
     val racers by app.repo.racers.collectAsState()
     val settings by app.repo.settings.collectAsState()
     var sportIdx by remember { mutableIntStateOf(if (settings.lastConfig.sport == Sport.RUNNING) 1 else 0) }
@@ -102,6 +109,7 @@ fun HomeScreen() {
             HeroCard(
                 sport = sport,
                 racerCount = sportRacers.size,
+                maxRacers = Limits.maxRacers(sport, tier),
                 calibrated = sportRacers.count { it.isCalibrated || it.markerId != null },
                 onStart = {
                     app.repo.updateSettings { s -> s.copy(lastConfig = s.lastConfig.copy(sport = sport)) }
@@ -156,11 +164,20 @@ fun HomeScreen() {
                 }
             }
         }
+        if (locked > 0) {
+            item(key = "locked") {
+                ProLockCard(
+                    nav, ProFeature.HISTORY,
+                    title = "$locked older session${if (locked == 1) "" else "s"} saved",
+                    body = "Free shows your last ${Limits.FREE_HISTORY}. Unlock Pro to bring back every lap, replay and stat.",
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun HeroCard(sport: Sport, racerCount: Int, calibrated: Int, onStart: () -> Unit, onRacers: () -> Unit) {
+private fun HeroCard(sport: Sport, racerCount: Int, maxRacers: Int, calibrated: Int, onStart: () -> Unit, onRacers: () -> Unit) {
     val shape = RoundedCornerShape(26.dp)
     Box(
         Modifier
@@ -183,7 +200,7 @@ private fun HeroCard(sport: Sport, racerCount: Int, calibrated: Int, onStart: ()
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Tag("$racerCount ${sport.unitName}${if (racerCount == 1) "" else "s"}", RT.Text)
                 Tag("$calibrated ready", if (calibrated > 0) RT.Green else RT.Amber)
-                Tag("max ${sport.maxRacers}", RT.TextDim)
+                Tag("max $maxRacers", RT.TextDim)
             }
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

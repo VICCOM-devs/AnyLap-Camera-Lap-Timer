@@ -16,7 +16,22 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Tests + debug APK
-        run: ./gradlew :composeApp:testDebugUnitTest :composeApp:assembleDebug --stacktrace
+        shell: bash
+        run: |
+          status=0
+          ./gradlew :composeApp:testDebugUnitTest :composeApp:assembleDebug --continue > gradle-android.log 2>&1 || status=$?
+          tail -60 gradle-android.log
+          # Compiler errors and failed tests as annotations (readable through the GitHub API).
+          { grep -E '^e: ' gradle-android.log | sed -E 's#^e: file://[^ ]*/composeApp/src/([^:]+):([0-9]+):([0-9]+) (.*)#\1:\2:\3 \4#'; \
+            grep -E -A2 ' FAILED$' gradle-android.log; grep -E -A3 'What went wrong' gradle-android.log; } | grep -v '^--$' | head -30 \
+            | awk '{ lvl = (NR<=10) ? "error" : (NR<=20 ? "warning" : "notice"); print "::" lvl "::" $0 }' || true
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: anylap-screenshots
+          path: composeApp/screenshots/*.png
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: anylap-android-debug

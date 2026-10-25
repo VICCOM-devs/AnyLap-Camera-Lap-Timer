@@ -44,6 +44,7 @@ import app.anylap.ui.LocalNav
 import app.anylap.ui.Navigator
 import app.anylap.ui.Screen
 import app.anylap.ui.home.HomeScreen
+import app.anylap.ui.pro.PaywallScreen
 import app.anylap.ui.racers.CalibrateScreen
 import app.anylap.ui.racers.RacerEditScreen
 import app.anylap.ui.racers.RacersScreen
@@ -85,6 +86,7 @@ fun App() {
                         is Screen.Calibrate -> CalibrateScreen(nav, screen.id)
                         is Screen.Results -> ResultsScreen(nav, screen.id)
                         is Screen.Replay -> ReplayScreen(nav, screen.sessionId, screen.racerId, screen.lap)
+                        is Screen.Paywall -> PaywallScreen(nav, screen.feature)
                     }
                 }
                 if (nav.current.isTab) {
