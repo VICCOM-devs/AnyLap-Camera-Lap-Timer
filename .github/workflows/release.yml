@@ -1,0 +1,115 @@
+name: Release
+
+# Cut a release with scripts/release.sh <version>; it pushes the v<version> tag that starts this.
+# Manual runs (workflow_dispatch) build a signed bundle from the current branch without
+# touching the store – handy for testing signing or producing an APK to hand out.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Play track to upload to (leave empty to only build)"
+        type: choice
+        options: ["", "internal", "alpha", "beta", "production"]
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version from tag
+        id: meta
+        shell: bash
+        run: |
+          # versionCode is monotonic across all runs of this workflow and never reused, which is
+          # what Play needs. The offset leaves room above anything uploaded by hand before this existed.
+          echo "VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+          else
+            version="$(grep '^appVersionName=' gradle.properties | cut -d= -f2)-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "Building $version (versionCode $((100 + GITHUB_RUN_NUMBER)))"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode upload keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        shell: bash
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+
+      - name: Tests, bundle and APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :composeApp:testDebugUnitTest :composeApp:bundleRelease :composeApp:assembleRelease --stacktrace
+
+      - name: Rename outputs
+        shell: bash
+        run: |
+          mkdir -p out
+          cp composeApp/build/outputs/bundle/release/*.aab "out/anylap-${{ steps.meta.outputs.version }}.aab"
+          cp composeApp/build/outputs/apk/release/*.apk "out/anylap-${{ steps.meta.outputs.version }}.apk"
+          cp composeApp/build/outputs/mapping/release/mapping.txt out/mapping.txt || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anylap-release
+          path: out/*
+
+      - name: What's new (from CHANGELOG.md)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          mkdir -p whatsnew
+          scripts/changelog-section.sh "${{ steps.meta.outputs.version }}" sv > whatsnew/whatsnew-sv-SE
+          scripts/changelog-section.sh "${{ steps.meta.outputs.version }}" en > whatsnew/whatsnew-en-US
+          scripts/changelog-section.sh "${{ steps.meta.outputs.version }}" > release-notes.md
+          cat release-notes.md
+
+      - name: Upload to Google Play
+        if: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.track != '') && secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: se.viccom.anylap
+          releaseFiles: out/anylap-${{ steps.meta.outputs.version }}.aab
+          track: ${{ inputs.track || 'internal' }}
+          status: completed
+          releaseName: ${{ steps.meta.outputs.version }}
+          whatsNewDirectory: whatsnew
+          mappingFile: out/mapping.txt
+
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: AnyLap ${{ steps.meta.outputs.version }}
+          body_path: release-notes.md
+          files: |
+            out/anylap-${{ steps.meta.outputs.version }}.apk
+            out/anylap-${{ steps.meta.outputs.version }}.aab
