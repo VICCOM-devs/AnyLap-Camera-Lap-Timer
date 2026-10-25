@@ -11,6 +11,17 @@ plugins {
 /** Permanent store id (Play applicationId / iOS bundle id). Never change after the first release. */
 val appId = "se.viccom.anylap"
 
+/**
+ * Version. `appVersionName` lives in gradle.properties and is bumped by scripts/release.sh.
+ * In CI the release workflow sets VERSION_CODE (monotonic, from the workflow run number) and,
+ * for tag builds, VERSION_NAME from the tag. Locally both fall back to sane defaults.
+ */
+val appVersionName: String = System.getenv("VERSION_NAME") ?: providers.gradleProperty("appVersionName").get()
+val appVersionCode: Int = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+
+/** Release signing comes from the environment (see RELEASING.md); without it, release builds use the debug key. */
+val releaseKeystore = System.getenv("ANDROID_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+
 kotlin {
     androidTarget {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
@@ -52,14 +63,25 @@ android {
         applicationId = appId
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.3.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+    }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {
