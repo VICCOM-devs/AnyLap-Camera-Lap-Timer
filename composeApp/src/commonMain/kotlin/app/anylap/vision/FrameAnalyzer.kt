@@ -226,7 +226,7 @@ class FrameAnalyzer(
 
     private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?)
 
-    private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, f: AnalysisFrame) {
+    private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame) {
         val n = t.pts.size
         val cur = t.pts[n - 1]
         val s = line.side(cur.x, cur.y)
@@ -252,7 +252,7 @@ class FrameAnalyzer(
             Direction.FORWARD -> dir == 1
             Direction.REVERSE -> dir == -1
         }
-        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, f) else null)
+        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null)
     }
 
     private fun finalizePending(nowNs: Long, cfg: AnalyzerConfig, force: Boolean) {

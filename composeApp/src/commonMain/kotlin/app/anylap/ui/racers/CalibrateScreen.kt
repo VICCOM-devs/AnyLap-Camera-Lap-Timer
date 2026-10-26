@@ -1,6 +1,5 @@
 package app.anylap.ui.racers
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
@@ -401,7 +400,7 @@ fun CalibrateLayout(
                 }
 
                 if (step is CalStep.Pass && !editingLine) {
-                    AnimatedVisibility(
+                    androidx.compose.animation.AnimatedVisibility(
                         visible = lastPass != null,
                         enter = fadeIn(),
                         exit = fadeOut(),
