@@ -35,14 +35,14 @@ object SyncLogic {
         encodeDefaults = true
     }
 
-    /** What goes to the server for a racer: no local file paths. */
-    fun cloudRacer(r: Racer): Racer = r.copy(photoPath = null)
+    /** What goes to the server for a racer: no local file paths, no per-sample calibration images. */
+    fun cloudRacer(r: Racer): Racer = r.copy(photoPath = null, calibration = emptyList())
 
     /** What goes to the server for a session: no video, no photos, no appearance fingerprints of the racers. */
     fun cloudSession(s: Session): Session = s.copy(
         videoPath = null,
         videoOffsetMs = 0,
-        racers = s.racers.map { it.copy(photoPath = null, fingerprint = emptyList(), fingerprintSamples = 0) },
+        racers = s.racers.map { it.copy(photoPath = null, fingerprint = emptyList(), fingerprintSamples = 0, calibration = emptyList()) },
     )
 
     fun hash(r: Racer): String = json.encodeToString(Racer.serializer(), cloudRacer(r)).hashCode().toString(16)

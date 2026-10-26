@@ -213,4 +213,29 @@ class VisionTest {
         a.flush(ts)
         assertEquals(0, events.size)
     }
+
+    @Test
+    fun snapshotOfTheCrossingOnlyWhenAsked() {
+        val scene = Scene(seed = 11)
+        val car = { x: Float -> Scene.Car(x, 135f, 34, 18, 90, 100, 220) }
+        for (want in listOf(false, true)) {
+            val events = ArrayList<CrossingEvent>()
+            val a = FrameAnalyzer(onCrossing = { events += it })
+            a.config = AnalyzerConfig(line = LineSpec(), racers = listOf(RacerRef("x", null, null)), captureSnapshots = want)
+            var ts = 1_000_000_000L
+            repeat(30) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+            ts = runPass(a, scene, ts, 60, 500f, car, 120)
+            a.flush(ts)
+            val snap = events.single().snapshot
+            if (!want) {
+                assertEquals(null, snap)
+            } else {
+                assertNotNull(snap)
+                // At least the car (34 x 18 analysis px) plus some padding.
+                assertTrue(snap.width >= 34 && snap.height >= 18, "snapshot ${snap.width}x${snap.height}")
+                assertEquals(snap.width * snap.height, snap.argb.size)
+                assertTrue(snap.argb.all { (it ushr 24) == 0xFF }, "opaque pixels")
+            }
+        }
+    }
 }

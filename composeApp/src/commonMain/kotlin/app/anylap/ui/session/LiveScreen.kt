@@ -74,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anylap.data.Direction
+import app.anylap.data.matchViews
 import app.anylap.data.RaceMode
 import app.anylap.data.Sport
 import app.anylap.engine.Format
@@ -180,7 +181,7 @@ private fun LiveContent(nav: Navigator) {
             direction = direction,
             sport = config.sport,
             racers = racers.map { r ->
-                RacerRef(r.id, r.fingerprint.takeIf { it.isNotEmpty() }?.toFloatArray(), r.markerId)
+                RacerRef(r.id, r.fingerprint.takeIf { it.isNotEmpty() }?.toFloatArray(), r.markerId, r.matchViews())
             },
             metersPerProcPx = mpp,
             useMarkers = config.sport == Sport.RUNNING && racers.any { it.markerId != null },

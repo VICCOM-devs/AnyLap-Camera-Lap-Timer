@@ -47,4 +47,18 @@ object Fingerprint {
         val w = 1f / (n + 1)
         return List(SIZE) { i -> old[i] * (1f - w) + new[i] * w }
     }
+
+    /** Weighted mean of several fingerprints (weights need not sum to 1). Empty input → empty list. */
+    fun average(items: List<Pair<List<Float>, Float>>): List<Float> {
+        val valid = items.filter { it.first.size == SIZE && it.second > 0f }
+        if (valid.isEmpty()) return emptyList()
+        val out = FloatArray(SIZE)
+        var wSum = 0f
+        for ((fp, w) in valid) {
+            for (i in 0 until SIZE) out[i] += fp[i] * w
+            wSum += w
+        }
+        for (i in 0 until SIZE) out[i] /= wSum
+        return out.toList()
+    }
 }

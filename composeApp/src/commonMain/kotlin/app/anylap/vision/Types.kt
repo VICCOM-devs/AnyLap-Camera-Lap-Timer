@@ -22,7 +22,13 @@ class AnalysisFrame(
     val lumaCrop: (x0: Int, y0: Int, w: Int, h: Int) -> ByteArray?,
 )
 
-data class RacerRef(val id: String, val fingerprint: FloatArray?, val markerId: Int?)
+data class RacerRef(
+    val id: String,
+    val fingerprint: FloatArray?,
+    val markerId: Int?,
+    /** Per-sample fingerprints (sides, passes); the best-matching one also counts. */
+    val views: List<FloatArray> = emptyList(),
+)
 
 data class AnalyzerConfig(
     val line: LineSpec = LineSpec(),
@@ -32,6 +38,8 @@ data class AnalyzerConfig(
     /** Metres per analysis pixel at the finish line; null = no speed. */
     val metersPerProcPx: Float? = null,
     val useMarkers: Boolean = false,
+    /** Attach a small picture of what crossed to each event (calibration review). */
+    val captureSnapshots: Boolean = false,
 )
 
 enum class IdSource { MARKER, APPEARANCE, ONLY_RACER, NONE }
@@ -48,7 +56,12 @@ class CrossingEvent(
     /** Calibrated racers ranked by colour similarity (best first). */
     val candidates: List<Pair<String, Float>>,
     val markerSeen: Int?,
+    /** Crop of the racer at the moment it crossed; only when [AnalyzerConfig.captureSnapshots]. */
+    val snapshot: Snapshot? = null,
 )
+
+/** Small RGB picture (ARGB pixels, row by row). */
+class Snapshot(val width: Int, val height: Int, val argb: IntArray)
 
 /** Normalised (0..1) box around something moving. */
 data class OverlayBox(val l: Float, val t: Float, val r: Float, val b: Float, val nearLine: Boolean)

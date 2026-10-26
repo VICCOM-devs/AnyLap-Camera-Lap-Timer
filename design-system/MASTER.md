@@ -32,7 +32,11 @@ Racer colours come from `RacerPalette` and appear as avatar fill and as the 4 dp
 ## Components (`ui/components`)
 `ScreenScaffold` (glow + header + one LazyColumn) · `BrandWordmark` / `ChequeredMark` · `RtCard` · `StripeCard` · `SectionLabel` (red tick + caps) · `Tag` · `StatTile` · `PillTabs` · `PrimaryButton` (gradient, caps) · `SecondaryButton` · `Stepper` · `RtSlider` · `RacerAvatar` · `AvatarStack` · `PositionBadge` · `DateDivider` / `TimelineItem` · `EmptyState` · `KeyValue` · charts (`LineChart` with area fill for single series, `BarList`).
 
-Live screen (`LiveLayout`): clock HUD (red label block + italic clock), three start lights, broadcast lower-third for each lap, timing tower (position · colour stripe · 3-letter code · last lap · gap/best).
+Camera screens (`ui/session/CameraChrome.kt`): the camera gets nearly the whole screen. Right side = `CameraRail` (78 dp, `RailButton`s: round icon + 9 sp caption + optional count badge, green when done, red when selected/primary). Line editing is a mode (Flag rail button) with `LineTools` on the left (both/one way · centre · reset background · done) and a one-line `CameraHint`; the line can't be dragged outside that mode. Instructions go in one small translucent card bottom-left, never a big panel over the track.
+
+Calibration (`ui/racers/CalibrateScreen.kt`, `CalibrationGallery.kt`): wizard of side photos → 3 slow → 3 fast passes → review. Every sample is a `SampleTile` (thumbnail, caption, × delete) so bad ones can be removed; `SampleDialog` for a closer look.
+
+Live screen (`LiveLayout`): setup phase uses the camera rail (back · line · voice · live · racers · big Start); once started: clock HUD (red label block + italic clock), three start lights, broadcast lower-third for each lap, timing tower (position · colour stripe · 3-letter code · last lap · gap/best).
 
 ## Motion
 Fades between screens; lap banner slides in from the left and stays 3.2 s; pills animate text colour. No looping animations except loading.

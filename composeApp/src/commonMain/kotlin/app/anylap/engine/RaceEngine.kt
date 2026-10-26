@@ -318,7 +318,8 @@ class RaceEngine(
             id = Uuid.random().toString(),
             startedAt = if (startWallMs > 0) startWallMs else Platform.nowMillis(),
             config = config,
-            racers = racers,
+            // Sessions keep a snapshot of who raced, not their calibration images.
+            racers = racers.map { it.copy(calibration = emptyList()) },
             laps = st.laps,
             durationMs = durationMs,
             order = st.standings.filter { it.laps > 0 || isRace }.map { it.racer.id },

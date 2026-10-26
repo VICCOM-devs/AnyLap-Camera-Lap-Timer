@@ -83,8 +83,31 @@ class Repository {
         persist(racersFile, ListSerializer(Racer.serializer())) { _racers.value }
     }
 
+    /** Adds a calibration sample (or replaces the photo of the same view) and recomputes the fingerprint. */
+    fun addCalibrationSample(racerId: String, sample: CalibrationSample) {
+        val r = racer(racerId) ?: return
+        val replaced = if (sample.kind == SampleKind.PHOTO) r.calibration.filter { it.kind == SampleKind.PHOTO && it.view == sample.view } else emptyList()
+        replaced.forEach { old -> old.imagePath?.let { Platform.delete(it) } }
+        upsertRacer(r.withCalibration(r.calibration - replaced.toSet() + sample))
+    }
+
+    fun removeCalibrationSample(racerId: String, sampleId: String) {
+        val r = racer(racerId) ?: return
+        val gone = r.calibration.filter { it.id == sampleId }
+        gone.forEach { old -> old.imagePath?.let { Platform.delete(it) } }
+        upsertRacer(r.withCalibration(r.calibration - gone.toSet()))
+    }
+
+    /** Forgets everything the camera learned about this racer (the avatar photo stays). */
+    fun resetCalibration(racerId: String) {
+        val r = racer(racerId) ?: return
+        r.calibration.forEach { old -> old.imagePath?.let { Platform.delete(it) } }
+        upsertRacer(r.copy(calibration = emptyList(), fingerprint = emptyList(), fingerprintSamples = 0))
+    }
+
     fun deleteRacer(id: String) {
         racer(id)?.photoPath?.let { Platform.delete(it) }
+        racer(id)?.calibration?.forEach { s -> s.imagePath?.let { Platform.delete(it) } }
         _racers.value = _racers.value.filterNot { it.id == id }
         persist(racersFile, ListSerializer(Racer.serializer())) { _racers.value }
     }

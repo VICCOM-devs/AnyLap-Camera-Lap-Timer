@@ -223,6 +223,8 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
 
     private var device: CameraDevice? = null
     private var session: CameraCaptureSession? = null
+    /** Bumped on every configure(): callbacks from an older, replaced session are ignored. */
+    private var sessionGen = 0
     private var previewSurface: Surface? = null
     private val reader = ImageReader.newInstance(choice.analysisSize.width, choice.analysisSize.height, ImageFormat.YUV_420_888, 3)
     private var recorder: MediaRecorder? = null
@@ -350,6 +352,8 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
 
     fun attachSurface(surface: Surface) {
         camHandler.post {
+            // surfaceChanged can fire more than once for the same surface: don't rebuild a live session.
+            if (previewSurface === surface && device != null && session != null) return@post
             previewSurface = surface
             if (device == null) open() else configure()
         }
@@ -406,6 +410,7 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
     }
 
     private fun closeInternal() {
+        sessionGen++
         try { session?.close() } catch (_: Exception) {}
         session = null
         try { device?.close() } catch (_: Exception) {}
@@ -417,16 +422,29 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
         val preview = previewSurface ?: return
         val outputs = listOfNotNull(preview, reader.surface, recorderSurface).map { OutputConfiguration(it) }
         try { session?.stopRepeating() } catch (_: Exception) {}
+        // Creating a new session closes the old one; never send requests to it again.
+        session = null
+        val gen = ++sessionGen
         val cfg = SessionConfiguration(
             SessionConfiguration.SESSION_REGULAR, outputs, camExecutor,
             object : CameraCaptureSession.StateCallback() {
                 override fun onConfigured(s: CameraCaptureSession) {
+                    if (gen != sessionGen) {
+                        // A newer configure() is on its way; this one is already stale.
+                        try { s.close() } catch (_: Exception) {}
+                        return
+                    }
                     session = s
                     repeat()
                     onReady?.invoke()
                 }
 
+                override fun onClosed(s: CameraCaptureSession) {
+                    if (session === s) session = null
+                }
+
                 override fun onConfigureFailed(s: CameraCaptureSession) {
+                    if (gen != sessionGen) return
                     if (recorderSurface != null) {
                         postError("This phone can't record video while timing – replays are off for this session.")
                         cleanupRecorder()
@@ -462,6 +480,11 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
             b.set(CaptureRequest.CONTROL_AE_LOCK, aeLocked)
             b.set(CaptureRequest.CONTROL_AWB_LOCK, aeLocked)
             s.setRepeatingRequest(b.build(), resultCallback, camHandler)
+            clearError()
+        } catch (e: IllegalStateException) {
+            // The session was closed under us (a new one is being set up): not the user's problem.
+            Log.w(TAG, "repeat on closed session", e)
+            if (session === s) session = null
         } catch (e: Exception) {
             postError("Camera preview failed: ${e.message}")
         }
@@ -485,6 +508,11 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
             aeLocked = locked
             repeat()
         }
+    }
+
+    /** Errors are shown until the camera works again. */
+    private fun clearError() {
+        if (_stats.value.error != null) _stats.value = _stats.value.copy(error = null)
     }
 
     private fun postError(msg: String) {
