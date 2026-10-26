@@ -26,6 +26,10 @@ class FrameAnalyzer(
     private var model: BackgroundModel? = null
     private var blobFinder: BlobFinder? = null
     private var mask = ByteArray(0)
+    /** Owner tag per pixel for blobs that were split this frame (0 = not split). */
+    private var owner = IntArray(0)
+    /** Learned (along, area) of single racers this session. */
+    private val sizeSamples = ArrayList<FloatArray>()
     private var tmpA = ByteArray(0)
     private var tmpB = ByteArray(0)
     private val markerDetector = MarkerDetector()
@@ -85,13 +89,13 @@ class FrameAnalyzer(
         tmpA.copyInto(mask)
 
         val minArea = max(12, (cfg.sport.minBlobAreaFrac * w * h).toInt())
-        val blobs = blobFinder!!.find(mask, minArea)
+        val line = lineGeom(cfg.line)
+        val blobs = splitMerged(blobFinder!!.find(mask, minArea), f, line, cfg)
         updateTracks(blobs, f.timestampNs)
 
         // A lot of the frame "moving" at once is a lighting transient (auto-exposure, a cloud, a
         // door opening): keep following things, but don't count crossings until it settles.
         val unstable = frac > UNSTABLE_FRAC
-        val line = lineGeom(cfg.line)
         for (t in tracks) {
             if (t.missed > 0) continue
             accumulateFingerprint(t, f)
@@ -132,6 +136,7 @@ class FrameAnalyzer(
         model = BackgroundModel(w, h)
         blobFinder = BlobFinder(w, h)
         mask = ByteArray(w * h)
+        owner = IntArray(w * h)
         tmpA = ByteArray(w * h)
         tmpB = ByteArray(w * h)
         tracks.clear(); pending.clear()
@@ -175,6 +180,9 @@ class FrameAnalyzer(
         val hist = Fingerprint.accumulator()
         var histFrames = 0
         val markerVotes = HashMap<Int, Int>()
+        /** Split tag of the blob this track got this frame (0 = a whole blob). */
+        var tag = 0
+        var area = 0
 
         fun predict(ts: Long): Pair<Float, Float> {
             val n = pts.size
@@ -190,6 +198,7 @@ class FrameAnalyzer(
             pts += TrackPoint(ts, b.cx, b.cy)
             if (pts.size > 60) pts.removeAt(0)
             bx = b.x; by = b.y; bw = b.w; bh = b.h
+            tag = b.tag; area = b.area
             missed = 0
             lastTs = ts
         }
@@ -222,7 +231,20 @@ class FrameAnalyzer(
             t.add(p.blob, ts)
         }
         for (t in tracks) if (t.id !in usedT) t.missed++
-        for (b in blobs) if (b !in usedB) tracks += Track(nextTrackId++).also { it.add(b, ts) }
+        for (b in blobs) if (b !in usedB) {
+            val t = Track(nextTrackId++)
+            // A racer split out of a blob it shared with another track keeps that track's motion
+            // history (shifted to its own position): otherwise a car that was hidden in a merged blob
+            // until near the line has no "really moved" history and its crossing would be lost.
+            val src = if (b.source >= 0) tracks.firstOrNull { it.id == b.source } else null
+            if (src != null && src.pts.size >= 2) {
+                val last = src.pts.last()
+                val dx = b.cx - last.x; val dy = b.cy - last.y
+                for (p in src.pts.dropLast(1)) t.pts += TrackPoint(p.ts, p.x + dx, p.y + dy)
+            }
+            t.add(b, ts)
+            tracks += t
+        }
         tracks.removeAll { it.missed > 0 && ts - it.lastTs > 300_000_000L }
     }
 
@@ -252,11 +274,12 @@ class FrameAnalyzer(
             val row = y * w
             while (x < x1) {
                 val i = row + x
-                if (mask[i].toInt() != 0) {
+                if (mask[i].toInt() != 0 && (t.tag == 0 || owner[i] == t.tag)) {
                     val ok = !core || (
                         x >= CORE && x + CORE < w && y >= CORE && y + CORE < h &&
                             mask[i - CORE].toInt() != 0 && mask[i + CORE].toInt() != 0 &&
-                            mask[i - cw].toInt() != 0 && mask[i + cw].toInt() != 0
+                            mask[i - cw].toInt() != 0 && mask[i + cw].toInt() != 0 &&
+                            (t.tag == 0 || (owner[i - CORE] == t.tag && owner[i + CORE] == t.tag && owner[i - cw] == t.tag && owner[i + cw] == t.tag))
                         )
                     if (ok) {
                         Fingerprint.add(t.hist, f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF, exposure)
@@ -268,6 +291,236 @@ class FrameAnalyzer(
             y += step
         }
         return added
+    }
+
+    // ------------------------------------------------------------------ merged racers
+
+    /**
+     * Expected blob area of one racer at [along] on the line: sqrt(area) fitted linearly over the
+     * calibration hints and this session's samples (perspective makes size roughly linear in
+     * position across the track). Null until there is something to go on.
+     */
+    private fun expectedArea(along: Float, cfg: AnalyzerConfig): Float? {
+        // This session's own sizes win once there are a few: hints from an older calibration may be
+        // from a camera that stood closer or further away.
+        val pts = if (sizeSamples.size >= 3) sizeSamples else cfg.sizeHints + sizeSamples
+        if (pts.size < 2) return null
+        val n = pts.size
+        var sx = 0.0; var sy = 0.0; var sxx = 0.0; var sxy = 0.0
+        for (p in pts) { val x = p[0].toDouble(); val y = sqrt(p[1].toDouble()); sx += x; sy += y; sxx += x * x; sxy += x * y }
+        val den = n * sxx - sx * sx
+        val size = if (den / (n.toDouble() * n) < 0.01) {
+            // all samples from one place: use their median
+            pts.map { sqrt(it[1]) }.sorted()[n / 2].toDouble()
+        } else {
+            val b = (n * sxy - sx * sy) / den
+            val a = (sy - b * sx) / n
+            a + b * along.coerceIn(0f, 1f)
+        }
+        return if (size > 1) (size * size).toFloat() else null
+    }
+
+    /**
+     * Splits blobs that hold more than one racer. Two cues: (1) two or more live tracks are predicted
+     * inside one blob – they ran into each other (overtake, side by side); (2) the blob is much bigger
+     * than one racer at that point of the line – they arrived merged (nose to tail). Pixels are shared
+     * out by k-means on position, seeded with the predictions (cue 1) or along the blob's long axis
+     * (cue 2). Each part's pixels are tagged in [owner] so its fingerprint only reads its own racer.
+     */
+    private fun splitMerged(blobs0: List<Blob>, f: AnalysisFrame, line: LineGeom, cfg: AnalyzerConfig): List<Blob> {
+        val ts = f.timestampNs
+        owner.fill(0)
+        val blobs = joinFragments(blobs0, line, cfg)
+        var nextTag = 1
+        val out = ArrayList<Blob>(blobs.size + 2)
+        // Only established, racer-sized tracks can claim a share of a blob: a shadow fragment or a
+        // speck that briefly had its own track must not split the car it rejoins.
+        val live = tracks.filter { it.missed <= 1 && it.pts.size >= 5 }
+        for (b in blobs) {
+            val pad = 2f
+            val exp = expectedArea(line.along(b.cx, b.cy), cfg)
+            val minShare = if (exp != null) 0.45f * exp else 0.3f * b.area
+            val inside = live.filter { t ->
+                val (px, py) = t.predict(ts)
+                t.area >= minShare &&
+                    px >= b.x - pad && px <= b.x + b.w + pad && py >= b.y - pad && py <= b.y + b.h + pad
+            }.let { cand ->
+                // two tracks predicted on top of each other are one racer seen twice, not two racers
+                val minSep = if (exp != null) 0.35f * sqrt(exp) else 4f
+                val keep = ArrayList<Track>()
+                for (t in cand.sortedByDescending { it.area }) {
+                    val (ax, ay) = t.predict(ts)
+                    if (keep.none { k -> val (bx, by) = k.predict(ts); hypot(ax - bx, ay - by) < minSep }) keep += t
+                }
+                keep
+            }
+            var seeds: List<Pair<Float, Float>>? = null
+            var source = -1
+            if (inside.size >= 2) {
+                seeds = inside.take(3).map { it.predict(ts) }
+            } else {
+                if (DEBUG_SPLIT && exp != null && b.area > 1.2f * exp) println("big blob area ${b.area} exp ${exp.toInt()} along ${line.along(b.cx, b.cy)} ts ${ts / 1e9}")
+                if (exp != null && b.area > SPLIT_FACTOR * exp) {
+                    val k = (b.area / exp).roundToInt().coerceIn(2, 3)
+                    seeds = axisSeeds(b, k, perpendicular = false)
+                    source = inside.singleOrNull()?.id ?: -1
+                    // Racers side by side make a squarish blob whose long axis may be the wrong one:
+                    // also try across, keep the cut whose parts each look most like a known racer.
+                    if (cfg.racers.any { it.fingerprint != null }) {
+                        val alt = axisSeeds(b, k, perpendicular = true)
+                        val a1 = kmeans(b, seeds)?.let { partsScore(b, f, cfg) }
+                        val a2 = kmeans(b, alt)?.let { partsScore(b, f, cfg) }
+                        val pick = if (a2 != null && (a1 == null || a2.first > a1.first)) { seeds = alt; a2 } else a1
+                        // Parts that all look like the same racer are one big-looking racer (camera
+                        // closer than at calibration, long blur), not several: leave it whole.
+                        if (pick == null || pick.second.distinct().size < pick.second.size) seeds = null
+                    }
+                }
+            }
+            if (seeds == null) { out += b; continue }
+            val parts = kmeans(b, seeds)
+            if (parts == null) { out += b; continue }
+            for ((tag0, part) in parts.withIndex()) {
+                val tag = nextTag + tag0
+                part.tag = tag
+                part.source = source
+            }
+            // write the owner map
+            val bf = blobFinder!!
+            val ids = assignment
+            var k = 0
+            for (yy in b.y until b.y + b.h) for (xx in b.x until b.x + b.w) {
+                val i = yy * w + xx
+                if (bf.labelAt(i) == b.label && mask[i].toInt() != 0) { owner[i] = nextTag + ids[k]; k++ }
+            }
+            nextTag += parts.size
+            out += parts
+        }
+        return out
+    }
+
+    /**
+     * The reverse of a split: a racer broken into pieces (dark windows the colour of the asphalt, a
+     * stripe) gives two blobs close together that add up to about one racer. Joined, they are timed
+     * once. Needs the size model, so it only acts once one racer's size is known.
+     */
+    private fun joinFragments(blobs: List<Blob>, line: LineGeom, cfg: AnalyzerConfig): List<Blob> {
+        if (blobs.size < 2) return blobs
+        val list = blobs.toMutableList()
+        var changed = true
+        while (changed) {
+            changed = false
+            loop@ for (i in list.indices) for (j in i + 1 until list.size) {
+                val a = list[i]; val b = list[j]
+                val exp = expectedArea(line.along((a.cx * a.area + b.cx * b.area) / (a.area + b.area), (a.cy * a.area + b.cy * b.area) / (a.area + b.area)), cfg) ?: continue
+                if (a.area > 0.85f * exp || b.area > 0.85f * exp || a.area + b.area > 1.3f * exp) continue
+                val gapX = max(0, max(a.x, b.x) - min(a.x + a.w, b.x + b.w))
+                val gapY = max(0, max(a.y, b.y) - min(a.y + a.h, b.y + b.h))
+                if (max(gapX, gapY) > 0.5f * sqrt(exp)) continue
+                val x0 = min(a.x, b.x); val y0 = min(a.y, b.y)
+                val x1 = max(a.x + a.w, b.x + b.w); val y1 = max(a.y + a.h, b.y + b.h)
+                val n = a.area + b.area
+                // label −1: a joined blob is never split again (its pixels span two labels)
+                list[i] = Blob(x0, y0, x1 - x0, y1 - y0, n, (a.cx * a.area + b.cx * b.area) / n, (a.cy * a.area + b.cy * b.area) / n, -1)
+                list.removeAt(j)
+                changed = true
+                break@loop
+            }
+        }
+        return list
+    }
+
+    private var assignment = IntArray(0)
+    private var px = IntArray(0)
+    private var py = IntArray(0)
+
+    /** Seeds spread along the blob's principal axis (k equal racers in a row). */
+    private fun axisSeeds(b: Blob, k: Int, perpendicular: Boolean): List<Pair<Float, Float>> {
+        val bf = blobFinder!!
+        var n = 0; var sxx = 0.0; var syy = 0.0; var sxy = 0.0
+        for (yy in b.y until b.y + b.h) for (xx in b.x until b.x + b.w) {
+            val i = yy * w + xx
+            if (bf.labelAt(i) != b.label || mask[i].toInt() == 0) continue
+            val dx = xx - b.cx; val dy = yy - b.cy
+            sxx += dx * dx; syy += dy * dy; sxy += dx * dy; n++
+        }
+        if (n == 0) return listOf(b.cx to b.cy)
+        sxx /= n; syy /= n; sxy /= n
+        // largest eigenvector of [[sxx, sxy], [sxy, syy]]
+        val tr = sxx + syy; val det = sxx * syy - sxy * sxy
+        val l1 = tr / 2 + sqrt(max(0.0, tr * tr / 4 - det))
+        var ex = sxy; var ey = l1 - sxx
+        if (abs(ex) + abs(ey) < 1e-9) { ex = if (sxx >= syy) 1.0 else 0.0; ey = if (sxx >= syy) 0.0 else 1.0 }
+        val len = sqrt(ex * ex + ey * ey); ex /= len; ey /= len
+        var sd = sqrt(l1)
+        if (perpendicular) { val t = ex; ex = -ey; ey = t; sd = sqrt(max(1e-6, tr - l1)) }
+        val offs = if (k == 2) listOf(-0.87, 0.87) else listOf(-1.15, 0.0, 1.15)
+        return offs.map { o -> (b.cx + (ex * sd * o).toFloat()) to (b.cy + (ey * sd * o).toFloat()) }
+    }
+
+    /** k-means on the blob's pixel positions; null if a part ends up too small to be a racer. */
+    private fun kmeans(b: Blob, seeds: List<Pair<Float, Float>>): List<Blob>? {
+        val bf = blobFinder!!
+        if (px.size < b.area) { px = IntArray(b.area); py = IntArray(b.area); assignment = IntArray(b.area) }
+        var n = 0
+        for (yy in b.y until b.y + b.h) for (xx in b.x until b.x + b.w) {
+            val i = yy * w + xx
+            if (bf.labelAt(i) == b.label && mask[i].toInt() != 0 && n < px.size) { px[n] = xx; py[n] = yy; n++ }
+        }
+        val k = seeds.size
+        val cx = FloatArray(k) { seeds[it].first }
+        val cy = FloatArray(k) { seeds[it].second }
+        val cnt = IntArray(k)
+        repeat(3) { iter ->
+            for (j in 0 until n) {
+                var best = 0; var bd = Float.MAX_VALUE
+                for (c in 0 until k) { val dx = px[j] - cx[c]; val dy = py[j] - cy[c]; val d = dx * dx + dy * dy; if (d < bd) { bd = d; best = c } }
+                assignment[j] = best
+            }
+            if (iter < 2) {
+                val sx = FloatArray(k); val sy = FloatArray(k); cnt.fill(0)
+                for (j in 0 until n) { val c = assignment[j]; sx[c] += px[j]; sy[c] += py[j]; cnt[c]++ }
+                for (c in 0 until k) if (cnt[c] > 0) { cx[c] = sx[c] / cnt[c]; cy[c] = sy[c] / cnt[c] }
+            }
+        }
+        val minX = IntArray(k) { w }; val minY = IntArray(k) { h }; val maxX = IntArray(k); val maxY = IntArray(k)
+        val sx = FloatArray(k); val sy = FloatArray(k); cnt.fill(0)
+        for (j in 0 until n) {
+            val c = assignment[j]; val x = px[j]; val y = py[j]
+            cnt[c]++; sx[c] += x; sy[c] += y
+            if (x < minX[c]) minX[c] = x; if (x > maxX[c]) maxX[c] = x
+            if (y < minY[c]) minY[c] = y; if (y > maxY[c]) maxY[c] = y
+        }
+        if ((0 until k).any { cnt[it] < max(12, (0.2f * n / k).toInt()) }) return null
+        return (0 until k).map { c ->
+            Blob(minX[c], minY[c], maxX[c] - minX[c] + 1, maxY[c] - minY[c] + 1, cnt[c], sx[c] / cnt[c], sy[c] / cnt[c], 0)
+        }
+    }
+
+    /**
+     * How racer-like the parts of the last [kmeans] are: each part's colour fingerprint against its
+     * best-matching racer, summed. Used to pick the direction of a size-based split.
+     */
+    private fun partsScore(b: Blob, f: AnalysisFrame, cfg: AnalyzerConfig): Pair<Float, List<String?>> {
+        val bf = blobFinder!!
+        val k = assignment.let { a -> var m = 0; for (j in 0 until min(a.size, b.area)) if (a[j] > m) m = a[j]; m + 1 }
+        val acc = Array(k) { Fingerprint.accumulator() }
+        var j = 0
+        for (yy in b.y until b.y + b.h) for (xx in b.x until b.x + b.w) {
+            val i = yy * w + xx
+            if (bf.labelAt(i) != b.label || mask[i].toInt() == 0 || j >= assignment.size) continue
+            Fingerprint.add(acc[assignment[j]], f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF, exposure)
+            j++
+        }
+        var total = 0f
+        val best = ArrayList<String?>()
+        for (a in acc) {
+            val fp = Fingerprint.normalize(a)
+            val top = cfg.racers.mapNotNull { r -> score(fp, r)?.let { r.id to it } }.maxByOrNull { it.second }
+            total += top?.second ?: 0f
+            best += top?.first
+        }
+        return total to best
     }
 
     // ------------------------------------------------------------------ crossings
@@ -282,7 +535,7 @@ class FrameAnalyzer(
 
     private fun lineGeom(l: LineSpec) = LineGeom(l.x1 * w, l.y1 * h, l.x2 * w, l.y2 * h)
 
-    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?)
+    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?, val along: Float, val area: Int, val split: Boolean)
 
     private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame, unstable: Boolean) {
         val n = t.pts.size
@@ -313,7 +566,7 @@ class FrameAnalyzer(
             Direction.FORWARD -> dir == 1
             Direction.REVERSE -> dir == -1
         }
-        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null)
+        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0)
     }
 
     /**
@@ -409,8 +662,16 @@ class FrameAnalyzer(
                 snapshot = p.snapshot,
                 match = best,
                 accepted = accepted,
+                area = p.area,
+                along = p.along,
+                split = p.split,
             ),
         )
+        // Learn how big one racer is at this point of the line (whole, confidently named blobs only).
+        if (accepted && !p.split && p.area > 0 && (source == IdSource.ONLY_RACER || source == IdSource.MARKER || (source == IdSource.APPEARANCE && confidence >= 2 * MIN_MARGIN))) {
+            sizeSamples += floatArrayOf(p.along, p.area.toFloat())
+            if (sizeSamples.size > 60) sizeSamples.removeAt(0)
+        }
     }
 
     /**
@@ -517,6 +778,9 @@ class FrameAnalyzer(
 
         /** Fraction of the frame moving at once above which crossings are not counted. */
         const val UNSTABLE_FRAC = 0.30f
+        /** A blob this many times one racer's size (at that point of the line) is split. */
+        const val SPLIT_FACTOR = 1.7f
+        var DEBUG_SPLIT = false
         /** Frames between exposure (median luma) updates for the fingerprint. */
         const val EXPOSURE_EVERY = 15L
         /** How far past the line's ends (as a fraction of its length) a crossing still counts. */

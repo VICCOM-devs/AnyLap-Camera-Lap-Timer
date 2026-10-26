@@ -240,6 +240,8 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
                 speedKmh = e.speedKmh,
                 direction = e.direction,
                 match = e.match.takeIf { it > 0f },
+                area = e.area.takeIf { it > 0 && !e.split },
+                along = e.along.takeIf { e.area > 0 && !e.split },
             )
             app.repo.addCalibrationSample(racerId, sample)
             lastPass = sample

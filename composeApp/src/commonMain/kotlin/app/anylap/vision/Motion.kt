@@ -158,12 +158,22 @@ class Blob(
     val area: Int,
     val cx: Float,
     val cy: Float,
-)
+    /** Component label in [BlobFinder]'s label image (0 = made by a split). */
+    val label: Int = 0,
+) {
+    /** Non-zero when this blob is one part of a split: its pixels carry this tag in the owner map. */
+    var tag: Int = 0
+    /** Track this part grew out of (inherits its motion history if it becomes a new track); −1 = none. */
+    var source: Int = -1
+}
 
 /** Connected components (8-connected) of a 0/1 mask. Reuses its buffers between frames. */
 class BlobFinder(private val w: Int, private val h: Int) {
     private val labels = IntArray(w * h)
     private val stack = IntArray(w * h)
+
+    /** Label of pixel [i] after the last [find] (0 = background). */
+    fun labelAt(i: Int): Int = labels[i]
 
     fun find(mask: ByteArray, minArea: Int, maxBlobs: Int = 32): List<Blob> {
         labels.fill(0)
@@ -203,7 +213,7 @@ class BlobFinder(private val w: Int, private val h: Int) {
             }
             next++
             if (count >= minArea) {
-                out += Blob(minX, minY, maxX - minX + 1, maxY - minY + 1, count, sx.toFloat() / count, sy.toFloat() / count)
+                out += Blob(minX, minY, maxX - minX + 1, maxY - minY + 1, count, sx.toFloat() / count, sy.toFloat() / count, next - 1)
             }
         }
         return out.sortedByDescending { it.area }.take(maxBlobs)

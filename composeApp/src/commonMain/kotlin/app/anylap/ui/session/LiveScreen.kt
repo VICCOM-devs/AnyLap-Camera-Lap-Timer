@@ -187,6 +187,8 @@ private fun LiveContent(nav: Navigator) {
             useMarkers = config.sport == Sport.RUNNING && racers.any { it.markerId != null },
             // Applies only once every racer in the grid is calibrated (the analyzer checks).
             minMatch = FrameAnalyzer.MIN_MATCH,
+            // How big one racer looks at each point of the line, so two merged racers are split.
+            sizeHints = racers.flatMap { it.sizeHints() },
         )
     }
     LaunchedEffect(session, engine) {

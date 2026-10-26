@@ -184,7 +184,12 @@ object SyntheticTrack {
     // ------------------------------------------------------------------ running the engine
 
     /** The assisted wizard: slow + fast passes alone on the track; fingerprint = average, views = each pass. */
-    fun calibrate(car: Car, r: Renderer, lane: Float, seedT: Double, speeds: List<Double> = listOf(1.2, 1.5, 1.3, 4.0, 4.5, 5.0), margin: Double = 1.5): RacerRef {
+    fun calibrate(
+        car: Car, r: Renderer, lane: Float, seedT: Double,
+        speeds: List<Double> = listOf(1.2, 1.5, 1.3, 4.0, 4.5, 5.0), margin: Double = 1.5,
+        /** Collects (along, area) of each accepted pass – the size hints for the race. */
+        sizeHints: MutableList<FloatArray>? = null,
+    ): RacerRef {
         val events = ArrayList<CrossingEvent>()
         val a = FrameAnalyzer(onCrossing = { events += it })
         val views = ArrayList<FloatArray>()
@@ -201,7 +206,10 @@ object SyntheticTrack {
             run(tc + margin, listOf(Pass(car, tc, sp, lane)))
             a.flush((t * 1e9).toLong())
             val e = events.lastOrNull { abs(it.timestampNs / 1e9 - tc) < 0.2 }
-            if (e?.fingerprint != null && e.accepted) views += e.fingerprint!!
+            if (e?.fingerprint != null && e.accepted) {
+                views += e.fingerprint!!
+                if (e.area > 0) sizeHints?.add(floatArrayOf(e.along, e.area.toFloat()))
+            }
             events.clear()
         }
         val fp = Fingerprint.average(views.map { it.toList() to 1f }).toFloatArray()
@@ -228,10 +236,10 @@ object SyntheticTrack {
                 "timing ${timingMeanMs.fixed(1)} ms mean, ${timingMaxMs.fixed(1)} max · speed ${speedMeanPct.fixed(1)} %"
     }
 
-    fun race(r: Renderer, racers: List<RacerRef>, passes: List<Pass>): Score {
+    fun race(r: Renderer, racers: List<RacerRef>, passes: List<Pass>, sizeHints: List<FloatArray> = emptyList()): Score {
         val events = ArrayList<CrossingEvent>()
         val a = FrameAnalyzer(onCrossing = { events += it })
-        a.config = AnalyzerConfig(racers = racers, minMatch = FrameAnalyzer.MIN_MATCH, metersPerProcPx = 0.01f / r.pxPerCm)
+        a.config = AnalyzerConfig(racers = racers, minMatch = FrameAnalyzer.MIN_MATCH, metersPerProcPx = 0.01f / r.pxPerCm, sizeHints = sizeHints)
         val dt = 1.0 / r.fps
         var t = 0.0
         val end = passes.maxOf { it.tCross } + 2.0
@@ -256,6 +264,7 @@ object SyntheticTrack {
                 else -> { idWrong++; notes += "t=${p.tCross.fixed(2)} ${p.car.id}: read as ${e.racerId}" }
             }
         }
+        for (e in acc) if (e !in used) notes += "extra t=${(e.timestampNs / 1e9).fixed(2)} as ${e.racerId ?: "unknown"}${if (e.split) " (split)" else ""} area ${e.area} along ${e.along.toDouble().fixed(2)}"
         return Score(
             passes = passes.size, detected = detected, falseExtra = acc.size - used.size,
             rejected = events.count { !it.accepted },
@@ -283,6 +292,8 @@ object SyntheticTrack {
             out += Pass(cars[2], base + 8, 5.0, lane(3)); out += Pass(cars[0], base + 8.15, 5.0, lane(3))
             // the two look-alikes 3 frames apart
             out += Pass(cars[0], base + 12, 4.5, lane(0)); out += Pass(cars[1], base + 12 + 3.0 / fps, 4.5, lane(2))
+            // nose to tail, 5 mm apart (one car length + 0.5 cm at 5 m/s) → one merged blob from entry
+            out += Pass(cars[3], base + 16, 5.0, lane(4)); out += Pass(cars[2], base + 16 + 0.175 / 5.0, 5.0, lane(4))
         }
         return out
     }
