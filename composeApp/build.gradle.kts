@@ -32,11 +32,19 @@ kotlin {
             implementation(compose.components.resources)
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+            // Supabase (accounts + sync). 3.2.x is the last line built for Kotlin 2.2; bump with Kotlin.
+            implementation("io.github.jan-tennert.supabase:postgrest-kt:3.2.6")
+            implementation("io.github.jan-tennert.supabase:auth-kt:3.2.6")
+            implementation("io.ktor:ktor-client-core:3.3.1")
+        }
+        iosMain.dependencies {
+            implementation("io.ktor:ktor-client-darwin:3.3.1")
         }
         androidMain.dependencies {
             implementation("androidx.activity:activity-compose:1.10.1")
             implementation("androidx.core:core-ktx:1.16.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+            implementation("io.ktor:ktor-client-okhttp:3.3.1")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

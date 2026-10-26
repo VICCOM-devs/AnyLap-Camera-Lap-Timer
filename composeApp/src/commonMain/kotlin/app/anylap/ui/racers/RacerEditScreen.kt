@@ -62,12 +62,20 @@ import app.anylap.ui.components.Stepper
 import app.anylap.ui.components.Tag
 import app.anylap.ui.theme.RT
 import app.anylap.pro.ProFeature
+import app.anylap.ui.account.friendlyAuthError
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.rounded.Share
+import kotlinx.coroutines.launch
 import app.anylap.ui.pro.currentTier
 
 @Composable
 fun RacerEditScreen(nav: Navigator, racerId: String) {
     val app = LocalApp.current
     val tier = currentTier()
+    val account by app.cloud.account.collectAsState()
+    val scope = rememberCoroutineScope()
+    var shareCode by remember { mutableStateOf<String?>(null) }
+    var shareError by remember { mutableStateOf<String?>(null) }
     val racers by app.repo.racers.collectAsState()
     val racer = racers.firstOrNull { it.id == racerId }
     if (racer == null) {
@@ -200,6 +208,42 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                         if (tier.isPro) BibPdf.share(listOf(racer.copy(name = name)))
                         else nav.push(Screen.Paywall(ProFeature.BIBS))
                     }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Print)
+                }
+            }
+        }
+
+        item { SectionLabel("Other phones") }
+        item {
+            RtCard(Modifier.fillMaxWidth()) {
+                if (racer.ownerUserId != null) {
+                    Text("Shared by ${racer.ownerName ?: "a friend"}", style = MaterialTheme.typography.titleSmall)
+                    Text("Sessions you time with this racer also show up in their history.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text("Race on a friend's phone", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Get a code they enter under Racers → Add with code. Their phone learns this racer, and laps they time land in your history.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    shareCode?.let {
+                        Text(it, style = MaterialTheme.typography.displaySmall, color = RT.Gold)
+                        Text("Valid for 24 hours.", style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    shareError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = RT.Amber); Spacer(Modifier.height(8.dp)) }
+                    SecondaryButton(if (tier.isPro) "Get share code" else "Get share code · Pro", {
+                        save()
+                        when {
+                            !tier.isPro -> nav.push(Screen.Paywall(ProFeature.SYNC))
+                            account.userId == null -> nav.push(Screen.Account)
+                            else -> scope.launch {
+                                shareError = null
+                                app.cloud.shareRacer(racer.copy(name = name))
+                                    .onSuccess { shareCode = it }
+                                    .onFailure { shareError = friendlyAuthError(it) }
+                            }
+                        }
+                    }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Share)
                 }
             }
         }

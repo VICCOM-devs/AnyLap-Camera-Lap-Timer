@@ -30,6 +30,7 @@ import app.anylap.ui.components.SecondaryButton
 import app.anylap.ui.components.SectionLabel
 import app.anylap.ui.theme.RT
 import app.anylap.pro.Limits
+import app.anylap.cloud.Account
 import app.anylap.ui.Screen
 import app.anylap.ui.pro.ProBadge
 import app.anylap.ui.pro.currentTier
@@ -59,6 +60,20 @@ fun SettingsScreen(nav: Navigator) {
                     }
                     ProBadge()
                 }
+            }
+        }
+        item {
+            val account by app.cloud.account.collectAsState()
+            RtCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Account) }) {
+                Text("Account & sync", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    when (val a = account) {
+                        is Account.WithEmail -> "Signed in as ${a.email}"
+                        is Account.Guest -> "Syncing as guest – add your email"
+                        else -> "Off – everything stays on this phone"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
         item { SectionLabel("Preferences", Icons.Rounded.Tune) }
@@ -100,7 +115,7 @@ fun SettingsScreen(nav: Navigator) {
             RtCard(Modifier.fillMaxWidth()) {
                 Text("AnyLap · ${Platform.name}", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Camera lap timing for RC cars and runners. Everything is processed on this phone – no account, no uploads. " +
+                    "Camera lap timing for RC cars and runners. Video is processed on this phone and never uploaded. Lap data leaves the phone only if you turn on sync. " +
                         "Timing is for practice and fun, not official results.",
                     style = MaterialTheme.typography.bodySmall,
                 )

@@ -46,6 +46,14 @@ import app.anylap.ui.components.SectionLabel
 import app.anylap.ui.components.Tag
 import app.anylap.ui.theme.RT
 import app.anylap.pro.Limits
+import app.anylap.ui.account.friendlyAuthError
+import app.anylap.ui.components.RtTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import app.anylap.pro.ProFeature
 import app.anylap.ui.pro.currentTier
 
@@ -57,6 +65,40 @@ fun RacersScreen(nav: Navigator) {
     val sport = if (tab == 0) Sport.RC else Sport.RUNNING
     val list = racers.filter { it.sport == sport }.sortedBy { it.number }
     val tier = currentTier()
+    val account by app.cloud.account.collectAsState()
+    val scope = rememberCoroutineScope()
+    var codeDialog by remember { mutableStateOf(false) }
+    var claimCode by remember { mutableStateOf("") }
+    var claimError by remember { mutableStateOf<String?>(null) }
+    var claiming by remember { mutableStateOf(false) }
+
+    if (codeDialog) {
+        AlertDialog(
+            onDismissRequest = { codeDialog = false },
+            containerColor = RT.Surface2,
+            title = { Text("Add a friend's racer") },
+            text = {
+                Column {
+                    Text("Enter the 6-character code from their racer page.", color = RT.TextDim)
+                    Spacer(Modifier.height(10.dp))
+                    RtTextField(claimCode, { claimCode = it.uppercase().filter(Char::isLetterOrDigit).take(6) }, "Code")
+                    claimError?.let { Text(it, color = RT.Amber, style = MaterialTheme.typography.bodySmall) }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = claimCode.length == 6 && !claiming, onClick = {
+                    scope.launch {
+                        claiming = true
+                        app.cloud.claimRacer(claimCode)
+                            .onSuccess { r -> codeDialog = false; nav.push(Screen.RacerEdit(r.id)) }
+                            .onFailure { claimError = friendlyAuthError(it) }
+                        claiming = false
+                    }
+                }) { Text("Add", color = RT.Accent) }
+            },
+            dismissButton = { TextButton(onClick = { codeDialog = false }) { Text("Cancel", color = RT.Text) } },
+        )
+    }
 
     ScreenScaffold(title = "Racers", subtitle = "Profiles, calibration and bibs") {
         item { PillTabs(listOf("RC cars", "Runners"), tab, { tab = it }, Modifier.fillMaxWidth()) }
@@ -96,6 +138,15 @@ fun RacersScreen(nav: Navigator) {
                 }
             }
         }
+        item {
+            SecondaryButton("Add with code", onClick = {
+                    when {
+                        !tier.isPro -> nav.push(Screen.Paywall(ProFeature.SYNC))
+                        account.userId == null -> nav.push(Screen.Account)
+                        else -> { codeDialog = true; claimError = null; claimCode = "" }
+                    }
+                }, Modifier.fillMaxWidth(), icon = Icons.Rounded.QrCode2)
+        }
     }
 }
 
@@ -110,6 +161,7 @@ private fun RacerRow(r: Racer, onClick: () -> Unit) {
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Tag("#${r.number}", RT.TextDim)
+                    if (r.ownerUserId != null) Tag(r.ownerName?.let { "From $it" } ?: "Shared", RT.Purple)
                     when {
                         r.isCalibrated -> Tag("Calibrated · ${r.fingerprintSamples}", RT.Green)
                         r.sport == Sport.RC -> Tag("Needs calibration", RT.Amber)

@@ -79,6 +79,7 @@ import app.anylap.ui.components.uiColor
 import app.anylap.ui.theme.Num
 import app.anylap.ui.theme.RT
 import app.anylap.pro.Limits
+import app.anylap.cloud.timedByLabel
 import app.anylap.pro.ProFeature
 import app.anylap.ui.pro.ProLockCard
 import app.anylap.ui.pro.currentTier
@@ -111,7 +112,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
     ScreenScaffold(
         title = s.title,
         subtitle = Platform.formatDate(s.startedAt, "EEE d MMM · HH:mm") +
-            " · " + Format.duration(s.durationMs),
+            " · " + Format.duration(s.durationMs) + (s.timedByLabel()?.let { " · $it" } ?: ""),
         onBack = { nav.tab(Screen.Home) },
         actions = {
             CircleIconButton(Icons.Rounded.Share, { shareResults(s, branded = !tier.isPro) })
