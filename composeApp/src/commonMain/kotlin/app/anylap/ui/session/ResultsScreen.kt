@@ -113,7 +113,10 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
         title = s.title,
         subtitle = Platform.formatDate(s.startedAt, "EEE d MMM · HH:mm") +
             " · " + Format.duration(s.durationMs) + (s.timedByLabel()?.let { " · $it" } ?: ""),
-        onBack = { nav.tab(Screen.Home) },
+        onBack = {
+            // Event rounds go back to the event; everything else to Home.
+            if (app.repo.events.value.any { ev -> ev.rounds.any { it.sessionId == s.id } }) nav.pop() else nav.tab(Screen.Home)
+        },
         actions = {
             CircleIconButton(Icons.Rounded.Share, { shareResults(s, branded = !tier.isPro) })
         },

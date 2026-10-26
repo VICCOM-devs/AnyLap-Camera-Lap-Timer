@@ -28,6 +28,8 @@ enum class ProFeature(val headline: String, val body: String) {
     CHARTS("See your progress", "Lap-time trends, consistency and speed charts across every session you've timed."),
     BIBS("Print marker bibs", "Printable bibs with markers the camera reads from metres away – the most reliable way to tell racers apart."),
     CLEAN_SHARE("Share without branding", "Share results without the \"Timed with AnyLap\" line."),
+    EVENTS("Run a race day", "Heats, a points table and a final seeded from the heats – for clubs, birthdays and track days."),
+    LIVE("Live timing screen", "Friends follow the timing tower live on their own phones, no app needed."),
     SYNC("Your races on every phone", "Sign in to back up every session, time on a friend's phone and have the laps land in your own history."),
 }
 

@@ -31,6 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
@@ -104,6 +105,8 @@ fun LiveLayout(
     direction: Direction,
     previewAspect: Float,
     voice: Boolean,
+    live: Boolean,
+    onLive: () -> Unit,
     onLineChange: (LineSpec) -> Unit,
     onDirection: () -> Unit,
     onResetBackground: () -> Unit,
@@ -185,6 +188,8 @@ fun LiveLayout(
             config = config,
             race = race,
             voice = voice,
+            live = live,
+            onLive = onLive,
             onToggleVoice = onToggleVoice,
             onStart = onStart,
             onEnd = onEnd,
@@ -372,6 +377,8 @@ private fun TimingTower(
     config: SessionConfig,
     race: RaceState,
     voice: Boolean,
+    live: Boolean,
+    onLive: () -> Unit,
     onToggleVoice: () -> Unit,
     onStart: () -> Unit,
     onEnd: () -> Unit,
@@ -403,6 +410,11 @@ private fun TimingTower(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+            CircleIconButton(
+                Icons.Rounded.Sensors, onLive, tint = if (live) RT.Accent else RT.Text, size = 44.dp,
+                contentDescription = if (live) "Live timing is on" else "Share live timing",
+            )
+            Spacer(Modifier.width(8.dp))
             CircleIconButton(
                 if (voice) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
                 onToggleVoice, size = 44.dp,

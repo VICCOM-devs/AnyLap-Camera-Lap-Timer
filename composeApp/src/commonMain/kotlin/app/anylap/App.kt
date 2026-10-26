@@ -46,6 +46,8 @@ import app.anylap.ui.Screen
 import app.anylap.ui.home.HomeScreen
 import app.anylap.ui.pro.PaywallScreen
 import app.anylap.ui.account.AccountScreen
+import app.anylap.ui.events.EventScreen
+import app.anylap.ui.events.EventsScreen
 import androidx.compose.runtime.LaunchedEffect
 import app.anylap.ui.racers.CalibrateScreen
 import app.anylap.ui.racers.RacerEditScreen
@@ -91,6 +93,8 @@ fun App() {
                         is Screen.Replay -> ReplayScreen(nav, screen.sessionId, screen.racerId, screen.lap)
                         is Screen.Paywall -> PaywallScreen(nav, screen.feature)
                         Screen.Account -> AccountScreen(nav)
+                        Screen.Events -> EventsScreen(nav)
+                        is Screen.EventDetail -> EventScreen(nav, screen.id)
                     }
                 }
                 if (nav.current.isTab) {

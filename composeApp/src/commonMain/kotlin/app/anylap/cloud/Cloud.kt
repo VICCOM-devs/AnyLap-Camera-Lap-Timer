@@ -43,6 +43,10 @@ import kotlin.time.Instant
 object BackendConfig {
     const val URL = "https://ecdkjmvfjusznvggzvfs.supabase.co"
     const val PUBLISHABLE_KEY = "sb_publishable_luYMNaJjBpzYM2fhzmBMZw_xPcR_hon"
+
+    /** Public spectator page (VICCOM_Site/anylap/live/). */
+    const val LIVE_PAGE = "https://viccom.se/anylap/live/"
+    fun liveUrl(code: String) = "$LIVE_PAGE?c=$code"
 }
 
 sealed interface Account {
@@ -252,6 +256,32 @@ class Cloud(private val repo: Repository) {
         val local = if (owner == me) racer else racer.copy(ownerUserId = owner, ownerName = name)
         repo.upsertRacer(local.copy(photoPath = repo.racer(racer.id)?.photoPath))
         local
+    }
+
+    // ------------------------------------------------------------------ live timing board
+
+    /** Opens a live board and returns its 6-character code. */
+    suspend fun startLive(): Result<String> = runCatching {
+        json.decodeFromString<String>(client.postgrest.rpc("anylap_live_start").data)
+    }
+
+    /** Replaces the board's snapshot. Errors are swallowed: a missed update is fixed by the next one. */
+    suspend fun pushLive(code: String, snapshot: JsonElement) {
+        try {
+            client.from("anylap_live").update(buildJsonObject { put("snapshot", snapshot) }) {
+                filter { eq("code", code) }
+            }
+        } catch (e: Exception) {
+            println("AnyLap cloud: live update failed: $e")
+        }
+    }
+
+    suspend fun stopLive(code: String) {
+        try {
+            client.from("anylap_live").delete { filter { eq("code", code) } }
+        } catch (e: Exception) {
+            println("AnyLap cloud: live stop failed: $e")
+        }
     }
 
     // ------------------------------------------------------------------ GDPR
