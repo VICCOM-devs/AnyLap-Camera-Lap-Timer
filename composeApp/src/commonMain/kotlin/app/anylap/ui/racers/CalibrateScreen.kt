@@ -177,6 +177,11 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
         return
     }
     val stats by session.camera.stats.collectAsState()
+    // Exposure time for motion-blur-aware colour sampling (rounded so small AE wobble doesn't churn).
+    val exposureMs = (stats.exposureNs / 100_000L) / 10f
+    LaunchedEffect(exposureMs) {
+        if (exposureMs > 0f) session.analyzer.config = session.analyzer.config.copy(exposureS = exposureMs / 1000f)
+    }
     val boxes by session.overlay.collectAsState()
 
     // Only this racer is "in the race", so every crossing is theirs – but it has to look like

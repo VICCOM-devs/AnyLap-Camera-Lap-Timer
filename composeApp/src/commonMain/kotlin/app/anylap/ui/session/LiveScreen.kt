@@ -171,6 +171,11 @@ private fun LiveContent(nav: Navigator) {
         return
     }
     val camStats by session.camera.stats.collectAsState()
+    // Exposure time for motion-blur-aware colour sampling (rounded so small AE wobble doesn't churn).
+    val exposureMs = (camStats.exposureNs / 100_000L) / 10f
+    LaunchedEffect(exposureMs) {
+        if (exposureMs > 0f) session.analyzer.config = session.analyzer.config.copy(exposureS = exposureMs / 1000f)
+    }
     val boxes by session.overlay.collectAsState()
 
     // Keep the analyzer in sync with the line, direction and racers.

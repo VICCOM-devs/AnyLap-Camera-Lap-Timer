@@ -64,7 +64,7 @@ class FrameAnalyzer(
         val m = model ?: return
         if (resetRequested) {
             resetRequested = false
-            m.reset(); tracks.clear(); pending.clear()
+            m.reset(); tracks.clear(); pending.clear(); claims.clear()
         }
         regionRequest?.let { (rect, cb) ->
             regionRequest = null
@@ -258,10 +258,39 @@ class FrameAnalyzer(
         val y0 = t.by.coerceIn(0, h - 1)
         val x1 = (t.bx + t.bw).coerceIn(x0 + 1, w)
         val y1 = (t.by + t.bh).coerceIn(y0 + 1, h)
+        // Motion blur: each end of a moving blob is racer and ground mixed over one blur length
+        // (speed × exposure). At 40 km/h and 1/120 s that is 9 cm of a 16 cm car – most of it – and the
+        // mix drags every car's colours towards the asphalt. Read only the band along the direction of
+        // travel that the blur has not reached (at least the middle 30 %).
+        bandUx = 0f; bandUy = 0f; bandKeep = 0f
+        val n = t.pts.size
+        if (n >= 2) {
+            val a = t.pts[n - 2]; val b = t.pts[n - 1]
+            val dt = (b.ts - a.ts) / 1e9f
+            if (dt > 0f) {
+                val vx = (b.x - a.x) / dt; val vy = (b.y - a.y) / dt
+                val sp = hypot(vx, vy)
+                val blur = sp * config.exposureS
+                if (blur > 1f) {
+                    bandUx = vx / sp; bandUy = vy / sp
+                    val half = (abs(bandUx) * t.bw + abs(bandUy) * t.bh) / 2f
+                    bandKeep = max(0.3f * half, half - blur)
+                    bandCx = t.bx + t.bw / 2f; bandCy = t.by + t.bh / 2f
+                }
+            }
+        }
         val added = sampleFingerprint(t, f, x0, y0, x1, y1, core = true)
         if (added == 0) sampleFingerprint(t, f, x0, y0, x1, y1, core = false)
         t.histFrames++
     }
+
+
+
+    private var bandUx = 0f
+    private var bandUy = 0f
+    private var bandKeep = 0f
+    private var bandCx = 0f
+    private var bandCy = 0f
 
     private fun sampleFingerprint(t: Track, f: AnalysisFrame, x0: Int, y0: Int, x1: Int, y1: Int, core: Boolean): Int {
         var added = 0
@@ -274,7 +303,9 @@ class FrameAnalyzer(
             val row = y * w
             while (x < x1) {
                 val i = row + x
-                if (mask[i].toInt() != 0 && (t.tag == 0 || owner[i] == t.tag)) {
+                if (mask[i].toInt() != 0 && (t.tag == 0 || owner[i] == t.tag) &&
+                    (bandKeep <= 0f || abs((x - bandCx) * bandUx + (y - bandCy) * bandUy) <= bandKeep)
+                ) {
                     val ok = !core || (
                         x >= CORE && x + CORE < w && y >= CORE && y + CORE < h &&
                             mask[i - CORE].toInt() != 0 && mask[i + CORE].toInt() != 0 &&
@@ -357,11 +388,11 @@ class FrameAnalyzer(
             var seeds: List<Pair<Float, Float>>? = null
             var source = -1
             if (inside.size >= 2) {
-                seeds = inside.take(3).map { it.predict(ts) }
+                seeds = inside.take(4).map { it.predict(ts) }
             } else {
                 if (DEBUG_SPLIT && exp != null && b.area > 1.2f * exp) println("big blob area ${b.area} exp ${exp.toInt()} along ${line.along(b.cx, b.cy)} ts ${ts / 1e9}")
                 if (exp != null && b.area > SPLIT_FACTOR * exp) {
-                    val k = (b.area / exp).roundToInt().coerceIn(2, 3)
+                    val k = (b.area / exp).roundToInt().coerceIn(2, 4)
                     seeds = axisSeeds(b, k, perpendicular = false)
                     source = inside.singleOrNull()?.id ?: -1
                     // Racers side by side make a squarish blob whose long axis may be the wrong one:
@@ -373,7 +404,7 @@ class FrameAnalyzer(
                         val pick = if (a2 != null && (a1 == null || a2.first > a1.first)) { seeds = alt; a2 } else a1
                         // Parts that all look like the same racer are one big-looking racer (camera
                         // closer than at calibration, long blur), not several: leave it whole.
-                        if (pick == null || pick.second.distinct().size < pick.second.size) seeds = null
+                        if (pick == null || pick.second.any { it == null } || pick.second.distinct().size < pick.second.size) seeds = null
                     }
                 }
             }
@@ -454,7 +485,8 @@ class FrameAnalyzer(
         val len = sqrt(ex * ex + ey * ey); ex /= len; ey /= len
         var sd = sqrt(l1)
         if (perpendicular) { val t = ex; ex = -ey; ey = t; sd = sqrt(max(1e-6, tr - l1)) }
-        val offs = if (k == 2) listOf(-0.87, 0.87) else listOf(-1.15, 0.0, 1.15)
+        // centres of k equal racers in a row, in standard deviations of the whole row (sd = k·L/√12)
+        val offs = (0 until k).map { (it - (k - 1) / 2.0) * sqrt(12.0) / k }
         return offs.map { o -> (b.cx + (ex * sd * o).toFloat()) to (b.cy + (ey * sd * o).toFloat()) }
     }
 
@@ -518,7 +550,8 @@ class FrameAnalyzer(
             val fp = Fingerprint.normalize(a)
             val top = cfg.racers.mapNotNull { r -> score(fp, r)?.let { r.id to it } }.maxByOrNull { it.second }
             total += top?.second ?: 0f
-            best += top?.first
+            // a part that doesn't clearly look like any racer (shadow, legs) makes the cut invalid
+            best += top?.takeIf { it.second >= SPLIT_PART_MATCH }?.first
         }
         return total to best
     }
@@ -591,7 +624,9 @@ class FrameAnalyzer(
         val travel = hypot(cur.x - oldest.x, cur.y - oldest.y)
         if (travel < max(MIN_TRAVEL_PX.toFloat(), MIN_TRAVEL_FRAC * w)) return false
         val across = abs(curSide - line.side(oldest.x, oldest.y))
-        return across >= 0.5f * travel
+        // Within 45° of straight across. Racers cross a finish line close to square; a shadow edge or
+        // a sliding reflection that drifts *along* the line (≥ 60° in Blender tests) does not count.
+        return across >= ACROSS_FRAC * travel
     }
 
     private fun finalizePending(nowNs: Long, cfg: AnalyzerConfig, force: Boolean) {
@@ -605,6 +640,74 @@ class FrameAnalyzer(
             iter.remove()
             emit(p, cfg)
         }
+    }
+
+    /** Racer → time of the last crossing it was named at (for "can't cross twice within a lap"). */
+    private val claims = HashMap<String, Long>()
+
+    /**
+     * Names a crossing by appearance, deciding it together with the crossings still waiting to be
+     * emitted, and leaving out racers named within the sport's minimum lap time (a car can't cross
+     * twice in 2.5 s). Cars that cross at nearly the same moment are often ambiguous one by one but
+     * not as a set: grey-vs-black for one and black-vs-grey for the other is one clear answer.
+     * Returns (racer or null, margin): margin = best joint total − best joint total with this
+     * crossing given any other answer (another racer, or none); the old one-by-one rule is the
+     * special case of a single crossing.
+     */
+    private fun jointAppearance(p: Pending, fp: FloatArray, cfg: AnalyzerConfig): Pair<String?, Float> {
+        val minLapNs = (cfg.sport.defaultMinLapSec * 1e9).toLong()
+        val free = cfg.racers.filter { r -> claims[r.id]?.let { abs(p.crossNs - it) >= minLapNs } ?: true }
+        if (free.isEmpty()) return null to 0f
+        val others = pending.filter { it !== p && abs(it.crossNs - p.crossNs) < minLapNs && it.track.histFrames > 0 }
+            .sortedBy { abs(it.crossNs - p.crossNs) }.take(5)
+        val rows = ArrayList<FloatArray>(1 + others.size)
+        rows += fp
+        for (o in others) rows += Fingerprint.normalize(o.track.hist)
+        val n = rows.size
+        // columns: free racers, then one "none" column per row (score 0)
+        val m = free.size + n
+        val sc = Array(n) { r -> FloatArray(m) { c -> if (c < free.size) (score(rows[r], free[c]) ?: 0f) else 0f } }
+        val (total, assign) = maxAssignment(sc)
+        val col = assign[0]
+        if (col >= free.size) return null to 0f
+        val own = sc[0][col]
+        val saved = sc[0][col]
+        sc[0][col] = -1e3f
+        val (alt, _) = maxAssignment(sc)
+        sc[0][col] = saved
+        val margin = total - alt
+        return (if (own >= MIN_SIMILARITY && margin >= MIN_MARGIN) free[col].id else null) to margin
+    }
+
+    /** Maximum-weight assignment of every row to a distinct column (rows ≤ columns): Hungarian, O(n²m). */
+    private fun maxAssignment(s: Array<FloatArray>): Pair<Float, IntArray> {
+        val n = s.size; val m = s[0].size
+        val inf = 1e9
+        val u = DoubleArray(n + 1); val v = DoubleArray(m + 1)
+        val pRow = IntArray(m + 1); val way = IntArray(m + 1)
+        for (i in 1..n) {
+            pRow[0] = i
+            var j0 = 0
+            val minv = DoubleArray(m + 1) { inf }
+            val used = BooleanArray(m + 1)
+            do {
+                used[j0] = true
+                val i0 = pRow[j0]
+                var delta = inf; var j1 = 0
+                for (j in 1..m) if (!used[j]) {
+                    val cur = -s[i0 - 1][j - 1] - u[i0] - v[j]
+                    if (cur < minv[j]) { minv[j] = cur; way[j] = j0 }
+                    if (minv[j] < delta) { delta = minv[j]; j1 = j }
+                }
+                for (j in 0..m) if (used[j]) { u[pRow[j]] += delta; v[j] -= delta } else minv[j] -= delta
+                j0 = j1
+            } while (pRow[j0] != 0)
+            do { val j1 = way[j0]; pRow[j0] = pRow[j1]; j0 = j1 } while (j0 != 0)
+        }
+        val assign = IntArray(n)
+        var total = 0f
+        for (j in 1..m) if (pRow[j] != 0) { assign[pRow[j] - 1] = j - 1; total += s[pRow[j] - 1][j - 1] }
+        return total to assign
     }
 
     private fun emit(p: Pending, cfg: AnalyzerConfig) {
@@ -639,15 +742,15 @@ class FrameAnalyzer(
                 confidence = 1f
             }
             candidates.isNotEmpty() -> {
-                val best = candidates[0]
-                val second = candidates.getOrNull(1)?.second ?: 0f
-                confidence = best.second - second
-                if (best.second >= MIN_SIMILARITY && best.second - second >= MIN_MARGIN) {
-                    racerId = best.first
+                val (id, margin) = jointAppearance(p, fp!!, cfg)
+                confidence = margin
+                if (id != null) {
+                    racerId = id
                     source = IdSource.APPEARANCE
                 }
             }
         }
+        if (racerId != null) claims[racerId] = p.crossNs
         onCrossing(
             CrossingEvent(
                 timestampNs = p.crossNs,
@@ -778,8 +881,16 @@ class FrameAnalyzer(
 
         /** Fraction of the frame moving at once above which crossings are not counted. */
         const val UNSTABLE_FRAC = 0.30f
-        /** A blob this many times one racer's size (at that point of the line) is split. */
+        /**
+         * A blob this many times one racer's size (at that point of the line) is split. Lower values
+         * split lone fast racers (blur makes them long); racers that hide each other and only reach
+         * ~1.5× stay merged – a higher camera is the fix for those, not a lower threshold.
+         */
         const val SPLIT_FACTOR = 1.7f
+        /** Each part of a size-based split must look at least this much like some racer. */
+        const val SPLIT_PART_MATCH = 0.5f
+        /** Share of a crossing's recent travel that must be across the line (0.7 ≈ within 45°). */
+        const val ACROSS_FRAC = 0.7f
         var DEBUG_SPLIT = false
         /** Frames between exposure (median luma) updates for the fingerprint. */
         const val EXPOSURE_EVERY = 15L

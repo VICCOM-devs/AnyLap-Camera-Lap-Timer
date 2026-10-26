@@ -53,6 +53,11 @@ data class AnalyzerConfig(
      * from identified crossings during the session.
      */
     val sizeHints: List<FloatArray> = emptyList(),
+    /**
+     * Exposure time of the camera (s), for motion-blur-aware colour sampling. Default = the worst
+     * an indoor 60 fps session locks to; the app passes the real value once exposure is locked.
+     */
+    val exposureS: Float = 1f / 120f,
 )
 
 enum class IdSource { MARKER, APPEARANCE, ONLY_RACER, NONE }

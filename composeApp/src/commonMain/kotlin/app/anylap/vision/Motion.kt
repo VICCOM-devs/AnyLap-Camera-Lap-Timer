@@ -32,7 +32,7 @@ class BackgroundModel(val width: Int, val height: Int) {
      */
     var shadowMin = 0.5f
     var shadowMax = 0.93f
-    /** Shadows may shift colour a little (sky light); below this |ΔU|+|ΔV| it still counts as shadow. */
+    /** Shadows may shift colour a little (sky light): allowed |ΔU|+|ΔV| from the scaled background colour. */
     var shadowChroma = 10f
     /** Pixels marked as shadow in the last [apply], as a fraction of the frame. */
     var shadowFrac = 0f
@@ -74,9 +74,16 @@ class BackgroundModel(val width: Int, val height: Int) {
             val chroma = abs(du) + abs(dv)
             var fg = !warm && ((d2 > k2 * variance[i] && abs(d) > minDiff) || chroma > chromaDiff)
             var shadow = false
-            if (fg && d < 0f && chroma < shadowChroma) {
+            if (fg && d < 0f) {
+                // Light blocked scales R, G and B alike: brightness by `ratio`, and the colour offset
+                // from neutral by the same ratio (a shadow on a cyan line or a red kerb is a darker,
+                // *less* saturated cyan or red – not a colour change).
                 val ratio = px / (mean[i] + 1f)
-                if (ratio >= shadowMin && ratio <= shadowMax) { fg = false; shadow = true; shadows++ }
+                if (ratio >= shadowMin && ratio <= shadowMax) {
+                    val eu = pu - (128f + ratio * (meanU[i] - 128f))
+                    val ev = pv - (128f + ratio * (meanV[i] - 128f))
+                    if (abs(eu) + abs(ev) < shadowChroma) { fg = false; shadow = true; shadows++ }
+                }
             }
             if (fg) {
                 mask[i] = 1
