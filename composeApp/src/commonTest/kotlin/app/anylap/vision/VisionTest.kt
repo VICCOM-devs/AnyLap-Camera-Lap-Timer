@@ -215,6 +215,73 @@ class VisionTest {
     }
 
     @Test
+    fun hugeBlobsAreNotCrossings() {
+        // Half the frame changing (a light switched on, someone walking up to the phone) is not a car.
+        val events = ArrayList<CrossingEvent>()
+        val a = FrameAnalyzer(onCrossing = { events += it })
+        a.config = AnalyzerConfig(line = LineSpec(), sport = Sport.RC)
+        val scene = Scene(seed = 11)
+        var ts = 1_000_000_000L
+        repeat(30) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+        ts = runPass(a, scene, ts, 60, 400f, { x -> Scene.Car(x, 135f, 260, 180, 200, 90, 200) }, 120)
+        a.flush(ts)
+        assertEquals(0, events.size)
+    }
+
+    @Test
+    fun flickeringOnTheLineIsNotACrossing() {
+        // Something static that pops in and out of the background right on the line never travels anywhere.
+        val events = ArrayList<CrossingEvent>()
+        val a = FrameAnalyzer(onCrossing = { events += it })
+        a.config = AnalyzerConfig(line = LineSpec(), sport = Sport.RC)
+        val scene = Scene(seed = 12)
+        var ts = 1_000_000_000L
+        repeat(30) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+        repeat(120) { f ->
+            val x = 240f + if (f % 2 == 0) -3f else 3f
+            a.process(scene.frame(ts, listOf(Scene.Car(x, 135f, 30, 16, 200, 90, 200)))); ts += 16_666_667L
+        }
+        a.flush(ts)
+        assertEquals(0, events.size)
+    }
+
+    @Test
+    fun appearanceGateTurnsDownThingsThatDontLookLikeTheRacer() {
+        val scene = Scene(seed = 13)
+        val red = { x: Float -> Scene.Car(x, 135f, 34, 18, 90, 100, 220) }
+        val grey = { x: Float -> Scene.Car(x, 135f, 34, 18, 170, 128, 128) }
+
+        // Learn red from one ungated pass.
+        val learned = ArrayList<CrossingEvent>()
+        val la = FrameAnalyzer(onCrossing = { learned += it })
+        la.config = AnalyzerConfig(line = LineSpec(), racers = listOf(RacerRef("r", null, null)))
+        var ts = 1_000_000_000L
+        repeat(30) { la.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+        ts = runPass(la, scene, ts, 60, 500f, red, 120)
+        la.flush(ts)
+        val fpRed = assertNotNull(learned.single().fingerprint)
+
+        // Gated: the grey thing is reported but not accepted; the red car is.
+        val events = ArrayList<CrossingEvent>()
+        val a = FrameAnalyzer(onCrossing = { events += it })
+        a.config = AnalyzerConfig(
+            line = LineSpec(),
+            racers = listOf(RacerRef("r", fpRed, null, listOf(fpRed))),
+            minMatch = FrameAnalyzer.MIN_MATCH,
+        )
+        ts = 50_000_000_000L
+        repeat(30) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+        ts = runPass(a, scene, ts, 60, 500f, grey, 120)
+        repeat(20) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+        ts = runPass(a, scene, ts, 60, 500f, red, 120)
+        a.flush(ts)
+        assertEquals(listOf(false, true), events.map { it.accepted }, "matches: ${events.map { it.match }}")
+        assertTrue(events[0].match < FrameAnalyzer.MIN_MATCH)
+        assertTrue(events[1].match >= FrameAnalyzer.MIN_MATCH)
+        assertEquals("r", events[1].racerId)
+    }
+
+    @Test
     fun snapshotOfTheCrossingOnlyWhenAsked() {
         val scene = Scene(seed = 11)
         val car = { x: Float -> Scene.Car(x, 135f, 34, 18, 90, 100, 220) }

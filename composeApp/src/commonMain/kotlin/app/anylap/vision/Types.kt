@@ -40,6 +40,12 @@ data class AnalyzerConfig(
     val useMarkers: Boolean = false,
     /** Attach a small picture of what crossed to each event (calibration review). */
     val captureSnapshots: Boolean = false,
+    /**
+     * Appearance gate: a crossing must look at least this much like one of the racers (their
+     * photos and passes) to be accepted; 0 = off. Only applies once every racer has samples.
+     * Rejected crossings are still reported with [CrossingEvent.accepted] = false.
+     */
+    val minMatch: Float = 0f,
 )
 
 enum class IdSource { MARKER, APPEARANCE, ONLY_RACER, NONE }
@@ -58,6 +64,10 @@ class CrossingEvent(
     val markerSeen: Int?,
     /** Crop of the racer at the moment it crossed; only when [AnalyzerConfig.captureSnapshots]. */
     val snapshot: Snapshot? = null,
+    /** Best colour similarity to any racer (0..1); 0 when nothing to compare with. */
+    val match: Float = 0f,
+    /** False when the appearance gate ([AnalyzerConfig.minMatch]) turned this crossing down. */
+    val accepted: Boolean = true,
 )
 
 /** Small RGB picture (ARGB pixels, row by row). */

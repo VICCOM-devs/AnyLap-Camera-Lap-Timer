@@ -69,6 +69,7 @@ import app.anylap.data.LineSpec
 import app.anylap.data.Racer
 import app.anylap.data.SampleKind
 import app.anylap.data.Sport
+import app.anylap.data.matchViews
 import app.anylap.platform.Platform
 import app.anylap.platform.PlatformBackHandler
 import app.anylap.platform.joinPath
@@ -178,18 +179,40 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
     val stats by session.camera.stats.collectAsState()
     val boxes by session.overlay.collectAsState()
 
-    // Only this racer is "in the race", so every crossing is theirs.
-    LaunchedEffect(line, direction, racer.id) {
+    // Only this racer is "in the race", so every crossing is theirs – but it has to look like
+    // the photos (and the passes so far): a pallet, a shoe or a fire extinguisher is not a pass.
+    val views = racer.matchViews()
+    LaunchedEffect(line, direction, racer.id, views.size) {
         val mpp = session.camera.setup.hfovRad?.let { Optics.metersPerPixel(settings.lastConfig.cameraDistanceM, it, FrameAnalyzer.PROC_W) }
         session.analyzer.config = session.analyzer.config.copy(
             line = line,
             direction = direction,
             sport = racer.sport,
-            racers = listOf(RacerRef(racer.id, null, racer.markerId)),
+            racers = listOf(RacerRef(racer.id, racer.fingerprint.takeIf { it.isNotEmpty() }?.toFloatArray(), racer.markerId, views)),
             useMarkers = racer.markerId != null,
             metersPerProcPx = mpp,
             captureSnapshots = true,
+            minMatch = if (views.isEmpty()) 0f else FrameAnalyzer.MIN_MATCH,
         )
+    }
+    // Same as in a race: fixed exposure while recording passes, so brightness drift isn't "motion".
+    LaunchedEffect(step) {
+        session.camera.setExposureLock(step is CalStep.Pass)
+        if (step is CalStep.Pass) session.analyzer.resetBackground()
+    }
+    var rejectedInARow by remember { mutableStateOf(0) }
+    LaunchedEffect(session) {
+        session.rejected.collect { e ->
+            if (currentStep !is CalStep.Pass || currentEditing) return@collect
+            rejectedInARow++
+            val pct = "${(e.match * 100).fixed(0)}% match"
+            notice = if (rejectedInARow < 3) "Ignored: something crossed that didn't look like ${racer.name} ($pct)."
+            else "Still not recognising ${racer.name} ($pct). If that was the ${racer.sport.unitName}, retake the photos with it filling the box, in this light."
+            scope.launch {
+                delay(5_000)
+                if (notice?.startsWith("Ignored") == true || notice?.startsWith("Still") == true) notice = null
+            }
+        }
     }
     LaunchedEffect(session) {
         session.crossings.collect { e ->
@@ -216,9 +239,11 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
                 createdAt = now,
                 speedKmh = e.speedKmh,
                 direction = e.direction,
+                match = e.match.takeIf { it > 0f },
             )
             app.repo.addCalibrationSample(racerId, sample)
             lastPass = sample
+            rejectedInARow = 0
             notice = null
             if (e.markerSeen != null) markerSeen = e.markerSeen
             if (before + 1 == CalibrationPlan.PASSES_PER_SPEED) {

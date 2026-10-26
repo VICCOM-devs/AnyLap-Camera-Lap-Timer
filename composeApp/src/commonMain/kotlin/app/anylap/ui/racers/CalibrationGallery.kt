@@ -237,6 +237,13 @@ fun SampleDialog(racer: Racer, sample: CalibrationSample, kmh: Boolean, onDelete
                     else "Delete it if this wasn't the ${racer.sport.unitName}, it crashed, or someone walked through.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                sample.match?.let { m ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Looked ${(m * 100).fixed(0)}% like the other samples.",
+                        style = MaterialTheme.typography.labelSmall, color = RT.TextDim,
+                    )
+                }
             }
         },
         confirmButton = {

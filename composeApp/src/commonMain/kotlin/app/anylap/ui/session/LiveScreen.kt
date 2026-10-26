@@ -185,6 +185,8 @@ private fun LiveContent(nav: Navigator) {
             },
             metersPerProcPx = mpp,
             useMarkers = config.sport == Sport.RUNNING && racers.any { it.markerId != null },
+            // Applies only once every racer in the grid is calibrated (the analyzer checks).
+            minMatch = FrameAnalyzer.MIN_MATCH,
         )
     }
     LaunchedEffect(session, engine) {
