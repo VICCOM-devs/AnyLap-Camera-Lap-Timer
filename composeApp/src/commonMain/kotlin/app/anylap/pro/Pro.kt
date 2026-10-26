@@ -8,7 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 /** What the user has paid for. */
@@ -27,6 +28,7 @@ enum class ProFeature(val headline: String, val body: String) {
     CHARTS("See your progress", "Lap-time trends, consistency and speed charts across every session you've timed."),
     BIBS("Print marker bibs", "Printable bibs with markers the camera reads from metres away – the most reliable way to tell racers apart."),
     CLEAN_SHARE("Share without branding", "Share results without the \"Timed with AnyLap\" line."),
+    SYNC("Your races on every phone", "Sign in to back up every session, time on a friend's phone and have the laps land in your own history."),
 }
 
 /**
@@ -92,12 +94,17 @@ interface Billing {
  * Pre-release billing: no store. Pro can be switched on for testing from Settings,
  * stored in settings.json. Remove the testing switch when the store implementation lands.
  */
-class LocalBilling(private val repo: Repository) : Billing {
+class LocalBilling(
+    private val repo: Repository,
+    /** Pro bought on another phone / granted, as reported by the server for the signed-in account. */
+    private val serverPro: StateFlow<Boolean> = MutableStateFlow(false),
+) : Billing {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    override val tier: StateFlow<Tier> = repo.settings
-        .map { if (it.testingProUnlocked) Tier.PRO else Tier.FREE }
-        .stateIn(scope, SharingStarted.Eagerly, if (repo.settings.value.testingProUnlocked) Tier.PRO else Tier.FREE)
+    private fun tierOf(testing: Boolean, server: Boolean) = if (testing || server) Tier.PRO else Tier.FREE
+
+    override val tier: StateFlow<Tier> = combine(repo.settings, serverPro) { s, p -> tierOf(s.testingProUnlocked, p) }
+        .stateIn(scope, SharingStarted.Eagerly, tierOf(repo.settings.value.testingProUnlocked, serverPro.value))
 
     override val storeAvailable: Boolean = false
 

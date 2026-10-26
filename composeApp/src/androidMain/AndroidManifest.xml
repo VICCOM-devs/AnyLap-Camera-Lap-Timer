@@ -3,6 +3,8 @@
 
     <uses-feature android:name="android.hardware.camera" android:required="true" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Cloud sync (only used once the user turns sync on). -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Needed on Android 11+ to reach the text-to-speech engine for lap announcements. -->
     <queries>

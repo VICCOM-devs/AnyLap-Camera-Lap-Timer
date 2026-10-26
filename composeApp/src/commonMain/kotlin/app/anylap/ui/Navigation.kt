@@ -8,6 +8,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import app.anylap.data.Repository
 import app.anylap.data.SessionConfig
 import app.anylap.pro.Billing
+import app.anylap.cloud.Cloud
 import app.anylap.pro.LocalBilling
 import app.anylap.pro.ProFeature
 import app.anylap.pro.Tier
@@ -25,6 +26,7 @@ sealed interface Screen {
     data class Results(val id: String) : Screen
     data class Replay(val sessionId: String, val racerId: String, val lap: Int) : Screen
     data class Paywall(val feature: ProFeature? = null) : Screen
+    data object Account : Screen
 
     val isTab: Boolean get() = this == Home || this == Race || this == Stats || this == Racers
 }
@@ -61,8 +63,13 @@ class Navigator {
 /** App-wide state shared by all screens. */
 class AppState {
     val repo = Repository()
-    val billing: Billing = LocalBilling(repo)
+    val cloud = Cloud(repo)
+    val billing: Billing = LocalBilling(repo, cloud.serverPro)
     val tier: StateFlow<Tier> get() = billing.tier
+
+    init {
+        cloud.isPro = { billing.tier.value.isPro }
+    }
 
     /** Hand-off from the setup screen to the live screen. */
     var pendingConfig: SessionConfig? = null

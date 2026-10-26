@@ -32,6 +32,9 @@ data class Racer(
     /** ArUco marker id on the printed bib (running). */
     val markerId: Int? = null,
     val createdAt: Long = 0,
+    /** Set when this racer was added from another account's share code. */
+    val ownerUserId: String? = null,
+    val ownerName: String? = null,
 ) {
     val isCalibrated: Boolean get() = fingerprint.isNotEmpty()
 }
@@ -101,6 +104,9 @@ data class Session(
     /** Position in the video file (ms) that corresponds to session time 0. */
     val videoOffsetMs: Long = 0,
     val unassignedCrossings: Int = 0,
+    /** Set when the session was timed on someone else's phone and synced here. */
+    val timedByUserId: String? = null,
+    val timedByName: String? = null,
 ) {
     val title: String
         get() = when (config.mode) {

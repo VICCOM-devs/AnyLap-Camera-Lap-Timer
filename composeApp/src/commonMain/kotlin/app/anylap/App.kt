@@ -45,6 +45,8 @@ import app.anylap.ui.Navigator
 import app.anylap.ui.Screen
 import app.anylap.ui.home.HomeScreen
 import app.anylap.ui.pro.PaywallScreen
+import app.anylap.ui.account.AccountScreen
+import androidx.compose.runtime.LaunchedEffect
 import app.anylap.ui.racers.CalibrateScreen
 import app.anylap.ui.racers.RacerEditScreen
 import app.anylap.ui.racers.RacersScreen
@@ -66,6 +68,7 @@ object AppGraph {
 @Composable
 fun App() {
     val nav = remember { Navigator() }
+    LaunchedEffect(Unit) { AppGraph.state.cloud.start() }
     RaceTheme {
         CompositionLocalProvider(LocalApp provides AppGraph.state, LocalNav provides nav) {
             Box(Modifier.fillMaxSize().background(RT.Bg)) {
@@ -87,6 +90,7 @@ fun App() {
                         is Screen.Results -> ResultsScreen(nav, screen.id)
                         is Screen.Replay -> ReplayScreen(nav, screen.sessionId, screen.racerId, screen.lap)
                         is Screen.Paywall -> PaywallScreen(nav, screen.feature)
+                        Screen.Account -> AccountScreen(nav)
                     }
                 }
                 if (nav.current.isTab) {
