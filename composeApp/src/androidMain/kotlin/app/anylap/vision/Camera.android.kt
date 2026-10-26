@@ -69,6 +69,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlin.math.atan
+import kotlin.math.min
 
 // ====================================================================== composables
 
@@ -477,7 +478,17 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
             b.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, choice.fpsRange)
             b.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
             b.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF)
-            b.set(CaptureRequest.CONTROL_AE_LOCK, aeLocked)
+            val manual = if (aeLocked) manualExposure() else null
+            if (manual != null) {
+                // Shutter policy: a short shutter keeps a racer sharp (at 20 km/h, 1/120 s smears it
+                // by 4.6 cm, 1/500 s by 1 cm) – trade ISO for it as far as the sensor allows, keeping
+                // the brightness auto-exposure had chosen.
+                b.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                b.set(CaptureRequest.SENSOR_EXPOSURE_TIME, manual.first)
+                b.set(CaptureRequest.SENSOR_SENSITIVITY, manual.second)
+            } else {
+                b.set(CaptureRequest.CONTROL_AE_LOCK, aeLocked)
+            }
             b.set(CaptureRequest.CONTROL_AWB_LOCK, aeLocked)
             s.setRepeatingRequest(b.build(), resultCallback, camHandler)
             clearError()
@@ -493,14 +504,42 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
     private val resultCallback = object : CameraCaptureSession.CaptureCallback() {
         private var last = 0L
         override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
+            val exp = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: 0L
+            val iso = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: 0
+            if (!aeLocked && exp > 0 && iso > 0) { autoExposureNs = exp; autoIso = iso }
             val now = SystemClock.elapsedRealtime()
             if (now - last < 400) return
             last = now
-            _stats.value = _stats.value.copy(
-                exposureNs = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: 0L,
-                iso = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: 0,
-            )
+            _stats.value = _stats.value.copy(exposureNs = exp, iso = iso)
         }
+    }
+
+    /** What auto-exposure last chose, kept while unlocked: the brightness a manual lock must match. */
+    @Volatile private var autoExposureNs = 0L
+    @Volatile private var autoIso = 0
+
+    /**
+     * Manual (exposure ns, ISO) for a locked session: the same brightness as auto-exposure's last
+     * pick, but with the shutter no longer than [TARGET_EXPOSURE_NS] when the sensor's ISO range
+     * allows (ISO goes up as the shutter comes down). Null when the sensor has no manual control or
+     * nothing was measured yet – then the plain AE lock is used.
+     */
+    private fun manualExposure(): Pair<Long, Int>? {
+        val exp = autoExposureNs; val iso = autoIso
+        if (exp <= 0L || iso <= 0) return null
+        val chars = try { manager.getCameraCharacteristics(choice.cameraId) } catch (e: Exception) { return null }
+        val caps = chars.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES) ?: return null
+        if (CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR !in caps) return null
+        val expRange = chars.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE) ?: return null
+        val isoRange = chars.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE) ?: return null
+        if (exp <= TARGET_EXPOSURE_NS) return exp.coerceIn(expRange.lower, expRange.upper) to iso.coerceIn(isoRange.lower, isoRange.upper)
+        // same light: exp × iso = const. ISO is capped to limit grain; then the shutter stays as
+        // long as it has to.
+        val maxIso = min(isoRange.upper, MAX_ISO)
+        var newIso = (iso.toDouble() * exp / TARGET_EXPOSURE_NS).toLong()
+        var newExp = TARGET_EXPOSURE_NS
+        if (newIso > maxIso) { newExp = exp * iso / maxIso; newIso = maxIso.toLong() }
+        return newExp.coerceIn(expRange.lower, expRange.upper) to newIso.toInt().coerceIn(isoRange.lower, isoRange.upper)
     }
 
     override fun setExposureLock(locked: Boolean) {
@@ -643,6 +682,11 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
     }
 
     companion object {
+        /** Shutter the session aims for when locking exposure: 1/500 s. */
+        const val TARGET_EXPOSURE_NS = 2_000_000L
+        /** ISO ceiling for the shutter policy (grain beyond this hurts more than blur). */
+        const val MAX_ISO = 3200
+
         private const val TAG = "AnyLapCamera"
     }
 }
