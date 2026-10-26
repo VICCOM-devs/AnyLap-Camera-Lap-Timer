@@ -19,13 +19,12 @@ import kotlin.test.assertTrue
  * calls. The quick tests guard against regressions; [fullBench] prints the whole table and is
  * ignored by default (several minutes).
  *
- * Reference (Oct 26 2026, PR "engine: shadows, exposure-relative fingerprint, track adoption"):
- *   good, 3 distinct cars, 5 laps              15/15 found, 0 false, identity 15/0/0, timing 0.5 ms
- *   bad, white+silver+red+blue + close calls   23/24, 6 false, identity 22/1/0, timing 3.3 ms
- *   bad, 10 identical white cars, 10 tags      30/30, 0 false, identity 30/0/0, timing 1.7 ms
- *   worst (1/120 s), same 10                   30/30, 0 false, identity 30/0/0, timing 3.7 ms
- * The remaining error in every scenario is the side-by-side pass (one merged blob): one car is
- * missed and the other gets the wrong identity – blob separation is the next engine task.
+ * Reference (Oct 26 2026), quick tests:
+ *   bad light + shadows + close calls (overtake 2 frames, side by side touching, nose to tail with a
+ *   5 mm gap, look-alikes 3 frames apart)       14/14 found, 0 extra, 14/0/0 named, timing 1.6 ms
+ *   10 identical white cars with the 10-tag set  10/10 found, 0 extra, 10/0/0 named, timing 1.6 ms
+ * History: before PR #8 the first scenario had 14 false crossings per 24 passes; before blob
+ * separation the touching pairs were one blob (one car missed, the other misnamed).
  */
 class EngineBenchTest {
 
@@ -54,30 +53,32 @@ class EngineBenchTest {
     fun shadowsAndDimLightDoNotInventCrossings() {
         val cars = listOf(white, silver, red, blue)
         val r = Renderer(cond = BAD, seed = 21, subSamples = 4)
-        val racers = cars.mapIndexed { i, c -> calibrate(c, r, lane(i), 100.0 * (i + 1), quickSpeeds, margin = 1.0) }
+        val hints = ArrayList<FloatArray>()
+        val racers = cars.mapIndexed { i, c -> calibrate(c, r, lane(i), 100.0 * (i + 1), quickSpeeds, margin = 1.0, sizeHints = hints) }
         val passes = passesFor(cars, laps = 1, closeCalls = true, lapTimeS = 8.0)
-        val s = race(r, racers, passes)
+        val s = race(r, racers, passes, hints)
         println("bad light + shadows + close calls: $s\n  " + s.notes.joinToString("\n  "))
-        // 12 passes; the side-by-side pair merges into one blob (1 missed, 1 wrong) – allowed for now
-        assertTrue(s.detected >= s.passes - 1, "detected ${s.detected} of ${s.passes}")
-        assertTrue(s.falseExtra <= 3, "false crossings: ${s.falseExtra}")
-        assertTrue(s.idWrong <= 1, "wrong identities: ${s.idWrong}")
-        assertTrue(s.idCorrect >= s.passes - 2, "correct identities: ${s.idCorrect} of ${s.passes}")
-        assertTrue(s.timingMeanMs < 8.0, "timing error ${s.timingMeanMs} ms")
+        // 14 passes incl. side-by-side and nose-to-tail pairs that arrive as one blob
+        assertTrue(s.detected == s.passes, "detected ${s.detected} of ${s.passes}")
+        assertTrue(s.falseExtra == 0, "false crossings: ${s.falseExtra}")
+        assertTrue(s.idWrong == 0, "wrong identities: ${s.idWrong}")
+        assertTrue(s.idCorrect >= s.passes - 1, "correct identities: ${s.idCorrect} of ${s.passes}")
+        assertTrue(s.timingMeanMs < 5.0, "timing error ${s.timingMeanMs} ms")
     }
 
     @Test
     fun colourTagsTellIdenticalCarsApartInDimLight() {
         val cars = tagSet.mapIndexed { i, t -> Car("w${i + 1}", white.body, t) }
         val r = Renderer(cond = BAD, seed = 22, subSamples = 4)
-        val racers = cars.mapIndexed { i, c -> calibrate(c, r, lane(i % 5), 100.0 * (i + 1), quickSpeeds, margin = 1.0) }
+        val hints = ArrayList<FloatArray>()
+        val racers = cars.mapIndexed { i, c -> calibrate(c, r, lane(i % 5), 100.0 * (i + 1), quickSpeeds, margin = 1.0, sizeHints = hints) }
         val passes = passesFor(cars, laps = 1, closeCalls = false)
-        val s = race(r, racers, passes)
+        val s = race(r, racers, passes, hints)
         println("10 identical white cars with tags: $s\n  " + s.notes.joinToString("\n  "))
         assertTrue(s.detected == s.passes, "detected ${s.detected} of ${s.passes}")
-        assertTrue(s.falseExtra <= 1, "false crossings: ${s.falseExtra}")
+        assertTrue(s.falseExtra == 0, "false crossings: ${s.falseExtra}")
         assertTrue(s.idWrong == 0, "wrong identities: ${s.idWrong}")
-        assertTrue(s.idCorrect >= s.passes - 1, "correct identities: ${s.idCorrect} of ${s.passes}")
+        assertTrue(s.idCorrect == s.passes, "correct identities: ${s.idCorrect} of ${s.passes}")
     }
 
     @Ignore
@@ -85,8 +86,9 @@ class EngineBenchTest {
     fun fullBench() {
         fun scenario(name: String, cond: SyntheticTrack.Conditions, cars: List<Car>, laps: Int, closeCalls: Boolean) {
             val r = Renderer(cond = cond, seed = name.hashCode())
-            val racers = cars.mapIndexed { i, c -> calibrate(c, r, lane(i % 5), 100.0 * (i + 1)) }
-            val s = race(r, racers, passesFor(cars, laps, closeCalls))
+            val hints = ArrayList<FloatArray>()
+            val racers = cars.mapIndexed { i, c -> calibrate(c, r, lane(i % 5), 100.0 * (i + 1), sizeHints = hints) }
+            val s = race(r, racers, passesFor(cars, laps, closeCalls), hints)
             println("== $name\n$s\n  " + s.notes.joinToString("\n  "))
         }
         val tenWhite = tagSet.mapIndexed { i, t -> Car("w${i + 1}", white.body, t) }

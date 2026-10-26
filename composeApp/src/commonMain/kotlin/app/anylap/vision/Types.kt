@@ -46,6 +46,18 @@ data class AnalyzerConfig(
      * Rejected crossings are still reported with [CrossingEvent.accepted] = false.
      */
     val minMatch: Float = 0f,
+    /**
+     * How big one racer looks at a point of the line: (along 0..1, blob area px) from calibration
+     * passes ([CrossingEvent.along], [CrossingEvent.area]). Lets the analyzer split a blob that is
+     * two racers merged (nose to tail, side by side) from the first lap on; it keeps learning
+     * from identified crossings during the session.
+     */
+    val sizeHints: List<FloatArray> = emptyList(),
+    /**
+     * Exposure time of the camera (s), for motion-blur-aware colour sampling. Default = the worst
+     * an indoor 60 fps session locks to; the app passes the real value once exposure is locked.
+     */
+    val exposureS: Float = 1f / 120f,
 )
 
 enum class IdSource { MARKER, APPEARANCE, ONLY_RACER, NONE }
@@ -68,6 +80,11 @@ class CrossingEvent(
     val match: Float = 0f,
     /** False when the appearance gate ([AnalyzerConfig.minMatch]) turned this crossing down. */
     val accepted: Boolean = true,
+    /** Blob area (analysis px) and position along the line (0..1) at the crossing – size hints. */
+    val area: Int = 0,
+    val along: Float = 0f,
+    /** True when the racer was split out of a merged blob at the crossing. */
+    val split: Boolean = false,
 )
 
 /** Small RGB picture (ARGB pixels, row by row). */

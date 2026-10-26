@@ -51,6 +51,13 @@ data class Racer(
     /** Calibrated with an older build (no samples, or an older fingerprint format): nothing to review, only reset. */
     val hasLegacyCalibration: Boolean get() = fingerprint.isNotEmpty() && (calibration.isEmpty() || fingerprint.size != Fingerprint.SIZE)
 
+    /** (along, area) of this racer's calibration passes: size hints for splitting merged racers. */
+    fun sizeHints(): List<FloatArray> = calibration.mapNotNull { s ->
+        val a = s.area ?: return@mapNotNull null
+        val p = s.along ?: return@mapNotNull null
+        if (s.kind == SampleKind.PHOTO || a <= 0) null else floatArrayOf(p, a.toFloat())
+    }
+
     fun samplesOf(kind: SampleKind): List<CalibrationSample> = calibration.filter { it.kind == kind }
 }
 
@@ -72,6 +79,9 @@ data class CalibrationSample(
     val direction: Int = 0,
     /** Passes: how much the crossing looked like the racer's other samples (0..1), for tuning. */
     val match: Float? = null,
+    /** Passes: blob area (analysis px) and position along the line (0..1) – how big one racer looks there. */
+    val area: Int? = null,
+    val along: Float? = null,
 )
 
 @Serializable

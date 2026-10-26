@@ -2,6 +2,7 @@ package app.anylap.vision
 
 import kotlin.math.PI
 import kotlin.math.atan2
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -103,12 +104,26 @@ object Fingerprint {
         return normalize(cleaned)
     }
 
-    /** Histogram intersection: 1.0 = identical colour make-up, 0 = nothing in common. */
+    /**
+     * Histogram intersection, 1.0 = identical, 0 = nothing in common – computed separately for the
+     * colour part and the brightness part and mixed by how colourful the two are. Two coloured cars
+     * are told apart by hue; two colourless ones (white, grey, black) only by brightness, which with
+     * a fixed 65/35 mix could never move the score by more than 0.35 – white, grey and black scored
+     * 0.81–0.88 alike in Blender tests. Colour weight = 0.35 + 0.5 × the share of hue in the two.
+     */
     fun similarity(a: FloatArray, b: FloatArray): Float {
         if (a.size != SIZE || b.size != SIZE) return 0f
-        var s = 0f
-        for (i in 0 until SIZE) s += min(a[i], b[i])
-        return s
+        var sc = 0f; var sy = 0f; var ha = 0f; var hb = 0f; var ca = 0f; var cb = 0f
+        for (i in 0 until CHROMA_SIZE) {
+            sc += min(a[i], b[i]); ca += a[i]; cb += b[i]
+            if (i < HUE_BINS) { ha += a[i]; hb += b[i] }
+        }
+        var ya = 0f; var yb = 0f
+        for (i in CHROMA_SIZE until SIZE) { sy += min(a[i], b[i]); ya += a[i]; yb += b[i] }
+        val cn = max(1e-6f, min(ca, cb)); val yn = max(1e-6f, min(ya, yb))
+        val hueShare = 0.5f * ((if (ca > 0f) ha / ca else 0f) + (if (cb > 0f) hb / cb else 0f))
+        val wc = 0.35f + 0.5f * hueShare.coerceIn(0f, 1f)
+        return wc * (sc / cn).coerceAtMost(1f) + (1f - wc) * (sy / yn).coerceAtMost(1f)
     }
 
     /** Running average of an existing fingerprint (n samples) with a new one. */

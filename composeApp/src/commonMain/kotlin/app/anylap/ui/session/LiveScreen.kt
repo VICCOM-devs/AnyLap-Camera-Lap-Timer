@@ -171,6 +171,11 @@ private fun LiveContent(nav: Navigator) {
         return
     }
     val camStats by session.camera.stats.collectAsState()
+    // Exposure time for motion-blur-aware colour sampling (rounded so small AE wobble doesn't churn).
+    val exposureMs = (camStats.exposureNs / 100_000L) / 10f
+    LaunchedEffect(exposureMs) {
+        if (exposureMs > 0f) session.analyzer.config = session.analyzer.config.copy(exposureS = exposureMs / 1000f)
+    }
     val boxes by session.overlay.collectAsState()
 
     // Keep the analyzer in sync with the line, direction and racers.
@@ -187,6 +192,8 @@ private fun LiveContent(nav: Navigator) {
             useMarkers = config.sport == Sport.RUNNING && racers.any { it.markerId != null },
             // Applies only once every racer in the grid is calibrated (the analyzer checks).
             minMatch = FrameAnalyzer.MIN_MATCH,
+            // How big one racer looks at each point of the line, so two merged racers are split.
+            sizeHints = racers.flatMap { it.sizeHints() },
         )
     }
     LaunchedEffect(session, engine) {
