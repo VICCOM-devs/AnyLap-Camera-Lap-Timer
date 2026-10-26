@@ -29,6 +29,8 @@ class FrameAnalyzer(
     private var tmpA = ByteArray(0)
     private var tmpB = ByteArray(0)
     private val markerDetector = MarkerDetector()
+    private var exposure = Fingerprint.NORMAL
+    private val lumaHist = IntArray(256)
 
     private val tracks = ArrayList<Track>()
     private var nextTrackId = 1
@@ -67,6 +69,7 @@ class FrameAnalyzer(
 
         val frac = m.apply(f.y, f.u, f.v, mask)
         frameCount++
+        if (frameCount % EXPOSURE_EVERY == 1L) exposure = Fingerprint.Exposure(medianLuma(f))
         if (!m.warmedUp) return
         if (frac > 0.45f) {
             // Lighting jumped or the camera moved: start over rather than invent crossings.
@@ -108,6 +111,18 @@ class FrameAnalyzer(
         }
     }
 
+    /** Median luma of the frame (every 4th pixel), the fingerprint's exposure reference. */
+    private fun medianLuma(f: AnalysisFrame): Float {
+        lumaHist.fill(0)
+        var n = 0
+        var i = 0
+        val size = f.width * f.height
+        while (i < size) { lumaHist[f.y[i].toInt() and 0xFF]++; n++; i += 4 }
+        var acc = 0
+        for (v in 0 until 256) { acc += lumaHist[v]; if (acc * 2 >= n) return v.toFloat() }
+        return Fingerprint.NORMAL_MEDIAN
+    }
+
     /** Emits crossings that are still waiting for more evidence (call when a session ends). */
     fun flush(nowNs: Long) = finalizePending(nowNs, config, force = true)
 
@@ -141,7 +156,7 @@ class FrameAnalyzer(
             val i = y * f.width + x
             val inside = x >= x0 && x < x1 && y >= y0 && y < y1
             val acc = if (inside) box else ring.also { ringArea++ }
-            Fingerprint.add(acc, f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
+            Fingerprint.add(acc, f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF, exposure)
         }
         return Fingerprint.subtractRing(box, (x1 - x0) * (y1 - y0), ring, ringArea)
     }
@@ -183,10 +198,13 @@ class FrameAnalyzer(
     private class Pairing(val track: Any, val blob: Blob, val d: Float)
 
     private fun updateTracks(blobs: List<Blob>, ts: Long) {
-        val dtSec = tracks.maxOfOrNull { (ts - it.lastTs) / 1e9 }?.coerceIn(0.0, 0.5) ?: 0.03
-        val maxJump = max(0.15 * w, 6.0 * w * dtSec).toFloat()
         val pairs = ArrayList<Pairing>()
         for (t in tracks) {
+            // Search radius per track: 6 frame-widths/s of travel since it was last seen, but never more
+            // than 0.3 w. A single radius grown by the *longest* missed track let a car entering on the
+            // left adopt the track (and fingerprint) of the car that just left on the right.
+            val dtSec = ((ts - t.lastTs) / 1e9).coerceIn(0.0, 0.5)
+            val maxJump = (6.0 * w * dtSec).coerceIn(0.12 * w, 0.3 * w).toFloat()
             val (px, py) = t.predict(ts)
             for (b in blobs) {
                 val d = hypot(px - b.cx, py - b.cy)
@@ -241,7 +259,7 @@ class FrameAnalyzer(
                             mask[i - cw].toInt() != 0 && mask[i + cw].toInt() != 0
                         )
                     if (ok) {
-                        Fingerprint.add(t.hist, f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
+                        Fingerprint.add(t.hist, f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF, exposure)
                         added++
                     }
                 }
@@ -499,6 +517,8 @@ class FrameAnalyzer(
 
         /** Fraction of the frame moving at once above which crossings are not counted. */
         const val UNSTABLE_FRAC = 0.30f
+        /** Frames between exposure (median luma) updates for the fingerprint. */
+        const val EXPOSURE_EVERY = 15L
         /** How far past the line's ends (as a fraction of its length) a crossing still counts. */
         const val ALONG_MARGIN = 0.05f
         /** Rim of the (dilated) mask that is left out of fingerprints, in analysis pixels. */
