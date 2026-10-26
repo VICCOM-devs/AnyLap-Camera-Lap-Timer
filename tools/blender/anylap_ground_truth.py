@@ -8,9 +8,11 @@ finish line, in the direction it crossed.
 
 Conventions:
 - Cars are objects named car_01, car_02 … (any object whose name starts with "car_").
-- The finish line is an object named finish_line (an empty or a thin plane). Its local X axis is the
-  line's direction; crossing is measured as the car centre passing the plane that contains the line
-  and is vertical in world space. Only the line's position and rotation matter, not its length.
+- The finish line is an object named finish_line (a thin plane/strip, or an empty). Its direction is
+  its longest horizontal side (for an empty: its local X axis); crossing is measured as the car's
+  centre passing the vertical plane that contains the line. Only position and rotation matter.
+- Car origins should be at the middle of the car (Object → Set Origin → Origin to Geometry): the
+  engine times the centre of the blob, so the truth must be the centre too.
 - The camera is the scene camera. Speeds are world-space, in m/s, assuming 1 Blender unit = 1 m.
 - Frames are the scene's frame range at the scene frame rate.
 
@@ -34,8 +36,14 @@ if not cars:
 blend = bpy.data.filepath or "untitled.blend"
 base = os.path.splitext(blend)[0]
 
-# Vertical plane through the line: normal = up × line direction (both in world space).
-line_dir = (line.matrix_world.to_3x3() @ Vector((1.0, 0.0, 0.0))).normalized()
+# Line direction = the object's longest horizontal side in world space (local X or Y), so a strip
+# modelled either way works. Empties have no size → local X.
+m3 = line.matrix_world.to_3x3()
+dims = line.dimensions
+axis = Vector((1.0, 0.0, 0.0)) if dims.x >= dims.y else Vector((0.0, 1.0, 0.0))
+line_dir = m3 @ axis
+line_dir.z = 0.0
+line_dir.normalize()
 up = Vector((0.0, 0.0, 1.0))
 normal = up.cross(line_dir).normalized()
 origin = line.matrix_world.translation.copy()
