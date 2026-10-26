@@ -171,7 +171,7 @@ class RaceEngine(
     fun onRejected(e: CrossingEvent) {
         if (_state.value.phase != Phase.RUNNING) return
         if (e.timestampNs < startNs || e.snapshot == null) return
-        review(e, ReviewKind.REJECTED, decided = null)
+        review(e, if (e.rescue) ReviewKind.MISSED else ReviewKind.REJECTED, decided = null)
     }
 
     private val reviews = ArrayList<ReviewItem>()

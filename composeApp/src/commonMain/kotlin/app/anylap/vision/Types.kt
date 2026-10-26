@@ -85,6 +85,12 @@ class CrossingEvent(
     val along: Float = 0f,
     /** True when the racer was split out of a merged blob at the crossing. */
     val split: Boolean = false,
+    /**
+     * True for a crossing *reconstructed* from the check line: the track passed a line 15 % of the
+     * frame beyond the finish without having been counted there. Always [accepted] = false – it is
+     * for the review tray, never for timing; [timestampNs] is the estimated finish-line time.
+     */
+    val rescue: Boolean = false,
 )
 
 /** Small RGB picture (ARGB pixels, row by row). */

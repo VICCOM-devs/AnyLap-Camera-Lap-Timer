@@ -146,6 +146,8 @@ enum class ReviewKind(val title: String) {
     SPLIT("Cars touching"),
     /** Turned down as not looking like any racer (a shadow, a hand, a dog). */
     REJECTED("Not a racer?"),
+    /** Passed the check line beyond the finish without being counted there – a possible missed lap. */
+    MISSED("Missed?"),
 }
 
 @Serializable

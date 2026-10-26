@@ -66,6 +66,7 @@ fun ReviewCard(s: Session, item: ReviewItem, onResolve: (String) -> Unit) {
                 answer != null -> "You said: ${s.racer(answer)?.name ?: answer}"
                 decidedRacer != null -> "App counted it for ${decidedRacer.name}" + (if (item.kind == ReviewKind.LOW_MARGIN) " – but only just" else "")
                 item.kind == ReviewKind.REJECTED -> "App ignored it (didn't look like any racer)"
+                item.kind == ReviewKind.MISSED -> "Something passed the line that the app didn't count"
                 else -> "App counted it for nobody"
             },
             style = MaterialTheme.typography.bodyMedium,
