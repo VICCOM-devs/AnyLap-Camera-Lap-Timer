@@ -59,7 +59,9 @@ import app.anylap.data.LapSource
 import app.anylap.data.RaceMode
 import app.anylap.data.Racer
 import app.anylap.data.Session
+import app.anylap.data.ReviewItem
 import app.anylap.engine.Format
+import app.anylap.engine.LapMath
 import app.anylap.engine.Stats
 import app.anylap.ui.charts.BarList
 import app.anylap.ui.charts.ChartSeries
@@ -130,9 +132,9 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
         }
         if (tab == 4) {
             item { SectionLabel("Crossings the camera wasn't sure about") }
-            s.reviews.sortedWith(compareBy<app.anylap.data.ReviewItem> { it.resolvedTo != null }.thenBy { it.atMs }).forEach { item ->
+            s.reviews.sortedWith(compareBy<ReviewItem> { it.resolvedTo != null }.thenBy { it.atMs }).forEach { item ->
                 item(key = "rv-${item.id}") {
-                    ReviewCard(s, item) { to -> app.repo.saveSession(app.anylap.engine.LapMath.resolve(s, item.id, to)) }
+                    ReviewCard(s, item) { to -> app.repo.saveSession(LapMath.resolve(s, item.id, to)) }
                 }
             }
         }

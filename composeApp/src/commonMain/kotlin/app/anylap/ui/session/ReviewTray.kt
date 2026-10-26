@@ -32,7 +32,8 @@ import app.anylap.platform.Platform
 import app.anylap.ui.components.RtCard
 import app.anylap.ui.components.Tag
 import app.anylap.ui.theme.RT
-import app.anylap.util.Format
+import app.anylap.engine.Format
+import app.anylap.ui.components.uiColor
 import org.jetbrains.compose.resources.decodeToImageBitmap
 
 /**
