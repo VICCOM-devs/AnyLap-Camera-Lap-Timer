@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
+import app.anylap.events.Event
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlin.uuid.ExperimentalUuidApi
@@ -31,6 +32,7 @@ class Repository {
     private val racersFile = joinPath(Platform.dataDir, "racers.json")
     private val sessionsFile = joinPath(Platform.dataDir, "sessions.json")
     private val settingsFile = joinPath(Platform.dataDir, "settings.json")
+    private val eventsFile = joinPath(Platform.dataDir, "events.json")
 
     private val _racers = MutableStateFlow(load(racersFile, ListSerializer(Racer.serializer())) ?: emptyList())
     val racers: StateFlow<List<Racer>> = _racers
@@ -100,6 +102,31 @@ class Repository {
         session(id)?.videoPath?.let { Platform.delete(it) }
         _sessions.value = _sessions.value.filterNot { it.id == id }
         persist(sessionsFile, ListSerializer(Session.serializer())) { _sessions.value }
+    }
+
+    // ---------------------------------------------------------------- events
+
+    private val _events = MutableStateFlow(
+        (load(eventsFile, ListSerializer(Event.serializer())) ?: emptyList()).sortedByDescending { it.createdAt },
+    )
+    val events: StateFlow<List<Event>> = _events
+
+    fun event(id: String): Event? = _events.value.firstOrNull { it.id == id }
+
+    fun upsertEvent(event: Event) {
+        _events.value = (_events.value.filterNot { it.id == event.id } + event).sortedByDescending { it.createdAt }
+        persist(eventsFile, ListSerializer(Event.serializer())) { _events.value }
+    }
+
+    fun deleteEvent(id: String) {
+        _events.value = _events.value.filterNot { it.id == id }
+        persist(eventsFile, ListSerializer(Event.serializer())) { _events.value }
+    }
+
+    /** Record that [sessionId] is the result of a round. */
+    fun linkRound(eventId: String, roundId: String, sessionId: String) {
+        val e = event(eventId) ?: return
+        upsertEvent(e.copy(rounds = e.rounds.map { if (it.id == roundId) it.copy(sessionId = sessionId) else it }))
     }
 
     // ---------------------------------------------------------------- settings

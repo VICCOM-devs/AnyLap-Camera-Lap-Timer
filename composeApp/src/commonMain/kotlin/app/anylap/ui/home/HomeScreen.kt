@@ -79,6 +79,7 @@ import app.anylap.ui.theme.Num
 import app.anylap.pro.Limits
 import app.anylap.pro.ProFeature
 import app.anylap.ui.pro.ProLockCard
+import app.anylap.ui.pro.ProBadge
 import app.anylap.ui.pro.currentTier
 
 @Composable
@@ -117,6 +118,23 @@ fun HomeScreen() {
                 },
                 onRacers = { nav.tab(Screen.Racers) },
             )
+        }
+        item {
+            val events by app.repo.events.collectAsState()
+            val open = events.count { !it.finished }
+            StripeCard(RT.Gold, Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Events) }) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Race day", style = MaterialTheme.typography.titleMedium)
+                        if (!tier.isPro) { Spacer(Modifier.width(8.dp)); ProBadge() }
+                    }
+                    Text(
+                        if (open > 0) "$open event${if (open == 1) "" else "s"} in progress" else "Heats, a points table and a final",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Icon(Icons.Rounded.EmojiEvents, null, tint = RT.Gold)
+            }
         }
         item { SectionLabel("Overview", Icons.Rounded.Speed) }
         item {

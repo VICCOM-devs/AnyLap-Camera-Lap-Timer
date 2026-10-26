@@ -267,7 +267,7 @@ fun SetupScreen(nav: Navigator) {
 }
 
 @Composable
-private fun RacerChip(r: Racer, selected: Boolean, onClick: () -> Unit) {
+internal fun RacerChip(r: Racer, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     Row(
         modifier = Modifier

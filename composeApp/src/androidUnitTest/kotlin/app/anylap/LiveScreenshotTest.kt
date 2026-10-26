@@ -70,7 +70,7 @@ class LiveScreenshotTest {
                     LiveLayout(
                         config = config, race = race, speedKmh = true, fps = 60.0, recording = true, error = null,
                         line = LineSpec(0.52f, 0.08f, 0.47f, 0.95f), direction = Direction.FORWARD, previewAspect = 16f / 9f,
-                        voice = true, onLineChange = {}, onDirection = {}, onResetBackground = {}, onBack = {}, onStart = {},
+                        voice = true, live = true, onLive = {}, onLineChange = {}, onDirection = {}, onResetBackground = {}, onBack = {}, onStart = {},
                         onEnd = {}, onToggleVoice = {}, onAssign = {}, onAddLap = {}, onRemoveLap = {},
                     ) {
                         // Stand-in for the camera: asphalt with a white tape line.

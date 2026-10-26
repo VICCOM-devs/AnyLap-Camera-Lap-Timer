@@ -27,6 +27,8 @@ sealed interface Screen {
     data class Replay(val sessionId: String, val racerId: String, val lap: Int) : Screen
     data class Paywall(val feature: ProFeature? = null) : Screen
     data object Account : Screen
+    data object Events : Screen
+    data class EventDetail(val id: String) : Screen
 
     val isTab: Boolean get() = this == Home || this == Race || this == Stats || this == Racers
 }
@@ -73,6 +75,9 @@ class AppState {
 
     /** Hand-off from the setup screen to the live screen. */
     var pendingConfig: SessionConfig? = null
+
+    /** Set when the live session being started is a round of an event: (eventId, roundId). */
+    var pendingRound: Pair<String, String>? = null
 }
 
 val LocalApp = staticCompositionLocalOf<AppState> { error("No AppState") }

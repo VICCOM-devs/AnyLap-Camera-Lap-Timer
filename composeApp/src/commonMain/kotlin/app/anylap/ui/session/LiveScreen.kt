@@ -94,6 +94,13 @@ import app.anylap.vision.FrameAnalyzer
 import app.anylap.vision.Optics
 import app.anylap.vision.RacerRef
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import app.anylap.cloud.BackendConfig
+import app.anylap.cloud.LiveSnapshot
+import app.anylap.data.SessionConfig
+import app.anylap.pro.ProFeature
+import app.anylap.ui.pro.currentTier
 import kotlinx.coroutines.launch
 
 @Composable
@@ -123,6 +130,8 @@ private fun LiveContent(nav: Navigator) {
 
     val tts = remember { TtsHolder() }
     DisposableEffect(Unit) { onDispose { tts.shutdown() } }
+    // Leaving without a saved result must not attach the next session to an event round.
+    DisposableEffect(Unit) { onDispose { if (!saving) app.pendingRound = null } }
 
     val engine = remember {
         RaceEngine(
@@ -135,6 +144,21 @@ private fun LiveContent(nav: Navigator) {
     }
     val race by engine.state.collectAsState()
     tts.enabled = voice
+
+    // ---------------- live timing board for spectators
+    val tier = currentTier()
+    val account by app.cloud.account.collectAsState()
+    var liveCode by remember { mutableStateOf<String?>(null) }
+    var liveDialog by remember { mutableStateOf(false) }
+    var liveError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(liveCode) {
+        val code = liveCode ?: return@LaunchedEffect
+        val title = liveTitle(config)
+        engine.state.distinctUntilChangedBy { LiveSnapshot.key(it) }.conflate().collect { st ->
+            app.cloud.pushLive(code, LiveSnapshot.build(title, config, st, settings.speedUnitKmh))
+            delay(1_000) // at most one update a second
+        }
+    }
 
     if (session == null) {
         Box(Modifier.fillMaxSize().background(RT.Bg), contentAlignment = Alignment.Center) {
@@ -182,6 +206,8 @@ private fun LiveContent(nav: Navigator) {
             val result = engine.buildSession(path, recordingStartNs)
                 .let { it.copy(config = it.config.copy(line = line, direction = direction)) }
             app.repo.saveSession(result)
+            app.pendingRound?.let { (eventId, roundId) -> app.repo.linkRound(eventId, roundId, result.id) }
+            app.pendingRound = null
             app.pendingConfig = null
             scope.launchMain {
                 nav.replace(Screen.Results(result.id))
@@ -208,6 +234,19 @@ private fun LiveContent(nav: Navigator) {
         direction = direction,
         previewAspect = session.camera.setup.previewWidth.toFloat() / session.camera.setup.previewHeight,
         voice = voice,
+        live = liveCode != null,
+        onLive = {
+            when {
+                !tier.isPro -> nav.push(Screen.Paywall(ProFeature.LIVE))
+                account.userId == null -> nav.push(Screen.Account)
+                liveCode != null -> liveDialog = true
+                else -> scope.launch {
+                    app.cloud.startLive()
+                        .onSuccess { liveCode = it; liveError = null; liveDialog = true }
+                        .onFailure { liveError = "Couldn't start live timing. Check your connection."; liveDialog = true }
+                }
+            }
+        },
         onLineChange = { line = it },
         onDirection = {
             direction = when (direction) {
@@ -230,6 +269,47 @@ private fun LiveContent(nav: Navigator) {
     ) {
         CameraPreview(session.camera, Modifier.fillMaxSize())
         TrackBoxesOverlay(boxes)
+    }
+
+    if (liveDialog) {
+        AlertDialog(
+            onDismissRequest = { liveDialog = false },
+            containerColor = RT.Surface2,
+            title = { Text(if (liveCode != null) "Live timing is on" else "Live timing") },
+            text = {
+                Column {
+                    val code = liveCode
+                    if (code != null) {
+                        Text("Spectators open this on their phone:", color = RT.TextDim)
+                        Spacer(Modifier.height(6.dp))
+                        Text(BackendConfig.liveUrl(code), style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(10.dp))
+                        Text(code, style = MaterialTheme.typography.displaySmall, color = RT.Accent)
+                        Text("Code works for 12 hours.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    liveError?.let { Text(it, color = RT.Amber) }
+                }
+            },
+            confirmButton = {
+                val code = liveCode
+                if (code != null) {
+                    TextButton(onClick = { Platform.shareText(BackendConfig.liveUrl(code), "Live timing") }) { Text("Share link", color = RT.Accent) }
+                }
+            },
+            dismissButton = {
+                Row {
+                    val code = liveCode
+                    if (code != null) {
+                        TextButton(onClick = {
+                            liveCode = null
+                            liveDialog = false
+                            scope.launch { app.cloud.stopLive(code) }
+                        }) { Text("Stop", color = RT.TextDim) }
+                    }
+                    TextButton(onClick = { liveDialog = false }) { Text("Close", color = RT.Text) }
+                }
+            },
+        )
     }
 
     if (confirmEnd) {
@@ -298,4 +378,10 @@ private class TtsHolder {
 
 private fun kotlinx.coroutines.CoroutineScope.launchMain(block: () -> Unit) {
     launch(kotlinx.coroutines.Dispatchers.Main) { block() }
+}
+
+private fun liveTitle(c: SessionConfig): String = when (c.mode) {
+    RaceMode.PRACTICE -> "${c.sport.title} practice"
+    RaceMode.LAPS -> "${c.targetLaps}-lap race"
+    RaceMode.TIME -> "${c.timeLimitSec / 60}-min race"
 }
