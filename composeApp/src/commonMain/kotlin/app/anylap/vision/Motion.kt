@@ -22,6 +22,22 @@ class BackgroundModel(val width: Int, val height: Int) {
     /** Colour change (|ΔU|+|ΔV|) that counts as motion even when brightness matches the background. */
     var chromaDiff = 22f
 
+    /**
+     * Shadow suppression (the MOG2 idea): a pixel that is only *darker* than its background – same
+     * colour, brightness between [shadowMin] and [shadowMax] of the learned mean – is a shadow cast by
+     * something moving, not the thing itself. Without this a car under a low sun drags a second blob
+     * across the line (0.5–0.8 false crossings per pass in the synthetic bench). Known trade-off:
+     * a mid-grey car on grey asphalt loses part of its body to this test; its wheels, windows and
+     * any colour still register, and the 3×3 morphology joins the rest.
+     */
+    var shadowMin = 0.5f
+    var shadowMax = 0.93f
+    /** Shadows may shift colour a little (sky light); below this |ΔU|+|ΔV| it still counts as shadow. */
+    var shadowChroma = 10f
+    /** Pixels marked as shadow in the last [apply], as a fraction of the frame. */
+    var shadowFrac = 0f
+        private set
+
     val warmedUp: Boolean get() = frames >= WARMUP
 
     fun reset() {
@@ -46,6 +62,7 @@ class BackgroundModel(val width: Int, val height: Int) {
         val learnFg = if (warm) learnBg else 0.0015f
         val k2 = k * k
         var count = 0
+        var shadows = 0
         for (i in 0 until n) {
             val px = (gray[i].toInt() and 0xFF).toFloat()
             val pu = (u[i].toInt() and 0xFF).toFloat()
@@ -54,14 +71,21 @@ class BackgroundModel(val width: Int, val height: Int) {
             val du = pu - meanU[i]
             val dv = pv - meanV[i]
             val d2 = d * d
-            val fg = !warm && ((d2 > k2 * variance[i] && abs(d) > minDiff) || abs(du) + abs(dv) > chromaDiff)
+            val chroma = abs(du) + abs(dv)
+            var fg = !warm && ((d2 > k2 * variance[i] && abs(d) > minDiff) || chroma > chromaDiff)
+            var shadow = false
+            if (fg && d < 0f && chroma < shadowChroma) {
+                val ratio = px / (mean[i] + 1f)
+                if (ratio >= shadowMin && ratio <= shadowMax) { fg = false; shadow = true; shadows++ }
+            }
             if (fg) {
                 mask[i] = 1
                 count++
             } else {
                 mask[i] = 0
             }
-            val a = if (fg) learnFg else learnBg
+            // A shadow is transient like the car that casts it: don't let it pull the background down.
+            val a = if (fg || shadow) learnFg else learnBg
             mean[i] += a * d
             meanU[i] += a * du
             meanV[i] += a * dv
@@ -70,6 +94,7 @@ class BackgroundModel(val width: Int, val height: Int) {
             variance[i] = vr
         }
         frames++
+        shadowFrac = shadows.toFloat() / n
         return count.toFloat() / n
     }
 

@@ -15,6 +15,11 @@ import kotlin.math.sqrt
  * Black is treated the same way – a **dark** bin weighted by how dark the pixel is – so black stripes
  * on white count as strongly as coloured ones. Eight brightness (Y) bins back that up.
  *
+ * Brightness is judged **relative to the exposure**: "dark" and the Y bins scale with the frame's
+ * median luma ([Exposure]), so a white car filmed in a dim hall (half the luma of a sunny day) is
+ * still white and not dark. With the fixed 180 threshold the dark bin swallowed the car's hue in
+ * dim light and look-alikes could not be told apart (synthetic bench, Oct 2026).
+ *
  * Version 2 (Oct 2026). Fingerprints have [SIZE] entries; anything else is from an older build
  * and is treated as "not calibrated".
  */
@@ -33,21 +38,35 @@ object Fingerprint {
     private const val FULL_SAT = 40f
     /** Weight of an achromatic pixel: small, so colour wins, but a plain white car still has a signature. */
     private const val ACHROMATIC_WEIGHT = 0.05f
-    /** Grey pixels darker than this count towards the dark bin, fully black at Y = 0. */
-    private const val DARK_FROM = 180f
+    /** Grey pixels darker than this count towards the dark bin, fully black at Y = 0 (normal exposure). */
+    const val DARK_FROM = 180f
+    /** Median luma of a normally exposed frame; [DARK_FROM] and the Y bins are defined for it. */
+    const val NORMAL_MEDIAN = 100f
+
+    /**
+     * How bright the frame is: [darkFrom] and [yBinScale] are [DARK_FROM] and 8 bins over 0..255
+     * for a frame whose median luma is [NORMAL_MEDIAN], and scale with the median otherwise.
+     */
+    class Exposure(median: Float) {
+        val darkFrom: Float = (DARK_FROM * median / NORMAL_MEDIAN).coerceIn(50f, 220f)
+        val yBinScale: Float = (Y_BINS / 256f) * (NORMAL_MEDIAN / median.coerceIn(30f, 200f))
+    }
+
+    val NORMAL = Exposure(NORMAL_MEDIAN)
     /** Share of the surrounding ring assumed to also be inside a photo box (ground around the car). */
     private const val RING_SUBTRACT = 0.5f
 
     fun accumulator() = FloatArray(SIZE)
 
     /** y, u, v are 0..255. */
-    fun add(acc: FloatArray, y: Int, u: Int, v: Int) {
+    fun add(acc: FloatArray, y: Int, u: Int, v: Int, exposure: Exposure = NORMAL) {
         val du = (u - 128).toFloat()
         val dv = (v - 128).toFloat()
         val sat = sqrt(du * du + dv * dv)
         if (sat < MIN_SAT) {
             acc[ACHROMATIC] += ACHROMATIC_WEIGHT
-            if (y < DARK_FROM) acc[DARK] += (DARK_FROM - y) / DARK_FROM
+            val darkFrom = exposure.darkFrom
+            if (y < darkFrom) acc[DARK] += (darkFrom - y) / darkFrom
         } else {
             val w = min(1f, sat / FULL_SAT)
             // Soft binning: split between the two nearest hue bins so a hue on a bin edge doesn't flicker.
@@ -57,7 +76,7 @@ object Fingerprint {
             acc[i % HUE_BINS] += w * (1f - f)
             acc[(i + 1) % HUE_BINS] += w * f
         }
-        acc[CHROMA_SIZE + (y shr 5)] += 1f
+        acc[CHROMA_SIZE + (y * exposure.yBinScale).toInt().coerceIn(0, Y_BINS - 1)] += 1f
     }
 
     fun normalize(acc: FloatArray): FloatArray {
