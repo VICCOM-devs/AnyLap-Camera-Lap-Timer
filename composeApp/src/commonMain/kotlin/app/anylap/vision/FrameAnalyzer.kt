@@ -390,29 +390,45 @@ class FrameAnalyzer(
             }
             var seeds: List<Pair<Float, Float>>? = null
             var source = -1
+            splitColour = 0f
             if (inside.size >= 2) {
-                seeds = inside.take(4).map { it.predict(ts) }
+                seeds = inside.take(6).map { it.predict(ts) }
             } else {
                 if (DEBUG_SPLIT && exp != null && b.area > 1.2f * exp) println("big blob area ${b.area} exp ${exp.toInt()} along ${line.along(b.cx, b.cy)} ts ${ts / 1e9}")
                 if (exp != null && b.area > SPLIT_FACTOR * exp) {
-                    val k = (b.area / exp).roundToInt().coerceIn(2, 4)
-                    seeds = axisSeeds(b, k, perpendicular = false)
+                    val k0 = (b.area / exp).roundToInt().coerceIn(2, 6)
                     source = inside.singleOrNull()?.id ?: -1
-                    // Racers side by side make a squarish blob whose long axis may be the wrong one:
-                    // also try across, keep the cut whose parts each look most like a known racer.
                     if (cfg.racers.any { it.fingerprint != null }) {
-                        val alt = axisSeeds(b, k, perpendicular = true)
-                        val a1 = kmeans(b, seeds)?.let { partsScore(b, f, cfg) }
-                        val a2 = kmeans(b, alt)?.let { partsScore(b, f, cfg) }
-                        val pick = if (a2 != null && (a1 == null || a2.first > a1.first)) { seeds = alt; a2 } else a1
-                        // Parts that all look like the same racer are one big-looking racer (camera
-                        // closer than at calibration, long blur), not several: leave it whole.
-                        if (pick == null || pick.second.any { it == null } || pick.second.distinct().size < pick.second.size) seeds = null
+                        // Which way to cut, and into how many: a cut is valid when every part looks
+                        // like a known racer and all of them like *different* racers. Tried in order of
+                        // preference – k0 parts by position; k0 parts by position + colour; one more
+                        // part (a racer half-hidden in shadow makes the blob look smaller than it is).
+                        // The first rung with a valid cut wins (best score within the rung); no valid
+                        // cut = one big-looking racer, leave it whole.
+                        // Among valid cuts the one with the most parts wins (then the best score):
+                        // every part must also be the size of one racer (0.55–1.5×), which is what
+                        // stops a low camera's overlapping pair from being cut into three.
+                        var bestK = 0; var bestScore = -1f
+                        for ((k, cw) in listOf(k0 to 0f, k0 to COLOUR_WEIGHT, k0 + 1 to 0f, k0 + 1 to COLOUR_WEIGHT)) {
+                            if (k > 6 || (cw > 0f && COLOUR_WEIGHT <= 0f)) continue
+                            for (perp in listOf(false, true)) {
+                                val sd = axisSeeds(b, k, perpendicular = perp)
+                                val parts = kmeans(b, sd, f, cw) ?: continue
+                                // the extra part is only believed when every part is the size of one racer
+                                if (k > k0 && parts.any { it.area < PART_MIN * exp || it.area > PART_MAX * exp }) continue
+                                val sc = partsScore(b, f, cfg)
+                                if (sc.second.any { it == null } || sc.second.distinct().size < sc.second.size) continue
+                                if (k > bestK || (k == bestK && sc.first > bestScore)) { bestK = k; bestScore = sc.first; seeds = sd; splitColour = cw }
+                            }
+                        }
+                        if (bestK == 0) seeds = null
+                    } else {
+                        seeds = axisSeeds(b, k0, perpendicular = false)
                     }
                 }
             }
             if (seeds == null) { out += b; continue }
-            val parts = kmeans(b, seeds)
+            val parts = kmeans(b, seeds, f, splitColour)
             if (parts == null) { out += b; continue }
             for ((tag0, part) in parts.withIndex()) {
                 val tag = nextTag + tag0
@@ -493,29 +509,68 @@ class FrameAnalyzer(
         return offs.map { o -> (b.cx + (ex * sd * o).toFloat()) to (b.cy + (ey * sd * o).toFloat()) }
     }
 
-    /** k-means on the blob's pixel positions; null if a part ends up too small to be a racer. */
-    private fun kmeans(b: Blob, seeds: List<Pair<Float, Float>>): List<Blob>? {
+    private var pcode = IntArray(0)
+
+    /**
+     * Colour code of a pixel for splitting: 12 hue bins, bright grey, mid grey, dark – coarse
+     * enough that one car is mostly one or two codes, so a cut between two touching cars of
+     * different colours follows the colour edge instead of a straight line.
+     */
+    private fun colourCode(y: Int, u: Int, v: Int): Int {
+        val du = u - 128; val dv = v - 128
+        if (du * du + dv * dv >= 49) {
+            val a = kotlin.math.atan2(dv.toFloat(), du.toFloat())
+            return ((a + kotlin.math.PI.toFloat()) / (2 * kotlin.math.PI.toFloat()) * 12).toInt().coerceIn(0, 11)
+        }
+        val dark = exposure.darkFrom
+        return when { y < dark * 0.5f -> 14; y < dark -> 13; else -> 12 }
+    }
+
+    /**
+     * k-means over the blob's pixels on position *and* colour ([COLOUR_WEIGHT]): a pixel joins the
+     * part it is close to whose colour make-up it fits. Seeds give the starting centres. Null if a
+     * part ends up too small to be a racer.
+     */
+    private var splitColour = 0f
+
+    private fun kmeans(b: Blob, seeds: List<Pair<Float, Float>>, f: AnalysisFrame, colourWeight: Float = 0f): List<Blob>? {
         val bf = blobFinder!!
-        if (px.size < b.area) { px = IntArray(b.area); py = IntArray(b.area); assignment = IntArray(b.area) }
+        if (px.size < b.area) { px = IntArray(b.area); py = IntArray(b.area); assignment = IntArray(b.area); pcode = IntArray(b.area) }
         var n = 0
         for (yy in b.y until b.y + b.h) for (xx in b.x until b.x + b.w) {
             val i = yy * w + xx
-            if (bf.labelAt(i) == b.label && mask[i].toInt() != 0 && n < px.size) { px[n] = xx; py[n] = yy; n++ }
+            if (bf.labelAt(i) == b.label && mask[i].toInt() != 0 && n < px.size) {
+                px[n] = xx; py[n] = yy
+                pcode[n] = colourCode(f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
+                n++
+            }
         }
         val k = seeds.size
         val cx = FloatArray(k) { seeds[it].first }
         val cy = FloatArray(k) { seeds[it].second }
         val cnt = IntArray(k)
-        repeat(3) { iter ->
+        val hist = Array(k) { FloatArray(CODES) }
+        val sigma2 = max(16f, (b.w.toFloat() * b.h / k) / 3f)
+        repeat(5) { iter ->
             for (j in 0 until n) {
                 var best = 0; var bd = Float.MAX_VALUE
-                for (c in 0 until k) { val dx = px[j] - cx[c]; val dy = py[j] - cy[c]; val d = dx * dx + dy * dy; if (d < bd) { bd = d; best = c } }
+                for (c in 0 until k) {
+                    val dx = px[j] - cx[c]; val dy = py[j] - cy[c]
+                    var d = (dx * dx + dy * dy) / sigma2
+                    if (iter > 0 && colourWeight > 0f) d -= colourWeight * kotlin.math.ln(hist[c][pcode[j]])
+                    if (d < bd) { bd = d; best = c }
+                }
                 assignment[j] = best
             }
-            if (iter < 2) {
+            if (iter < 4) {
                 val sx = FloatArray(k); val sy = FloatArray(k); cnt.fill(0)
-                for (j in 0 until n) { val c = assignment[j]; sx[c] += px[j]; sy[c] += py[j]; cnt[c]++ }
-                for (c in 0 until k) if (cnt[c] > 0) { cx[c] = sx[c] / cnt[c]; cy[c] = sy[c] / cnt[c] }
+                for (c in 0 until k) hist[c].fill(1f)
+                for (j in 0 until n) { val c = assignment[j]; sx[c] += px[j]; sy[c] += py[j]; cnt[c]++; hist[c][pcode[j]] += 1f }
+                for (c in 0 until k) {
+                    if (cnt[c] > 0) { cx[c] = sx[c] / cnt[c]; cy[c] = sy[c] / cnt[c] }
+                    val tot = cnt[c] + CODES
+                    for (q in 0 until CODES) hist[c][q] /= tot
+                }
             }
         }
         val minX = IntArray(k) { w }; val minY = IntArray(k) { h }; val maxX = IntArray(k); val maxY = IntArray(k)
@@ -930,6 +985,13 @@ class FrameAnalyzer(
         const val SPLIT_FACTOR = 1.7f
         /** Each part of a size-based split must look at least this much like some racer. */
         const val SPLIT_PART_MATCH = 0.5f
+        /** A part of a size-based split must be this fraction of one racer's size, at least / at most. */
+        const val PART_MIN = 0.55f
+        const val PART_MAX = 1.5f
+        /** Colour codes for splitting: 12 hues + bright grey + mid grey + dark. */
+        const val CODES = 15
+        /** Weight of a pixel's colour fit against its distance in the split k-means (0 = position only). */
+        var COLOUR_WEIGHT = 0f
         /** Check lines sit this fraction of the frame width beyond the finish line, on both sides. */
         const val CHECK_OFFSET = 0.15f
         /** A track reaching a check line with no finish crossing within this long is a possible miss. */

@@ -59,6 +59,8 @@ class Timeline(val empty: Clip, seed: Int = 3) {
     val placed = ArrayList<Placed>()
     /** Plain clip played from [offset], frames replacing the background entirely (e.g. Victor's full render). */
     var base: Pair<Clip, Int>? = null
+    /** Frames before the base clip starts (default: the base clip's own first frame). */
+    var lead: Clip? = null
 
     fun frame(i: Int): AnalysisFrame {
         val p = w * h
@@ -71,7 +73,8 @@ class Timeline(val empty: Clip, seed: Int = 3) {
             val k = b.first.n - 1; bgY = b.first.y[k]; bgU = b.first.u[k]; bgV = b.first.v[k]
         } else if (b != null) {
             // lead-in: the base clip's own first (empty) frame, so its shadows/props match
-            bgY = b.first.y[0]; bgU = b.first.u[0]; bgV = b.first.v[0]
+            val l = lead ?: b.first
+            bgY = l.y[0]; bgU = l.u[0]; bgV = l.v[0]
         } else { bgY = empty.y[0]; bgU = empty.u[0]; bgV = empty.v[0] }
         bgY.copyInto(y); bgU.copyInto(u); bgV.copyInto(v)
         // far lanes first so nearer cars cover them (camera stands at +x)
@@ -186,6 +189,11 @@ fun runRace(name: String, tl: Timeline, frames: Int, racers: List<RacerRef>, tru
         }
     }
     val extras = acc.filter { it !in used }
+    val rescues = events.filter { it.rescue }
+    for (r in rescues) {
+        val hit = truth.firstOrNull { abs(it.t - r.timestampNs / 1e9) < 0.15 && match[it] == null }
+        notes += "RESCUE   %6.2f s  %s (est. finish) – %s".format(r.timestampNs / 1e9, r.candidates.firstOrNull()?.first ?: "?", if (hit != null) "WOULD RESCUE missed ${hit.car}" else "no missed crossing there (false alarm)")
+    }
     for (e in extras) notes += "EXTRA    %6.2f s  read as %s%s area %d".format(e.timestampNs / 1e9, e.racerId ?: "unknown", if (e.split) " (split)" else "", e.area)
 
     TOTAL.n += truth.size; TOTAL.found += used.size; TOTAL.extra += extras.size; TOTAL.right += ok; TOTAL.wrong += wrong; TOTAL.unknown += unknown
@@ -249,7 +257,7 @@ fun runRace(name: String, tl: Timeline, frames: Int, racers: List<RacerRef>, tru
     notes.forEach { println("  $it") }
 }
 
-fun main(args: Array<String>) {
+fun main_lap(args: Array<String>) {
     val empty = Clip.load("empty")
     val meta = Clip.flatJson(File("/home/claude/blend/meta.json").readText())
     val nums = Regex("[-0-9.eE]+").findAll(File("/home/claude/blend/meta.json").readText().substringAfter("\"line\"").substringBefore("]]")).map { it.value.toFloat() }.toList()
