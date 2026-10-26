@@ -45,12 +45,16 @@ expect fun CameraPermissionGate(onBack: () -> Unit, content: @Composable () -> U
 /** Camera + shared analyzer: what the screens actually talk to. */
 class VisionSession(val camera: CameraController) {
     private val _crossings = MutableSharedFlow<CrossingEvent>(extraBufferCapacity = 64)
+    /** Crossings that passed every check. */
     val crossings: SharedFlow<CrossingEvent> = _crossings
+    private val _rejected = MutableSharedFlow<CrossingEvent>(extraBufferCapacity = 16)
+    /** Crossings turned down by the appearance gate – for a hint on screen, never for timing. */
+    val rejected: SharedFlow<CrossingEvent> = _rejected
     private val _overlay = MutableStateFlow<List<OverlayBox>>(emptyList())
     val overlay: StateFlow<List<OverlayBox>> = _overlay
 
     val analyzer = FrameAnalyzer(
-        onCrossing = { _crossings.tryEmit(it) },
+        onCrossing = { if (it.accepted) _crossings.tryEmit(it) else _rejected.tryEmit(it) },
         onOverlay = { _overlay.value = it },
     )
 

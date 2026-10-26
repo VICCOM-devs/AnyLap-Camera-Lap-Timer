@@ -82,11 +82,14 @@ class FrameAnalyzer(
         val blobs = blobFinder!!.find(mask, minArea)
         updateTracks(blobs, f.timestampNs)
 
+        // A lot of the frame "moving" at once is a lighting transient (auto-exposure, a cloud, a
+        // door opening): keep following things, but don't count crossings until it settles.
+        val unstable = frac > UNSTABLE_FRAC
         val line = lineGeom(cfg.line)
         for (t in tracks) {
             if (t.missed > 0) continue
             accumulateFingerprint(t, f)
-            checkCrossing(t, line, cfg, f)
+            checkCrossing(t, line, cfg, f, unstable)
             if (cfg.useMarkers && abs(t.side) < 0.45f * w && frameCount % 2 == 0L) readMarker(t, f)
         }
         finalizePending(f.timestampNs, cfg, force = false)
@@ -191,11 +194,24 @@ class FrameAnalyzer(
         tracks.removeAll { it.missed > 0 && ts - it.lastTs > 300_000_000L }
     }
 
+    /**
+     * Adds the colours under the blob to the track's fingerprint. The mask was dilated to join the
+     * parts of a racer, so its rim is mostly ground: only pixels with mask [CORE] px around them
+     * count (a thin blob falls back to the whole mask), which keeps the fingerprint about the racer.
+     */
     private fun accumulateFingerprint(t: Track, f: AnalysisFrame) {
         val x0 = t.bx.coerceIn(0, w - 1)
         val y0 = t.by.coerceIn(0, h - 1)
         val x1 = (t.bx + t.bw).coerceIn(x0 + 1, w)
         val y1 = (t.by + t.bh).coerceIn(y0 + 1, h)
+        val added = sampleFingerprint(t, f, x0, y0, x1, y1, core = true)
+        if (added == 0) sampleFingerprint(t, f, x0, y0, x1, y1, core = false)
+        t.histFrames++
+    }
+
+    private fun sampleFingerprint(t: Track, f: AnalysisFrame, x0: Int, y0: Int, x1: Int, y1: Int, core: Boolean): Int {
+        var added = 0
+        val cw = CORE * w
         var y = y0
         while (y < y1) {
             var x = x0
@@ -203,13 +219,21 @@ class FrameAnalyzer(
             while (x < x1) {
                 val i = row + x
                 if (mask[i].toInt() != 0) {
-                    Fingerprint.add(t.hist, f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
+                    val ok = !core || (
+                        x >= CORE && x + CORE < w && y >= CORE && y + CORE < h &&
+                            mask[i - CORE].toInt() != 0 && mask[i + CORE].toInt() != 0 &&
+                            mask[i - cw].toInt() != 0 && mask[i + cw].toInt() != 0
+                        )
+                    if (ok) {
+                        Fingerprint.add(t.hist, f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
+                        added++
+                    }
                 }
                 x += 2
             }
             y += 2
         }
-        t.histFrames++
+        return added
     }
 
     // ------------------------------------------------------------------ crossings
@@ -226,7 +250,7 @@ class FrameAnalyzer(
 
     private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?)
 
-    private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame) {
+    private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame, unstable: Boolean) {
         val n = t.pts.size
         val cur = t.pts[n - 1]
         val s = line.side(cur.x, cur.y)
@@ -234,13 +258,16 @@ class FrameAnalyzer(
         t.side = s
         if (n < 2 || prevSide.isNaN()) return
         if ((prevSide < 0f) == (s < 0f)) return
+        if (unstable) return
 
         val prev = t.pts[n - 2]
         val f = abs(prevSide) / max(1e-3f, abs(prevSide) + abs(s))
         val ix = prev.x + (cur.x - prev.x) * f
         val iy = prev.y + (cur.y - prev.y) * f
         val along = line.along(ix, iy)
-        if (along < -0.15f || along > 1.15f) return // passed beside the line, not over it
+        if (along < -ALONG_MARGIN || along > 1f + ALONG_MARGIN) return // passed beside the line, not over it
+        if (!plausibleSize(t, cfg)) return
+        if (!reallyMoved(t, line, cur, s)) return
 
         val crossNs = prev.ts + ((cur.ts - prev.ts) * f).toLong()
         if (crossNs - t.lastCrossTs < 400_000_000L) return // wobbling on the line
@@ -253,6 +280,31 @@ class FrameAnalyzer(
             Direction.REVERSE -> dir == -1
         }
         if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null)
+    }
+
+    /**
+     * One racer is never most of the frame. Huge blobs are a lighting change, the camera moving or
+     * someone walking up to it – their centroid wobbling over the line is not a crossing.
+     */
+    private fun plausibleSize(t: Track, cfg: AnalyzerConfig): Boolean {
+        val area = t.bw.toLong() * t.bh
+        if (area > cfg.sport.maxBlobAreaFrac * w * h) return false
+        return t.bw <= 0.7f * w && t.bh <= 0.95f * h
+    }
+
+    /**
+     * The track must have travelled a real distance in the last [MOVE_WINDOW_NS], mostly across
+     * the line. A blob that was just born on the line, or that only flickers in place (a shadow,
+     * a reflection, something static popping in and out of the background), doesn't count.
+     */
+    private fun reallyMoved(t: Track, line: LineGeom, cur: TrackPoint, curSide: Float): Boolean {
+        val n = t.pts.size
+        if (n < 3) return false
+        val oldest = t.pts.first { cur.ts - it.ts <= MOVE_WINDOW_NS }
+        val travel = hypot(cur.x - oldest.x, cur.y - oldest.y)
+        if (travel < max(MIN_TRAVEL_PX.toFloat(), MIN_TRAVEL_FRAC * w)) return false
+        val across = abs(curSide - line.side(oldest.x, oldest.y))
+        return across >= 0.5f * travel
     }
 
     private fun finalizePending(nowNs: Long, cfg: AnalyzerConfig, force: Boolean) {
@@ -278,6 +330,12 @@ class FrameAnalyzer(
         val markerEntry = t.markerVotes.maxByOrNull { it.value }
         val markerVotes = markerEntry?.value ?: 0
         val markerRacer = markerEntry?.let { e -> cfg.racers.firstOrNull { it.markerId == e.key } }
+
+        val best = candidates.firstOrNull()?.second ?: 0f
+        // Appearance gate: only meaningful once every racer has something to compare with.
+        val gated = cfg.minMatch > 0f && cfg.racers.isNotEmpty() &&
+            cfg.racers.all { it.fingerprint != null || it.views.isNotEmpty() }
+        val accepted = !gated || markerRacer != null || best >= cfg.minMatch
 
         var racerId: String? = null
         var source = IdSource.NONE
@@ -315,6 +373,8 @@ class FrameAnalyzer(
                 candidates = candidates,
                 markerSeen = markerEntry?.key,
                 snapshot = p.snapshot,
+                match = best,
+                accepted = accepted,
             ),
         )
     }
@@ -413,5 +473,22 @@ class FrameAnalyzer(
         const val PROC_W = 480
         const val MIN_SIMILARITY = 0.30f
         const val MIN_MARGIN = 0.06f
+
+        /**
+         * Default [AnalyzerConfig.minMatch]. Two things of the same brightness already share the
+         * whole Y part of the histogram (0.35), so anything below that is "same brightness, other
+         * colours"; a car against its own photos and passes should land well above this.
+         */
+        const val MIN_MATCH = 0.45f
+
+        /** Fraction of the frame moving at once above which crossings are not counted. */
+        const val UNSTABLE_FRAC = 0.30f
+        /** How far past the line's ends (as a fraction of its length) a crossing still counts. */
+        const val ALONG_MARGIN = 0.05f
+        /** Rim of the (dilated) mask that is left out of fingerprints, in analysis pixels. */
+        const val CORE = 4
+        const val MOVE_WINDOW_NS = 300_000_000L
+        const val MIN_TRAVEL_PX = 6
+        const val MIN_TRAVEL_FRAC = 0.02f
     }
 }

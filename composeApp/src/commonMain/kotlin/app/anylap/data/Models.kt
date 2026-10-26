@@ -11,10 +11,12 @@ enum class Sport(
     val defaultMinLapSec: Float,
     /** Smallest moving blob we care about, as a fraction of the analysed frame area. */
     val minBlobAreaFrac: Float,
+    /** Biggest blob that can still be one racer (bigger = a lighting change, a person, the camera moving). */
+    val maxBlobAreaFrac: Float,
     val defaultDistanceM: Float,
 ) {
-    RC("RC cars", "car", 5, 2.5f, 0.0012f, 2.5f),
-    RUNNING("Running", "runner", 10, 15f, 0.004f, 5f),
+    RC("RC cars", "car", 5, 2.5f, 0.0012f, 0.12f, 2.5f),
+    RUNNING("Running", "runner", 10, 15f, 0.004f, 0.6f, 5f),
 }
 
 @Serializable
@@ -66,6 +68,8 @@ data class CalibrationSample(
     val speedKmh: Float? = null,
     /** +1 / -1 crossing direction for passes, 0 for photos. */
     val direction: Int = 0,
+    /** Passes: how much the crossing looked like the racer's other samples (0..1), for tuning. */
+    val match: Float? = null,
 )
 
 @Serializable
