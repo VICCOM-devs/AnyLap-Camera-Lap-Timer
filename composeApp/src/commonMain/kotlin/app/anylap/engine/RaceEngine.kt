@@ -1,8 +1,14 @@
 package app.anylap.engine
 
 import app.anylap.platform.Platform
+import app.anylap.data.CrossRec
 import app.anylap.data.Lap
 import app.anylap.data.LapSource
+import app.anylap.data.ReviewCandidate
+import app.anylap.data.ReviewItem
+import app.anylap.data.ReviewKind
+import app.anylap.platform.joinPath
+import app.anylap.util.Bmp
 import app.anylap.data.RaceMode
 import app.anylap.data.Racer
 import app.anylap.data.Session
@@ -143,7 +149,9 @@ class RaceEngine(
             if (racers.isEmpty()) return
             val suggestions = e.candidates.map { it.first }.filter { s -> racers.any { it.id == s } }
             val ordered = suggestions + racers.map { it.id }.filterNot { it in suggestions }
-            unassigned += Unassigned(nextUnassignedId++, e.timestampNs, (e.timestampNs - startNs) / 1_000_000, e.speedKmh, ordered)
+            val uid = nextUnassignedId++
+            unassigned += Unassigned(uid, e.timestampNs, (e.timestampNs - startNs) / 1_000_000, e.speedKmh, ordered)
+            review(e, ReviewKind.UNKNOWN, decided = null, unassignedId = uid)
             publish(null)
             return
         }
@@ -151,17 +159,65 @@ class RaceEngine(
             IdSource.MARKER -> LapSource.MARKER
             else -> LapSource.AUTO
         }
+        // Things a human should glance at afterwards: a split pair, or a name that only just won.
+        when {
+            e.split -> review(e, ReviewKind.SPLIT, decided = id)
+            e.source == IdSource.APPEARANCE && e.confidence < LOW_MARGIN -> review(e, ReviewKind.LOW_MARGIN, decided = id)
+        }
         add(id, Cross(e.timestampNs, e.speedKmh, source, e.confidence))
+    }
+
+    /** A crossing the appearance gate turned down: kept with its picture so a missed car can be rescued. */
+    fun onRejected(e: CrossingEvent) {
+        if (_state.value.phase != Phase.RUNNING) return
+        if (e.timestampNs < startNs || e.snapshot == null) return
+        review(e, if (e.rescue) ReviewKind.MISSED else ReviewKind.REJECTED, decided = null)
+    }
+
+    private val reviews = ArrayList<ReviewItem>()
+    private val reviewUnassigned = HashMap<Long, String>()
+
+    @OptIn(ExperimentalUuidApi::class)
+    private fun review(e: CrossingEvent, kind: ReviewKind, decided: String?, unassignedId: Long? = null) {
+        if (reviews.size >= MAX_REVIEWS) return
+        val atMs = (e.timestampNs - startNs) / 1_000_000
+        val path = e.snapshot?.let { snap ->
+            try {
+                val p = joinPath(Platform.dataDir, "review_${sessionId}_$atMs.bmp")
+                Platform.writeBytes(p, Bmp.encode(snap.width, snap.height, snap.argb))
+                p
+            } catch (t: Throwable) { null }
+        }
+        val item = ReviewItem(
+            id = Uuid.random().toString(),
+            atMs = atMs,
+            kind = kind,
+            imagePath = path,
+            candidates = e.candidates.filter { c -> racers.any { it.id == c.first } }.take(4).map { ReviewCandidate(it.first, it.second) },
+            decided = decided,
+            speedKmh = e.speedKmh,
+            direction = e.direction,
+        )
+        reviews += item
+        if (unassignedId != null) reviewUnassigned[unassignedId] = item.id
+    }
+
+    private fun resolveReview(unassignedId: Long, to: String) {
+        val rid = reviewUnassigned.remove(unassignedId) ?: return
+        val i = reviews.indexOfFirst { it.id == rid }
+        if (i >= 0) reviews[i] = reviews[i].copy(resolvedTo = to)
     }
 
     fun assign(unassignedId: Long, racerId: String) {
         val u = unassigned.firstOrNull { it.id == unassignedId } ?: return
         unassigned.remove(u)
+        resolveReview(unassignedId, racerId)
         if (!add(racerId, Cross(u.elapsedNs, u.speedKmh, LapSource.ASSIGNED, 1f))) publish(null)
     }
 
     fun dismiss(unassignedId: Long) {
         unassigned.removeAll { it.id == unassignedId }
+        resolveReview(unassignedId, "")
         publish(null)
     }
 
@@ -315,7 +371,7 @@ class RaceEngine(
         val st = _state.value
         val durationMs = if (endNs > 0) (endNs - startNs) / 1_000_000 else st.elapsedMs
         return Session(
-            id = Uuid.random().toString(),
+            id = sessionId,
             startedAt = if (startWallMs > 0) startWallMs else Platform.nowMillis(),
             config = config,
             // Sessions keep a snapshot of who raced, not their calibration images.
@@ -326,6 +382,18 @@ class RaceEngine(
             videoPath = videoPath,
             videoOffsetMs = if (recordingStartNs != null && startNs > 0) (startNs - recordingStartNs) / 1_000_000 else 0,
             unassignedCrossings = st.unassigned.size,
+            crossings = racers.associate { r -> r.id to (crosses[r.id] ?: emptyList()).map { CrossRec((it.ns - startNs) / 1_000_000, it.speed, it.source, it.confidence) } },
+            reviews = reviews.toList(),
         )
+    }
+
+    @OptIn(ExperimentalUuidApi::class)
+    private val sessionId = Uuid.random().toString()
+
+    companion object {
+        /** Naming margin below which a crossing goes to the "Check these" tray (2× the engine's minimum). */
+        const val LOW_MARGIN = 0.12f
+        /** Pictures kept per session. */
+        const val MAX_REVIEWS = 60
     }
 }

@@ -59,7 +59,9 @@ import app.anylap.data.LapSource
 import app.anylap.data.RaceMode
 import app.anylap.data.Racer
 import app.anylap.data.Session
+import app.anylap.data.ReviewItem
 import app.anylap.engine.Format
+import app.anylap.engine.LapMath
 import app.anylap.engine.Stats
 import app.anylap.ui.charts.BarList
 import app.anylap.ui.charts.ChartSeries
@@ -124,7 +126,17 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
     ) {
         item { Podium(s, ordered) }
         item {
-            PillTabs(listOf("Overview", "Laps", "Charts", "Replays"), tab, { tab = it }, Modifier.fillMaxWidth())
+            val open = s.reviews.count { it.resolvedTo == null }
+            val tabs = listOf("Overview", "Laps", "Charts", "Replays") + if (s.reviews.isNotEmpty()) listOf(if (open > 0) "Check ($open)" else "Checked") else emptyList()
+            PillTabs(tabs, tab, { tab = it }, Modifier.fillMaxWidth())
+        }
+        if (tab == 4) {
+            item { SectionLabel("Crossings the camera wasn't sure about") }
+            s.reviews.sortedWith(compareBy<ReviewItem> { it.resolvedTo != null }.thenBy { it.atMs }).forEach { item ->
+                item(key = "rv-${item.id}") {
+                    ReviewCard(s, item) { to -> app.repo.saveSession(LapMath.resolve(s, item.id, to)) }
+                }
+            }
         }
         when (tab) {
             0 -> {

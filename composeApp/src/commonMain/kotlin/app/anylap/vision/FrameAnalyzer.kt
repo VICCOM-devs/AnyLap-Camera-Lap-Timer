@@ -100,6 +100,7 @@ class FrameAnalyzer(
             if (t.missed > 0) continue
             accumulateFingerprint(t, f)
             checkCrossing(t, line, cfg, f, unstable)
+            checkRescue(t, line, cfg, f, unstable)
             if (cfg.useMarkers && abs(t.side) < 0.45f * w && frameCount % 2 == 0L) readMarker(t, f)
         }
         finalizePending(f.timestampNs, cfg, force = false)
@@ -182,6 +183,8 @@ class FrameAnalyzer(
         val markerVotes = HashMap<Int, Int>()
         /** Split tag of the blob this track got this frame (0 = a whole blob). */
         var tag = 0
+        /** Side of the check lines (finish line shifted ±CHECK_OFFSET) last frame. */
+        var checkSide = Float.NaN
         var area = 0
 
         fun predict(ts: Long): Pair<Float, Float> {
@@ -568,7 +571,7 @@ class FrameAnalyzer(
 
     private fun lineGeom(l: LineSpec) = LineGeom(l.x1 * w, l.y1 * h, l.x2 * w, l.y2 * h)
 
-    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?, val along: Float, val area: Int, val split: Boolean)
+    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?, val along: Float, val area: Int, val split: Boolean, val rescue: Boolean = false)
 
     private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame, unstable: Boolean) {
         val n = t.pts.size
@@ -600,6 +603,43 @@ class FrameAnalyzer(
             Direction.REVERSE -> dir == -1
         }
         if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0)
+    }
+
+    /**
+     * Second-line safety net against missed crossings: a check line parallel to the finish line,
+     * [CHECK_OFFSET] of the frame beyond it on each side. A track that passes a check line with no
+     * finish-line crossing in the last [RESCUE_WINDOW_NS] – it was merged with another racer there,
+     * or gated out – is reported as a *rescue*: not timing, but a picture and an estimated time for
+     * the review tray, so a missed car can be put back by hand.
+     */
+    private fun checkRescue(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame, unstable: Boolean) {
+        val n = t.pts.size
+        val cur = t.pts[n - 1]
+        val d = CHECK_OFFSET * w
+        val s = line.side(cur.x, cur.y)
+        // signed distance beyond the nearer check line: positive outside, negative inside
+        val beyond = abs(s) - d
+        val prev = t.checkSide
+        t.checkSide = beyond
+        if (n < 2 || prev.isNaN() || unstable) return
+        if (!(prev < 0f && beyond >= 0f)) return             // must go from inside to outside
+        if (t.lastCrossTs > cur.ts - RESCUE_WINDOW_NS) return  // counted at the finish: fine
+        if (!plausibleSize(t, cfg)) return
+        val p = t.pts[n - 2]
+        val along = line.along(cur.x, cur.y)
+        if (along < -ALONG_MARGIN || along > 1f + ALONG_MARGIN) return
+        // did it come from the other side of the finish line within the window? (otherwise it
+        // appeared out here – a car entering the frame, not a missed crossing)
+        val from = t.pts.firstOrNull { cur.ts - it.ts <= RESCUE_WINDOW_NS } ?: return
+        val sFrom = line.side(from.x, from.y)
+        if ((sFrom < 0f) == (s < 0f) && abs(sFrom) > 0.3f * d) return
+        // estimated finish time from the speed across the line
+        val dt = (cur.ts - p.ts).coerceAtLeast(1L)
+        val vAcross = abs(s - line.side(p.x, p.y)) / dt   // px per ns
+        if (vAcross <= 0f) return
+        val finishNs = cur.ts - (abs(s) / vAcross).toLong()
+        t.lastCrossTs = finishNs // one rescue per pass
+        pending += Pending(t, finishNs, if (s > 0f) 1 else -1, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0, rescue = true)
     }
 
     /**
@@ -725,7 +765,7 @@ class FrameAnalyzer(
         // Appearance gate: only meaningful once every racer has something to compare with.
         val gated = cfg.minMatch > 0f && cfg.racers.isNotEmpty() &&
             cfg.racers.all { it.fingerprint != null || it.views.isNotEmpty() }
-        val accepted = !gated || markerRacer != null || best >= cfg.minMatch
+        val accepted = !p.rescue && (!gated || markerRacer != null || best >= cfg.minMatch)
 
         var racerId: String? = null
         var source = IdSource.NONE
@@ -750,7 +790,7 @@ class FrameAnalyzer(
                 }
             }
         }
-        if (racerId != null) claims[racerId] = p.crossNs
+        if (racerId != null && !p.rescue) claims[racerId] = p.crossNs
         onCrossing(
             CrossingEvent(
                 timestampNs = p.crossNs,
@@ -768,10 +808,11 @@ class FrameAnalyzer(
                 area = p.area,
                 along = p.along,
                 split = p.split,
+                rescue = p.rescue,
             ),
         )
         // Learn how big one racer is at this point of the line (whole, confidently named blobs only).
-        if (accepted && !p.split && p.area > 0 && (source == IdSource.ONLY_RACER || source == IdSource.MARKER || (source == IdSource.APPEARANCE && confidence >= 2 * MIN_MARGIN))) {
+        if (accepted && !p.split && !p.rescue && p.area > 0 && (source == IdSource.ONLY_RACER || source == IdSource.MARKER || (source == IdSource.APPEARANCE && confidence >= 2 * MIN_MARGIN))) {
             sizeSamples += floatArrayOf(p.along, p.area.toFloat())
             if (sizeSamples.size > 60) sizeSamples.removeAt(0)
         }
@@ -889,6 +930,10 @@ class FrameAnalyzer(
         const val SPLIT_FACTOR = 1.7f
         /** Each part of a size-based split must look at least this much like some racer. */
         const val SPLIT_PART_MATCH = 0.5f
+        /** Check lines sit this fraction of the frame width beyond the finish line, on both sides. */
+        const val CHECK_OFFSET = 0.15f
+        /** A track reaching a check line with no finish crossing within this long is a possible miss. */
+        const val RESCUE_WINDOW_NS = 700_000_000L
         /** Share of a crossing's recent travel that must be across the line (0.7 ≈ within 45°). */
         const val ACROSS_FRAC = 0.7f
         var DEBUG_SPLIT = false
