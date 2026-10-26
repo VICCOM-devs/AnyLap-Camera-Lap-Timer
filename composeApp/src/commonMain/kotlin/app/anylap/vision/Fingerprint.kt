@@ -1,36 +1,87 @@
 package app.anylap.vision
 
+import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
- * Appearance fingerprint: a colour histogram built straight from YUV pixels.
- * 16x16 chroma (U,V) bins capture paint/clothing colours fairly independently of brightness,
- * plus 8 brightness (Y) bins so black, grey and white can still be told apart.
+ * Appearance fingerprint built straight from YUV pixels.
+ *
+ * Colour is binned by **hue** (the direction of the chroma vector) and weighted by **saturation**,
+ * so a green stripe on a white car is what the fingerprint is mostly made of, while the white
+ * itself lands in one small achromatic bin. Hue survives motion blur and distance (which only dilute
+ * saturation), so a stripe read at speed still lands in the same bin as in the calibration photo.
+ * Black is treated the same way – a **dark** bin weighted by how dark the pixel is – so black stripes
+ * on white count as strongly as coloured ones. Eight brightness (Y) bins back that up.
+ *
+ * Version 2 (Oct 2026). Fingerprints have [SIZE] entries; anything else is from an older build
+ * and is treated as "not calibrated".
  */
 object Fingerprint {
-    private const val UV_BINS = 16
+    private const val HUE_BINS = 24
+    private const val CHROMA_SIZE = HUE_BINS + 2 // + achromatic + dark
+    private const val ACHROMATIC = HUE_BINS
+    private const val DARK = HUE_BINS + 1
     private const val Y_BINS = 8
-    private const val UV_SIZE = UV_BINS * UV_BINS
-    const val SIZE = UV_SIZE + Y_BINS
+    const val SIZE = CHROMA_SIZE + Y_BINS
     private const val Y_WEIGHT = 0.35f
+
+    /** Below this chroma radius (in U/V units) a pixel is grey/white/black. */
+    private const val MIN_SAT = 7f
+    /** Saturation at which a pixel gets full weight. */
+    private const val FULL_SAT = 40f
+    /** Weight of an achromatic pixel: small, so colour wins, but a plain white car still has a signature. */
+    private const val ACHROMATIC_WEIGHT = 0.05f
+    /** Grey pixels darker than this count towards the dark bin, fully black at Y = 0. */
+    private const val DARK_FROM = 180f
+    /** Share of the surrounding ring assumed to also be inside a photo box (ground around the car). */
+    private const val RING_SUBTRACT = 0.5f
 
     fun accumulator() = FloatArray(SIZE)
 
     /** y, u, v are 0..255. */
     fun add(acc: FloatArray, y: Int, u: Int, v: Int) {
-        acc[(u shr 4) * UV_BINS + (v shr 4)] += 1f
-        acc[UV_SIZE + (y shr 5)] += 1f
+        val du = (u - 128).toFloat()
+        val dv = (v - 128).toFloat()
+        val sat = sqrt(du * du + dv * dv)
+        if (sat < MIN_SAT) {
+            acc[ACHROMATIC] += ACHROMATIC_WEIGHT
+            if (y < DARK_FROM) acc[DARK] += (DARK_FROM - y) / DARK_FROM
+        } else {
+            val w = min(1f, sat / FULL_SAT)
+            // Soft binning: split between the two nearest hue bins so a hue on a bin edge doesn't flicker.
+            val pos = ((atan2(dv, du) + PI) / (2 * PI) * HUE_BINS).toFloat()
+            val i = pos.toInt()
+            val f = pos - i
+            acc[i % HUE_BINS] += w * (1f - f)
+            acc[(i + 1) % HUE_BINS] += w * f
+        }
+        acc[CHROMA_SIZE + (y shr 5)] += 1f
     }
 
     fun normalize(acc: FloatArray): FloatArray {
         val out = FloatArray(SIZE)
-        var uvSum = 0f
-        for (i in 0 until UV_SIZE) uvSum += acc[i]
+        var cSum = 0f
+        for (i in 0 until CHROMA_SIZE) cSum += acc[i]
         var ySum = 0f
-        for (i in UV_SIZE until SIZE) ySum += acc[i]
-        if (uvSum > 0f) for (i in 0 until UV_SIZE) out[i] = acc[i] / uvSum * (1f - Y_WEIGHT)
-        if (ySum > 0f) for (i in UV_SIZE until SIZE) out[i] = acc[i] / ySum * Y_WEIGHT
+        for (i in CHROMA_SIZE until SIZE) ySum += acc[i]
+        if (cSum > 0f) for (i in 0 until CHROMA_SIZE) out[i] = acc[i] / cSum * (1f - Y_WEIGHT)
+        if (ySum > 0f) for (i in CHROMA_SIZE until SIZE) out[i] = acc[i] / ySum * Y_WEIGHT
         return out
+    }
+
+    /**
+     * Fingerprint of a photo box with the ground around it taken out: whatever the ring around the
+     * box contains is assumed to make up to [RING_SUBTRACT] of the box too, and is subtracted
+     * (scaled by area) before normalising. Both inputs are raw accumulators.
+     */
+    fun subtractRing(box: FloatArray, boxArea: Int, ring: FloatArray, ringArea: Int): FloatArray {
+        if (ringArea <= 0 || boxArea <= 0) return normalize(box)
+        val scale = RING_SUBTRACT * boxArea.toFloat() / ringArea
+        val cleaned = FloatArray(SIZE)
+        for (i in 0 until SIZE) cleaned[i] = (box[i] - ring[i] * scale).coerceAtLeast(0f)
+        return normalize(cleaned)
     }
 
     /** Histogram intersection: 1.0 = identical colour make-up, 0 = nothing in common. */

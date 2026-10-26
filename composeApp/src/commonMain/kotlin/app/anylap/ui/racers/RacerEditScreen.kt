@@ -168,7 +168,7 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                 Spacer(Modifier.height(12.dp))
                 if (racer.hasLegacyCalibration) {
                     Text(
-                        "Calibrated with an older version (${racer.fingerprintSamples} samples, no pictures). Calibrating again replaces it with one you can review.",
+                        "Calibrated with an older version of the app (${racer.fingerprintSamples} samples). The camera reads colours differently now, so calibrate again.",
                         style = MaterialTheme.typography.bodySmall,
                         color = RT.Amber,
                     )

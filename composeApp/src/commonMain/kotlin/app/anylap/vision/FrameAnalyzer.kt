@@ -44,7 +44,10 @@ class FrameAnalyzer(
         resetRequested = true
     }
 
-    /** On the next frame, report the colour fingerprint of everything inside l,t,r,b (0..1). */
+    /**
+     * On the next frame, report the colour fingerprint of everything inside l,t,r,b (0..1), with
+     * the colours of the ring around the box (ground) subtracted – for calibration photos.
+     */
     fun requestRegionFingerprint(normRect: FloatArray, callback: (FloatArray) -> Unit) {
         regionRequest = normRect to callback
     }
@@ -124,12 +127,23 @@ class FrameAnalyzer(
         val x1 = (r[2] * f.width).toInt().coerceIn(x0 + 1, f.width)
         val y0 = (r[1] * f.height).toInt().coerceIn(0, f.height - 1)
         val y1 = (r[3] * f.height).toInt().coerceIn(y0 + 1, f.height)
-        val acc = Fingerprint.accumulator()
-        for (y in y0 until y1) for (x in x0 until x1) {
+        // Ring: the box grown by 30 % on each side, minus the box itself.
+        val padX = ((x1 - x0) * 0.3f).toInt()
+        val padY = ((y1 - y0) * 0.3f).toInt()
+        val rx0 = (x0 - padX).coerceAtLeast(0)
+        val rx1 = (x1 + padX).coerceAtMost(f.width)
+        val ry0 = (y0 - padY).coerceAtLeast(0)
+        val ry1 = (y1 + padY).coerceAtMost(f.height)
+        val box = Fingerprint.accumulator()
+        val ring = Fingerprint.accumulator()
+        var ringArea = 0
+        for (y in ry0 until ry1) for (x in rx0 until rx1) {
             val i = y * f.width + x
+            val inside = x >= x0 && x < x1 && y >= y0 && y < y1
+            val acc = if (inside) box else ring.also { ringArea++ }
             Fingerprint.add(acc, f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
         }
-        return Fingerprint.normalize(acc)
+        return Fingerprint.subtractRing(box, (x1 - x0) * (y1 - y0), ring, ringArea)
     }
 
     // ------------------------------------------------------------------ tracks
@@ -212,6 +226,8 @@ class FrameAnalyzer(
     private fun sampleFingerprint(t: Track, f: AnalysisFrame, x0: Int, y0: Int, x1: Int, y1: Int, core: Boolean): Int {
         var added = 0
         val cw = CORE * w
+        // Small blobs (an RC car) are read pixel by pixel so a 1 px stripe isn't skipped; big ones every other pixel.
+        val step = if (t.bw * t.bh < 6000) 1 else 2
         var y = y0
         while (y < y1) {
             var x = x0
@@ -229,9 +245,9 @@ class FrameAnalyzer(
                         added++
                     }
                 }
-                x += 2
+                x += step
             }
-            y += 2
+            y += step
         }
         return added
     }

@@ -1,5 +1,6 @@
 package app.anylap.data
 
+import app.anylap.vision.Fingerprint
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -44,10 +45,11 @@ data class Racer(
      */
     val calibration: List<CalibrationSample> = emptyList(),
 ) {
-    val isCalibrated: Boolean get() = fingerprint.isNotEmpty()
+    /** A fingerprint from the current engine version; older ones can't be matched and need redoing. */
+    val isCalibrated: Boolean get() = fingerprint.size == Fingerprint.SIZE
 
-    /** Calibrated before per-sample calibration existed: nothing to review, only reset. */
-    val hasLegacyCalibration: Boolean get() = fingerprint.isNotEmpty() && calibration.isEmpty()
+    /** Calibrated with an older build (no samples, or an older fingerprint format): nothing to review, only reset. */
+    val hasLegacyCalibration: Boolean get() = fingerprint.isNotEmpty() && (calibration.isEmpty() || fingerprint.size != Fingerprint.SIZE)
 
     fun samplesOf(kind: SampleKind): List<CalibrationSample> = calibration.filter { it.kind == kind }
 }

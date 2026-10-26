@@ -107,7 +107,8 @@ class VisionTest {
         val bgU = ByteArray(w * h) { (125 + rnd.nextInt(6)).toByte() }
         val bgV = ByteArray(w * h) { (125 + rnd.nextInt(6)).toByte() }
 
-        data class Car(val x: Float, val y: Float, val cw: Int, val ch: Int, val yv: Int, val u: Int, val v: Int)
+        /** [stripe] = (y, u, v) painted on every other 4 px column, like tape across the body. */
+        data class Car(val x: Float, val y: Float, val cw: Int, val ch: Int, val yv: Int, val u: Int, val v: Int, val stripe: IntArray? = null)
 
         fun frame(ts: Long, cars: List<Car>): AnalysisFrame {
             val y = bgY.copyOf(); val u = bgU.copyOf(); val v = bgV.copyOf()
@@ -117,7 +118,9 @@ class VisionTest {
                 for (yy in y0 until y0 + c.ch) for (xx in x0 until x0 + c.cw) {
                     if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue
                     val i = yy * w + xx
-                    y[i] = c.yv.toByte(); u[i] = c.u.toByte(); v[i] = c.v.toByte()
+                    val st = c.stripe?.takeIf { ((xx - x0) / 4) % 2 == 0 }
+                    if (st != null) { y[i] = st[0].toByte(); u[i] = st[1].toByte(); v[i] = st[2].toByte() }
+                    else { y[i] = c.yv.toByte(); u[i] = c.u.toByte(); v[i] = c.v.toByte() }
                 }
             }
             return AnalysisFrame(ts, w, h, y, u, v, w, h) { _, _, _, _ -> null }
@@ -212,6 +215,51 @@ class VisionTest {
         ts = runPass(a, scene, ts, 60, 600f, { x -> Scene.Car(x, 230f, 30, 16, 200, 90, 200) }, 120)
         a.flush(ts)
         assertEquals(0, events.size)
+    }
+
+    @Test
+    fun whiteCarsWithDifferentStripesAreToldApart() {
+        // Four white cars: plain, black stripes, red stripes, green stripes – only the stripes differ.
+        val scene = Scene(seed = 21)
+        fun car(stripe: IntArray?) = { x: Float -> Scene.Car(x, 135f, 36, 18, 230, 128, 128, stripe) }
+        val cars = linkedMapOf(
+            "white" to car(null),
+            "black" to car(intArrayOf(40, 128, 128)),
+            "red" to car(intArrayOf(110, 100, 210)),
+            "green" to car(intArrayOf(150, 80, 70)),
+        )
+        val learned = HashMap<String, FloatArray>()
+        var ts = 1_000_000_000L
+        for ((name, c) in cars) {
+            val events = ArrayList<CrossingEvent>()
+            val a = FrameAnalyzer(onCrossing = { events += it })
+            a.config = AnalyzerConfig(line = LineSpec(), racers = listOf(RacerRef(name, null, null)))
+            repeat(30) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+            ts = runPass(a, scene, ts, 60, 500f, c, 120)
+            a.flush(ts)
+            learned[name] = assertNotNull(events.single().fingerprint)
+            ts += 10_000_000_000L
+        }
+        val events = ArrayList<CrossingEvent>()
+        val a = FrameAnalyzer(onCrossing = { events += it })
+        a.config = AnalyzerConfig(
+            line = LineSpec(),
+            racers = cars.keys.map { RacerRef(it, learned[it], null, listOf(learned[it]!!)) },
+            minMatch = FrameAnalyzer.MIN_MATCH,
+        )
+        repeat(30) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+        for ((_, c) in cars) {
+            ts = runPass(a, scene, ts, 60, 700f, c, 100)
+            repeat(20) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
+        }
+        a.flush(ts)
+        assertEquals(cars.keys.toList(), events.map { it.racerId }, "ids: ${events.map { it.candidates }}")
+        assertTrue(events.all { it.accepted && it.source == IdSource.APPEARANCE })
+        // Every decision has a comfortable margin over the runner-up.
+        for (e in events) {
+            val margin = e.candidates[0].second - e.candidates[1].second
+            assertTrue(margin >= 0.15f, "${e.racerId}: margin $margin, ${e.candidates}")
+        }
     }
 
     @Test
