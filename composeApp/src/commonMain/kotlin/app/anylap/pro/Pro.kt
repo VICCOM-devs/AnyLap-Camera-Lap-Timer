@@ -62,8 +62,8 @@ object Limits {
 /** Store products. Prices here are placeholders shown until the store reports localised prices. */
 enum class Plan(val productId: String, val title: String, val placeholderPrice: String, val note: String) {
     YEARLY("anylap_pro_yearly", "Yearly", "€24.99 / year", "7-day free trial · best value"),
-    MONTHLY("anylap_pro_monthly", "Monthly", "€3.49 / month", "Cancel anytime"),
-    LIFETIME("anylap_pro_lifetime", "Lifetime", "€54.99 once", "Pay once, keep it forever"),
+    MONTHLY("anylap_pro_monthly", "Monthly", "€3.49 / month", "No trial · cancel anytime"),
+    LIFETIME("anylap_pro_lifetime", "Lifetime", "€39.99 once", "Pay once, keep it forever"),
 }
 
 sealed interface PurchaseResult {
