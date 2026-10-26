@@ -35,9 +35,38 @@ data class Racer(
     /** Set when this racer was added from another account's share code. */
     val ownerUserId: String? = null,
     val ownerName: String? = null,
+    /**
+     * What the fingerprint was learned from: one entry per photo / pass, each with its own
+     * fingerprint and a thumbnail, so bad ones (a crash, someone's shoe) can be removed.
+     * Local only – never synced, never copied into sessions.
+     */
+    val calibration: List<CalibrationSample> = emptyList(),
 ) {
     val isCalibrated: Boolean get() = fingerprint.isNotEmpty()
+
+    /** Calibrated before per-sample calibration existed: nothing to review, only reset. */
+    val hasLegacyCalibration: Boolean get() = fingerprint.isNotEmpty() && calibration.isEmpty()
+
+    fun samplesOf(kind: SampleKind): List<CalibrationSample> = calibration.filter { it.kind == kind }
 }
+
+@Serializable
+enum class SampleKind { PHOTO, PASS_SLOW, PASS_FAST }
+
+@Serializable
+data class CalibrationSample(
+    val id: String,
+    val kind: SampleKind,
+    /** Photos: which side ("left", "right", "front", "back"). Passes: empty. */
+    val view: String = "",
+    val fingerprint: List<Float>,
+    /** Thumbnail (photo JPEG or BMP crop of the pass); deleted together with the sample. */
+    val imagePath: String? = null,
+    val createdAt: Long = 0,
+    val speedKmh: Float? = null,
+    /** +1 / -1 crossing direction for passes, 0 for photos. */
+    val direction: Int = 0,
+)
 
 @Serializable
 enum class RaceMode(val title: String, val short: String) {

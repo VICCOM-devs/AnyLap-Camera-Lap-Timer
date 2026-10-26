@@ -254,7 +254,7 @@ class Cloud(private val repo: Repository) {
         val me = _account.value.userId
         val name = obj["owner_name"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val local = if (owner == me) racer else racer.copy(ownerUserId = owner, ownerName = name)
-        repo.upsertRacer(local.copy(photoPath = repo.racer(racer.id)?.photoPath))
+        repo.racer(racer.id).let { mine -> repo.upsertRacer(local.copy(photoPath = mine?.photoPath, calibration = mine?.calibration ?: emptyList())) }
         local
     }
 
@@ -370,7 +370,7 @@ class Cloud(private val repo: Repository) {
             }
             val remote = json.decodeFromJsonElement(Racer.serializer(), row.data)
             if (SyncLogic.acceptRemote(local, localHash, hashes[row.id])) {
-                val merged = remote.copy(photoPath = local?.photoPath)
+                val merged = remote.copy(photoPath = local?.photoPath, calibration = local?.calibration ?: emptyList())
                 repo.upsertRacer(merged)
                 hashes = hashes + (row.id to SyncLogic.hash(merged))
             }

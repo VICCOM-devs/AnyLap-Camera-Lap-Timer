@@ -86,7 +86,7 @@ class FrameAnalyzer(
         for (t in tracks) {
             if (t.missed > 0) continue
             accumulateFingerprint(t, f)
-            checkCrossing(t, line, cfg)
+            checkCrossing(t, line, cfg, f)
             if (cfg.useMarkers && abs(t.side) < 0.45f * w && frameCount % 2 == 0L) readMarker(t, f)
         }
         finalizePending(f.timestampNs, cfg, force = false)
@@ -224,9 +224,9 @@ class FrameAnalyzer(
 
     private fun lineGeom(l: LineSpec) = LineGeom(l.x1 * w, l.y1 * h, l.x2 * w, l.y2 * h)
 
-    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int)
+    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?)
 
-    private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig) {
+    private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame) {
         val n = t.pts.size
         val cur = t.pts[n - 1]
         val s = line.side(cur.x, cur.y)
@@ -252,7 +252,7 @@ class FrameAnalyzer(
             Direction.FORWARD -> dir == 1
             Direction.REVERSE -> dir == -1
         }
-        if (wanted) pending += Pending(t, crossNs, dir)
+        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null)
     }
 
     private fun finalizePending(nowNs: Long, cfg: AnalyzerConfig, force: Boolean) {
@@ -272,8 +272,7 @@ class FrameAnalyzer(
         val t = p.track
         val fp = if (t.histFrames > 0) Fingerprint.normalize(t.hist) else null
         val candidates = if (fp != null) {
-            cfg.racers.mapNotNull { r -> r.fingerprint?.let { r.id to Fingerprint.similarity(fp, it) } }
-                .sortedByDescending { it.second }
+            cfg.racers.mapNotNull { r -> score(fp, r)?.let { r.id to it } }.sortedByDescending { it.second }
         } else emptyList()
 
         val markerEntry = t.markerVotes.maxByOrNull { it.value }
@@ -315,8 +314,52 @@ class FrameAnalyzer(
                 fingerprint = fp,
                 candidates = candidates,
                 markerSeen = markerEntry?.key,
+                snapshot = p.snapshot,
             ),
         )
+    }
+
+    /**
+     * Colour match against a racer: the combined fingerprint, blended with the best single view
+     * (left side, right side, a pass…) so a car that looks different from each side still matches.
+     */
+    private fun score(fp: FloatArray, r: RacerRef): Float? {
+        val avg = r.fingerprint?.let { Fingerprint.similarity(fp, it) }
+        val best = r.views.maxOfOrNull { Fingerprint.similarity(fp, it) }
+        return when {
+            avg != null && best != null -> 0.5f * avg + 0.5f * max(avg, best)
+            else -> avg ?: best
+        }
+    }
+
+    /** RGB crop around the track (a little padding), at analysis resolution. */
+    private fun snapshot(t: Track, f: AnalysisFrame): Snapshot? {
+        if (t.bw <= 0 || t.bh <= 0) return null
+        val pad = (max(t.bw, t.bh) * 0.25f).roundToInt() + 4
+        val x0 = (t.bx - pad).coerceIn(0, w - 1)
+        val y0 = (t.by - pad).coerceIn(0, h - 1)
+        val x1 = (t.bx + t.bw + pad).coerceIn(x0 + 1, w)
+        val y1 = (t.by + t.bh + pad).coerceIn(y0 + 1, h)
+        val sw = x1 - x0
+        val sh = y1 - y0
+        val out = IntArray(sw * sh)
+        for (yy in 0 until sh) {
+            val row = (y0 + yy) * w
+            for (xx in 0 until sw) {
+                val i = row + x0 + xx
+                out[yy * sw + xx] = yuvToArgb(f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
+            }
+        }
+        return Snapshot(sw, sh, out)
+    }
+
+    private fun yuvToArgb(y: Int, u: Int, v: Int): Int {
+        val d = u - 128
+        val e = v - 128
+        val r = (y + 1.402f * e).roundToInt().coerceIn(0, 255)
+        val g = (y - 0.344f * d - 0.714f * e).roundToInt().coerceIn(0, 255)
+        val b = (y + 1.772f * d).roundToInt().coerceIn(0, 255)
+        return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
     }
 
     private fun speedAt(t: Track, ts: Long, cfg: AnalyzerConfig): Float? {

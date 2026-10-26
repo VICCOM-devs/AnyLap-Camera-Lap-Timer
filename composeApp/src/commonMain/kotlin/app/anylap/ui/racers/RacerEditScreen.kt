@@ -86,6 +86,9 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
     }
     var name by remember(racer.id) { mutableStateOf(racer.name) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmReset by remember { mutableStateOf(false) }
+    var openSample by remember { mutableStateOf<app.anylap.data.CalibrationSample?>(null) }
+    val settings by app.repo.settings.collectAsState()
 
     fun save(n: String = name) {
         val trimmed = n.trim()
@@ -156,27 +159,49 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
             RtCard(Modifier.fillMaxWidth()) {
                 Text(
                     if (racer.sport == Sport.RC)
-                        "Teach the camera what this car looks like. Hold it in the frame for a photo, then drive it past the finish line a few times on its own – ideally where you'll race, in the same light."
+                        "Teach the camera what this car looks like: a photo of each side, then a few slow and a few fast passes over the finish line – ideally where you'll race, in the same light."
                     else
-                        "The bib marker identifies this runner. Calibrating their clothing colours as well helps when the bib is hidden (arms, other runners).",
+                        "The bib marker identifies this runner. Calibrating their clothing as well helps when the bib is hidden (arms, other runners).",
                     style = MaterialTheme.typography.bodyMedium,
                     color = RT.TextDim,
                 )
                 Spacer(Modifier.height(12.dp))
-                KeyValue("Photo", if (racer.photoPath != null) "Saved" else "Not yet")
-                KeyValue("Calibration passes", racer.fingerprintSamples.toString())
-                Spacer(Modifier.height(12.dp))
+                if (racer.hasLegacyCalibration) {
+                    Text(
+                        "Calibrated with an older version (${racer.fingerprintSamples} samples, no pictures). Calibrating again replaces it with one you can review.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RT.Amber,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                } else if (racer.calibration.isNotEmpty()) {
+                    CalibrationGallery(
+                        racer = racer,
+                        onOpen = { openSample = it },
+                        onDelete = { app.repo.removeCalibrationSample(racer.id, it.id) },
+                        onAddPhoto = null,
+                        onAddPass = null,
+                        kmh = settings.speedUnitKmh,
+                        tile = 72.dp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PrimaryButton(
-                        if (racer.isCalibrated) "Recalibrate" else "Calibrate",
-                        { save(); nav.push(Screen.Calibrate(racer.id)) },
+                        when {
+                            !racer.isCalibrated -> "Calibrate"
+                            racer.hasLegacyCalibration -> "Calibrate again"
+                            else -> "Review & add"
+                        },
+                        {
+                            save()
+                            if (racer.hasLegacyCalibration) app.repo.resetCalibration(racer.id)
+                            nav.push(Screen.Calibrate(racer.id))
+                        },
                         Modifier.weight(1f),
                         icon = Icons.Rounded.CameraAlt,
                     )
                     if (racer.isCalibrated) {
-                        SecondaryButton("Reset", {
-                            app.repo.upsertRacer(racer.copy(fingerprint = emptyList(), fingerprintSamples = 0))
-                        }, icon = Icons.Rounded.RestartAlt)
+                        SecondaryButton("Reset", { confirmReset = true }, icon = Icons.Rounded.RestartAlt)
                     }
                 }
             }
@@ -256,6 +281,27 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                 Text("Delete ${if (racer.sport == Sport.RC) "car" else "runner"}", color = RT.Accent)
             }
         }
+    }
+
+    openSample?.let { s ->
+        SampleDialog(
+            racer, s, settings.speedUnitKmh,
+            onDelete = { app.repo.removeCalibrationSample(racer.id, s.id); openSample = null },
+            onDismiss = { openSample = null },
+        )
+    }
+
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            containerColor = RT.Surface2,
+            title = { Text("Reset calibration?") },
+            text = { Text("All photos and passes for ${racer.name} are deleted. The avatar photo stays.", color = RT.TextDim) },
+            confirmButton = {
+                TextButton(onClick = { confirmReset = false; app.repo.resetCalibration(racer.id) }) { Text("Reset", color = RT.Accent) }
+            },
+            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel", color = RT.Text) } },
+        )
     }
 
     if (confirmDelete) {

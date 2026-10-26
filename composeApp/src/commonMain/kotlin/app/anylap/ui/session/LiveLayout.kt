@@ -38,9 +38,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -119,26 +117,42 @@ fun LiveLayout(
     onRemoveLap: (String) -> Unit,
     camera: @Composable BoxScope.() -> Unit,
 ) {
+    val setup = race.phase == Phase.SETUP
+    // The finish line only moves while this is on (no accidental drags mid-session).
+    var editingLine by remember { mutableStateOf(true) }
     Row(Modifier.fillMaxSize().background(Color.Black)) {
         // ---------------------------------------------------------------- camera
         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
             Box(Modifier.aspectRatio(previewAspect)) {
                 camera()
-                FinishLineOverlay(line, direction, editable = race.phase == Phase.SETUP, onChange = onLineChange)
+                FinishLineOverlay(line, direction, editable = setup && editingLine, onChange = onLineChange)
 
-                Column(Modifier.align(Alignment.TopStart).padding(14.dp)) {
-                    ClockHud(race, config)
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (setup) {
+                    // Compact: a one-line summary and fps, nothing covering the track.
+                    Row(Modifier.align(Alignment.TopStart).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        HudChip("${modeLabel(config)} · ${race.standings.size} ${config.sport.unitName}${if (race.standings.size == 1) "" else "s"}")
                         HudChip("${fps.fixed(0)} FPS")
-                        if (recording && race.phase != Phase.SETUP) RecChip()
                     }
-                }
-                if (race.phase == Phase.SETUP) {
-                    Box(Modifier.align(Alignment.TopEnd).padding(14.dp)) {
-                        CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, onBack, contentDescription = "Back")
+                    if (editingLine) {
+                        LineTools(
+                            direction = direction,
+                            onDirection = onDirection,
+                            onResetBackground = onResetBackground,
+                            onCenter = { onLineChange(LineSpec()) },
+                            onDone = { editingLine = false },
+                            modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
+                        )
+                        CameraHint("Drag the ends onto the tape on the ground", Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
                     }
-                    SetupHint(direction, onDirection, onResetBackground, Modifier.align(Alignment.BottomStart).padding(14.dp))
+                } else {
+                    Column(Modifier.align(Alignment.TopStart).padding(14.dp)) {
+                        ClockHud(race, config)
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            HudChip("${fps.fixed(0)} FPS")
+                            if (recording) RecChip()
+                        }
+                    }
                 }
 
                 androidx.compose.animation.AnimatedVisibility(
@@ -183,8 +197,21 @@ fun LiveLayout(
             }
         }
 
-        // ---------------------------------------------------------------- timing tower
-        TimingTower(
+        // ---------------------------------------------------------------- right side
+        if (setup) {
+            SetupRail(
+                config = config,
+                race = race,
+                voice = voice,
+                live = live,
+                editingLine = editingLine,
+                onEditLine = { editingLine = !editingLine },
+                onBack = onBack,
+                onLive = onLive,
+                onToggleVoice = onToggleVoice,
+                onStart = { editingLine = false; onStart() },
+            )
+        } else TimingTower(
             config = config,
             race = race,
             voice = voice,
@@ -279,38 +306,51 @@ private fun StartLights(countdown: Int) {
     }
 }
 
+/** Setup phase: everything on one slim rail so the camera gets the screen. */
 @Composable
-private fun SetupHint(direction: Direction, onDirection: () -> Unit, onResetBg: () -> Unit, modifier: Modifier) {
-    Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.72f)).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("Drag the line onto the tape on the ground", style = MaterialTheme.typography.titleSmall.copy(color = Color.White))
-        Text("Keep the phone still. Boxes show what the camera sees moving.", style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SmallAction(
-                Icons.Rounded.SwapHoriz,
-                when (direction) {
-                    Direction.BOTH -> "Counts both ways"
-                    Direction.FORWARD, Direction.REVERSE -> "One way (arrow)"
-                },
-                onDirection,
-            )
-            SmallAction(Icons.Rounded.RestartAlt, "Reset background", onResetBg)
+private fun SetupRail(
+    config: SessionConfig,
+    race: RaceState,
+    voice: Boolean,
+    live: Boolean,
+    editingLine: Boolean,
+    onEditLine: () -> Unit,
+    onBack: () -> Unit,
+    onLive: () -> Unit,
+    onToggleVoice: () -> Unit,
+    onStart: () -> Unit,
+) {
+    val racers = race.standings.map { it.racer }
+    CameraRail {
+        RailButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack)
+        RailButton(Icons.Rounded.Flag, "Line", onEditLine, selected = editingLine)
+        RailButton(
+            if (voice) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
+            if (voice) "Voice on" else "Voice off",
+            onToggleVoice,
+        )
+        RailButton(Icons.Rounded.Sensors, if (live) "Live on" else "Live", onLive, selected = live)
+        Spacer(Modifier.weight(1f))
+        // Who's in the session: small avatars, "+n" if they don't fit.
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy((-8).dp)) {
+            racers.take(4).forEach { RacerAvatar(it, 28.dp, ring = RT.Bg) }
         }
+        if (racers.size > 4) Text("+${racers.size - 4}", style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
+        Spacer(Modifier.height(4.dp))
+        RailButton(
+            Icons.Rounded.PlayArrow,
+            if (config.mode == RaceMode.PRACTICE) "Start" else "Start race",
+            onStart,
+            size = 56.dp,
+            filled = true,
+        )
     }
 }
 
-@Composable
-private fun SmallAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Row(
-        Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).background(RT.Surface3).clickable(onClick = onClick).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium.copy(color = Color.White))
-    }
+private fun modeLabel(c: SessionConfig): String = when (c.mode) {
+    RaceMode.PRACTICE -> "PRACTICE"
+    RaceMode.LAPS -> "${c.targetLaps} LAPS"
+    RaceMode.TIME -> "${c.timeLimitSec / 60} MIN"
 }
 
 /** Broadcast lower-third for each completed lap. */
