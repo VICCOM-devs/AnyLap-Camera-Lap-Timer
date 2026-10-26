@@ -15,7 +15,11 @@ interface CameraController {
     /** Frames arrive on a background thread, one at a time, already upright for the landscape screen. */
     fun setFrameListener(listener: ((AnalysisFrame) -> Unit)?)
 
-    /** Locks exposure and white balance (during a session) so brightness changes don't look like motion. */
+    /**
+     * Locks exposure and white balance (during a session) so brightness changes don't look like
+     * motion. Android also shortens the shutter to ≤ 1/500 s where the sensor allows (ISO up, same
+     * brightness) so racers stay sharp; iOS keeps the plain lock for now.
+     */
     fun setExposureLock(locked: Boolean)
 
     /** [onStarted] gets the Platform.monotonicNanos() time of the first recorded frame. */
