@@ -194,10 +194,15 @@ private fun LiveContent(nav: Navigator) {
             minMatch = FrameAnalyzer.MIN_MATCH,
             // How big one racer looks at each point of the line, so two merged racers are split.
             sizeHints = racers.flatMap { it.sizeHints() },
+            // Pictures of what crossed, for the "Check these" tray.
+            captureSnapshots = true,
         )
     }
     LaunchedEffect(session, engine) {
         session.crossings.collect { engine.onCrossing(it) }
+    }
+    LaunchedEffect(session, engine) {
+        session.rejected.collect { engine.onRejected(it) }
     }
 
     fun begin() {

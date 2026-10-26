@@ -124,7 +124,17 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
     ) {
         item { Podium(s, ordered) }
         item {
-            PillTabs(listOf("Overview", "Laps", "Charts", "Replays"), tab, { tab = it }, Modifier.fillMaxWidth())
+            val open = s.reviews.count { it.resolvedTo == null }
+            val tabs = listOf("Overview", "Laps", "Charts", "Replays") + if (s.reviews.isNotEmpty()) listOf(if (open > 0) "Check ($open)" else "Checked") else emptyList()
+            PillTabs(tabs, tab, { tab = it }, Modifier.fillMaxWidth())
+        }
+        if (tab == 4) {
+            item { SectionLabel("Crossings the camera wasn't sure about") }
+            s.reviews.sortedWith(compareBy<app.anylap.data.ReviewItem> { it.resolvedTo != null }.thenBy { it.atMs }).forEach { item ->
+                item(key = "rv-${item.id}") {
+                    ReviewCard(s, item) { to -> app.repo.saveSession(app.anylap.engine.LapMath.resolve(s, item.id, to)) }
+                }
+            }
         }
         when (tab) {
             0 -> {

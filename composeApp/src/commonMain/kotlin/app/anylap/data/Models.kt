@@ -135,6 +135,46 @@ data class Lap(
     val confidence: Float = 1f,
 )
 
+/** Why a crossing is in the "Check these" tray. */
+@Serializable
+enum class ReviewKind(val title: String) {
+    /** Nobody matched well enough; the app counted it for no one. */
+    UNKNOWN("Unknown car"),
+    /** Named, but the runner-up was close. */
+    LOW_MARGIN("Close call"),
+    /** Two racers were separated from one blob at the line. */
+    SPLIT("Cars touching"),
+    /** Turned down as not looking like any racer (a shadow, a hand, a dog). */
+    REJECTED("Not a racer?"),
+}
+
+@Serializable
+data class ReviewCandidate(val racerId: String, val score: Float)
+
+/**
+ * A crossing the camera wasn't sure about, with its picture, for a human verdict after (or during)
+ * the race. Resolving one re-derives the laps from [Session.crossings].
+ */
+@Serializable
+data class ReviewItem(
+    val id: String,
+    val atMs: Long,
+    val kind: ReviewKind,
+    /** BMP crop of what crossed; local only, deleted with the session. */
+    val imagePath: String? = null,
+    val candidates: List<ReviewCandidate> = emptyList(),
+    /** What the app counted it as (racer id), or null for nobody. */
+    val decided: String? = null,
+    /** The human's answer: a racer id, "" for "not a car", null while unanswered. */
+    val resolvedTo: String? = null,
+    val speedKmh: Float? = null,
+    val direction: Int = 0,
+)
+
+/** One counted crossing, kept so laps can be rebuilt after a review. */
+@Serializable
+data class CrossRec(val atMs: Long, val speedKmh: Float? = null, val source: LapSource = LapSource.AUTO, val confidence: Float = 1f)
+
 @Serializable
 data class Session(
     val id: String,
@@ -149,6 +189,10 @@ data class Session(
     /** Position in the video file (ms) that corresponds to session time 0. */
     val videoOffsetMs: Long = 0,
     val unassignedCrossings: Int = 0,
+    /** Counted crossings per racer (session ms), the source [laps] are derived from. */
+    val crossings: Map<String, List<CrossRec>> = emptyMap(),
+    /** Crossings for a human to check, with pictures. */
+    val reviews: List<ReviewItem> = emptyList(),
     /** Set when the session was timed on someone else's phone and synced here. */
     val timedByUserId: String? = null,
     val timedByName: String? = null,

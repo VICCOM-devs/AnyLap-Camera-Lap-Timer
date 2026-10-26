@@ -123,6 +123,7 @@ class Repository {
 
     fun deleteSession(id: String) {
         session(id)?.videoPath?.let { Platform.delete(it) }
+        session(id)?.reviews?.forEach { r -> r.imagePath?.let { Platform.delete(it) } }
         _sessions.value = _sessions.value.filterNot { it.id == id }
         persist(sessionsFile, ListSerializer(Session.serializer())) { _sessions.value }
     }
