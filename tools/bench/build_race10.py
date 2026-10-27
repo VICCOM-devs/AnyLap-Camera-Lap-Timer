@@ -101,13 +101,20 @@ def picture(t, involved, focus=None, scale=3, ghosts=None):
     else:
         X0, Y0, X1, Y1 = 0, 0, im.width, im.height
     # labels (callouts) – placed outside the box, towards the crop's free side, with a leader line
+    placed = []
     for e, bx in zip(involved, boxes):
         lab = name_of(e['i'])
-        tw = d.textlength(lab, font=font)
-        lx = bx['r'] + 18 if bx['r'] + 18 + tw + 12 < X1 else bx['l'] - 18 - tw - 12
-        ly = max(Y0 + 6, bx['t'] - 26)
-        d.line([((bx['l'] + bx['r']) / 2, bx['t']), (lx + (0 if lx > bx['r'] else tw + 12), ly + 14)], fill=ORANGE + (230,), width=2)
-        d.rounded_rectangle([lx, ly, lx + tw + 12, ly + 26], radius=7, fill=(20, 20, 24, 225), outline=ORANGE + (255,), width=2)
+        tw = d.textlength(lab, font=font); lw, lh = tw + 12, 26
+        cx = (bx['l'] + bx['r']) / 2
+        lx = min(max(cx - lw / 2, X0 + 4), X1 - lw - 4)
+        cands_ = [(lx, bx['t'] - lh - 12, 'top'), (lx, bx['b'] + 12, 'bottom'), (lx, bx['t'] - 2 * lh - 18, 'top')]
+        def hits(y): return any(not (lx + lw < px0 or lx > px1 or y + lh < py0 or y > py1) for px0, py0, px1, py1 in placed)
+        ly, side = next(((x, y, sd) for x, y, sd in cands_ if Y0 + 2 <= y <= Y1 - lh - 2 and not hits(y)), cands_[0])[1:]
+        ly = min(max(ly, Y0 + 2), Y1 - lh - 2)
+        placed.append((lx, ly, lx + lw, ly + lh))
+        ay = bx['t'] if ly < bx['t'] else bx['b']
+        d.line([(cx, ay), (min(max(cx, lx + 8), lx + lw - 8), ly + (lh if ly < bx['t'] else 0))], fill=ORANGE + (230,), width=2)
+        d.rounded_rectangle([lx, ly, lx + lw, ly + lh], radius=7, fill=(20, 20, 24, 225), outline=ORANGE + (255,), width=2)
         d.text((lx + 6, ly + 4), lab, font=font, fill=(255, 255, 255))
     # race direction: arrow from the involved cars' velocity
     if involved:
@@ -136,7 +143,7 @@ def truth_near(t, car=None, win=0.12):
     xs = [x for x in truth if abs(x['t'] - t) < win and (car is None or x['car'] == car)]
     return min(xs, key=lambda x: abs(x['t'] - t)) if xs else None
 items = []; usedI = set()
-def involved_at(t, win=0.25):
+def involved_at(t, win=0.1):
     return [e for e in ev if abs(e['t'] - t) < win and e['box'] and (e['accepted'] or e['rescue'] or (outsByI.get(e['i']) or [{}])[0].get('car'))]
 for e in ev:
     i = e['i']; os_ = outsByI.get(i, [])
@@ -225,7 +232,7 @@ seen = set()
 for a in range(len(cev)):
     for b in range(a + 1, len(cev)):
         if cev[b][0] - cev[a][0] > 0.06: break
-        if (cev[a][2], cev[b][2]) in seen or cev[a][1] == cev[b][1]: continue
+        if (cev[a][2], cev[b][2]) in seen or cev[a][1] == cev[b][1] or cev[a][2] == cev[b][2]: continue
         seen.add((cev[a][2], cev[b][2])); finishes.append((cev[a], cev[b]))
 ghostCards = []
 for (ta, ca, ia), (tb, cb, ib) in finishes[:6]:
@@ -326,6 +333,12 @@ dec = {}
 for o in outs: dec[o['why']] = dec.get(o['why'], 0) + 1
 diagRows = ''.join(f'<tr><td class="mono">{fmt(x["t"])}</td><td>{sw(x["car"])}{nice(x["car"])}</td><td>{x["tag"]}</td><td>{"✓ counted" if any(abs(c["t"]-x["t"])<0.15 for c in counted[x["car"]]) else "✗ missed"}</td><td class="mono">{(min((c["t"]-x["t"] for c in counted[x["car"]]), key=abs)*1000):+.1f} ms</td></tr>' for x in truth if x['tag'].startswith('diag'))
 gate = open(f'{B}/out/gate.txt').read() if os.path.exists(f'{B}/out/gate.txt') else ''
+seedRows = ''
+import glob
+for f in sorted(glob.glob(f'{B}/out/keep_race10_*.json'), key=lambda x: int(x.split('_')[-1].split('.')[0])):
+    Q = json.load(open(f))['summary']; sd = f.split('_')[-1].split('.')[0]
+    seedRows += f'<tr{" class=on" if sd == seed else ""}><td class="pos">{sd}</td><td class="mono">{Q["engineRight"]} / {Q["crossings"]}</td><td class="mono"><b>{Q["right"]} / {Q["crossings"]}</b></td><td class="mono">{Q["missed"]}</td><td class="mono">{Q["extra"]}</td><td class="mono">{Q["abreast"]}</td><td class="mono">{Q["diag"]}</td><td class="mono">{Q["timingMeanMs"]:.1f} ms</td></tr>'
+
 right = S['right']; N = S['crossings']
 html = f'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AnyLap · 10 cars · {NL} laps · simulated race v2</title>
@@ -364,8 +377,8 @@ td.bad{{background:rgba(242,176,30,.14);color:var(--warn)}}td.miss{{background:r
 .toast{{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--s2);border:1px solid var(--stroke);border-radius:999px;padding:10px 18px;font-size:13px;display:none}}
 .note{{font-size:13px;color:var(--dim);line-height:1.55}}.cmp{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}@media(max-width:700px){{.cmp{{grid-template-columns:1fr}}h1{{font-size:26px}}.hero{{grid-template-columns:1fr}}}}
 .lights{{display:flex;gap:14px;justify-content:center;padding:18px 0}}.lt{{width:44px;height:44px;border-radius:50%;background:#2a0b0b;box-shadow:inset 0 0 0 3px #3a1414}}.lt.on{{background:var(--red);box-shadow:0 0 22px rgba(225,6,0,.8)}}
-.pf img{{width:100%;border-radius:12px;display:block}}.pfr{{margin-top:10px}}.big{{font-size:20px;font-weight:900}}
-pre{{white-space:pre-wrap;font-size:12px;color:var(--dim);background:var(--s2);border-radius:10px;padding:10px}}
+.pfg{{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}}.pf{{margin:0}}.pf img{{width:100%;border-radius:12px;display:block}}.pfr{{margin-top:10px}}.big{{font-size:20px;font-weight:900}}
+tr.on td{{background:rgba(225,6,0,.12)}}pre{{white-space:pre-wrap;font-size:12px;color:var(--dim);background:var(--s2);border-radius:10px;padding:10px}}
 </style></head><body><div class="wrap">
 <header><h1><small>AnyLap · Simulated race v2 · overhead · 60 fps · nose timing</small>10 cars · {NL} laps</h1>
 <div class="pills"><span class="pill ghost">{S['durationS']/60:.1f} min</span><span class="pill ghost">{N} crossings · {S['diag']} diagonal · {S['abreast']} abreast</span><span class="pill">Check ({nCheck})</span></div></header>
@@ -379,7 +392,9 @@ pre{{white-space:pre-wrap;font-size:12px;color:var(--dim);background:var(--s2);b
 <div class="kpi"><b>{sum(v for k, v in dec.items() if k not in ('ENGINE','IGNORED'))}</b><span>decided by lap timing</span></div>
 </div>
 <div class="tabs"><div class="tab on" onclick="show(0,this)">Standings</div><div class="tab" onclick="show(1,this)">Laps</div><div class="tab" onclick="show(2,this)">Graphs</div><div class="tab" onclick="show(3,this)">Check ({nCheck})</div><div class="tab" onclick="show(4,this)">Start &amp; finish</div><div class="tab" onclick="show(5,this)">Setup</div></div>
-<section class="panel on"><div class="card0"><h2>Result</h2><table><thead><tr><th>P</th><th>Car</th><th>Laps</th><th>Time</th><th>Gap</th><th>Best</th><th>Avg</th><th>Spread</th></tr></thead><tbody>{rowsE}</tbody></table></div>
+<section class="panel on"><div class="card0"><h2>Eight races, same cars, different seeds</h2><table><thead><tr><th>Seed</th><th>Camera alone</th><th>With lap timing</th><th>Missed</th><th>Wrong / extra</th><th>Abreast</th><th>Diagonal</th><th>Nose timing</th></tr></thead><tbody>{seedRows}</tbody></table>
+<p class="note">The race on this page is seed {seed} (highlighted). The rules were tuned while looking at seeds 1–5; seeds 6–8 were run once, untouched.</p></div>
+<div class="card0"><h2>Result</h2><table><thead><tr><th>P</th><th>Car</th><th>Laps</th><th>Time</th><th>Gap</th><th>Best</th><th>Avg</th><th>Spread</th></tr></thead><tbody>{rowsE}</tbody></table></div>
 <div class="card0"><h2>App vs truth</h2><table><thead><tr><th>P</th><th>App</th><th>Truth</th><th></th></tr></thead><tbody>{cmp}</tbody></table></div></section>
 <section class="panel"><div class="card0"><h2>Lap times</h2><div class="laps"><table><thead><tr><th>Lap</th>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>
 <p class="note">Lap 1 runs from lights-out (standing start). <span style="color:#C68CFF">purple</span> = personal best · ⏱ = named, renamed or added by lap timing · <span style="color:var(--warn)">amber</span> = differs from truth by &gt; 50 ms · <span style="color:var(--bad)">red</span> = lap missing.</p></div></section>
@@ -394,7 +409,7 @@ pre{{white-space:pre-wrap;font-size:12px;color:var(--dim);background:var(--s2);b
 <section class="panel"><div class="card0"><h2>Start · lights out and away we go</h2><div class="lights" id="lights">{''.join('<div class="lt"></div>' for _ in range(5))}</div>
 <p class="note" style="text-align:center"><button class="pill" onclick="startLights()">Replay start</button></p>
 <p class="note">Standing start from the grid behind the line; the race clock starts at lights-out (5 reds, one per second, then a random hold). Grid: {', '.join(nice(c) for c in R['grid'])}. Lap 1 arrivals were bunched within ~2 s.</p></div>
-<div class="card0"><h2>Photo finishes · {len(finishes)} pairs within 60 ms</h2><p class="note">Finish counts when <b>the front touches the line</b> (Settings → Timing; “the whole car has passed” is the other choice).</p>{''.join(ghostCards) or '<p class="note">none</p>'}</div></section>
+<div class="card0"><h2>Photo finishes · {len(finishes)} pairs within 60 ms</h2><p class="note">Finish counts when <b>the front touches the line</b> (Settings → Timing; “the whole car has passed” is the other choice).</p><div class="pfg">{''.join(ghostCards) or '<p class="note">none</p>'}</div></div></section>
 <section class="panel"><div class="card0"><h2>How this race was made</h2><p class="note">The ten new minis (GT3, LMP, Formula, rally, touring, drift, Group 5, supercar, stock car, hypercar; 15–19.5 cm, wear and stickers), each rendered alone from 1.8 m straight above (480×270, Cycles, 1/120 s blur): two calibration passes, four lanes, a fast pass and two diagonal crossings (+25°, −38°) per car. Passes composited onto the empty track with sensor noise: standing start from lights-out, {NL} laps, per-car pace 17.6–18.6 s ±0.3 s, spins, a forced photo finish (1 frame apart, abreast, lap 4) and a three-wide arrival (lap 7). Diagonal crossings only when no other car is near (cars can't pass through each other in a composite).</p>
 <p class="note">Engine (this branch): nose timing (blob edge ahead of the centroid, minus the mask rim and half the blur streak), crossing box + velocity on every event; <b>LapIdentity</b> after the camera: conflicts, unnamed crossings, check-line rescues and missing laps decided by each car's lap rhythm. Decisions: {', '.join(f"{k.replace('_',' ').lower()} {v}" for k, v in dec.items())}.</p>
 <p class="note">Pace: {', '.join(f"{nice(c)} {R['pace'][c]:.2f}" for c in cars)} s. Spins: {', '.join(R['incidents']).replace('_',' ') or 'none'}.</p></div>
