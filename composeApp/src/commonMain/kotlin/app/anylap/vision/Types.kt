@@ -142,6 +142,17 @@ class Snapshot(
     val line: FloatArray? = null,
     val timestampNs: Long = 0,
     val frameNs: Long = 0,
+    /** Colour planes Y, U, V one after another (memory only, for [CardFit]); null when not kept. */
+    val yuv: ByteArray? = null,
+    /** Raw foreground (before clean-up), 1 = moving; memory only. */
+    val fg: ByteArray? = null,
+    /** Median luma of the frame (brightness of the light the pictures are compared under). */
+    val lumaRef: Float = 0f,
+    /** Where the picture was cut from: top-left corner and the whole frame's size (analysis px). */
+    val x0: Int = 0,
+    val y0: Int = 0,
+    val frameW: Int = 0,
+    val frameH: Int = 0,
 )
 
 /**

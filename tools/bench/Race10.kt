@@ -4,6 +4,8 @@ import app.anylap.data.LineSpec
 import app.anylap.engine.LapSolver
 import app.anylap.data.FinishEdge
 import app.anylap.vision.AnalyzerConfig
+import app.anylap.vision.CardFit
+import app.anylap.vision.LabelLayout
 import app.anylap.vision.CrossingEvent
 import app.anylap.vision.Fingerprint
 import app.anylap.vision.FrameAnalyzer
@@ -20,6 +22,12 @@ import kotlin.random.Random
  * and frames for the Check cards. Usage: Race10 <seed> [laps] [gate]
  */
 private const val OUT = "/home/claude/blend/out"
+
+/** Check-card canvas: [CARD_S] px square, the picture centred with at least a [CARD_M] px free band round it for the tags (the page draws the same). */
+const val CARD_S = 420f
+const val CARD_M = 40f
+const val CARD_CHAR = 8.4f
+const val CARD_TAG_H = 24f
 
 fun main(args: Array<String>) {
     val seed = args.getOrNull(0)?.toInt() ?: 1
@@ -125,7 +133,7 @@ fun main(args: Array<String>) {
     // ---------------------------------------------------------------- engine
     val events = ArrayList<CrossingEvent>()
     val a = FrameAnalyzer(onCrossing = { events += it })
-    a.config = AnalyzerConfig(line = LINE, racers = racers, minMatch = FrameAnalyzer.MIN_MATCH, metersPerProcPx = MPP, sizeHints = HINTS.toList(), finishEdge = FinishEdge.FRONT)
+    a.config = AnalyzerConfig(line = LINE, racers = racers, minMatch = FrameAnalyzer.MIN_MATCH, metersPerProcPx = MPP, sizeHints = HINTS.toList(), finishEdge = FinishEdge.FRONT, captureSnapshots = true)
     val t0 = System.currentTimeMillis()
     for (i in 0 until frames) a.process(tl.frame(i))
     a.flush((frames * 1e9 / FPS).toLong())
@@ -168,10 +176,59 @@ fun main(args: Array<String>) {
     println("WITH LAP SOLVER: right $right / ${truth.size}, missed $missed, extra $extraN, wrong place $swapsL · nose timing |err| mean %.1f ms, max %.1f, bias %.1f · centre |err| %.1f".format(errs.map { abs(it) }.average(), errs.maxOf { abs(it) }, errs.average(), errsC.map { abs(it) }.average()))
     println("decisions: " + outs.groupingBy { it.why }.eachCount())
 
-    // ---------------------------------------------------------------- export
+    // ---------------------------------------------------------------- Check-card outlines (same code as the app's tray)
     File("$OUT/r10_$seed").mkdirs()
-    val frameWanted = HashSet<Int>()
     fun q(s: String?) = if (s == null) "null" else "\"" + s.replace("\"", "'").replace("\\", "/") + "\""
+    val pool = racers.mapNotNull { r -> r.template?.let { r.id to it } }
+    for ((id, t) in pool) File("$OUT/tpl_$id.pgm").outputStream().buffered().use { o -> o.write("P5\n${t.w} ${t.h * 2}\n255\n".toByteArray()); o.write(ByteArray(t.w * t.h * 2) { i -> if (i < t.w * t.h) t.y[i].toInt().coerceIn(0, 255).toByte() else (t.mask[i - t.w * t.h] * 255).toInt().toByte() }) }
+    println("templates: " + pool.joinToString(" ") { "${it.first} %.1fx%.1f".format(it.second.lengthPx, it.second.widthPx) })
+    val ownerOf = HashMap<Int, String>()
+    for (o in outs) if (o.racer != null) ownerOf[o.index] = o.racer!!
+    fun nice(c: String) = c.replace('_', ' ')
+    val cardJson = HashMap<Int, String>()
+    val uncovered = HashMap<Int, Float>()
+    val tc = System.currentTimeMillis()
+    for ((k, e) in events.withIndex()) {
+        val snap = e.snapshot ?: continue
+        val owners = { tid: Int ->
+            val mine = events.indices.filter { events[it].trackId == tid && ownerOf[it] != null }
+            val near = mine.filter { abs(events[it].timestampNs - snap.timestampNs) < 600_000_000L }
+            (near.ifEmpty { mine.sortedBy { abs(events[it].timestampNs - snap.timestampNs) }.take(1) }).map { ownerOf[it]!! }
+        }
+        val seen = events.indices.filter { ownerOf[it] != null && events[it].box != null && abs(events[it].timestampNs - snap.timestampNs) < 400_000_000L }
+            .map { CardFit.Seen(ownerOf[it]!!, events[it].box!!, events[it].vx, events[it].vy, events[it].timestampNs) }
+        val fits = CardFit.card(snap, owners, pool, 1f / 120f, seen)
+        // check: biggest patch of moving pixels no outline covers (in car areas)
+        run {
+            val fg = snap.fg!!; val W = snap.width; val H = snap.height
+            val cov = BooleanArray(W * H)
+            for (f in fits) for (yy in 0 until H) for (xx in 0 until W) if (inQuad(f.quad, (xx + 0.5f) / W, (yy + 0.5f) / H, W, H)) cov[yy * W + xx] = true
+            val seen = BooleanArray(W * H); var big = 0
+            for (q0 in 0 until W * H) { if (seen[q0] || fg[q0].toInt() == 0 || cov[q0]) continue
+                val st = ArrayList<Int>(); st += q0; seen[q0] = true; var n = 0
+                while (st.isNotEmpty()) { val q = st.removeAt(st.size - 1); n++; val x = q % W; val y = q / W
+                    for ((nx, ny) in arrayOf(x - 1 to y, x + 1 to y, x to y - 1, x to y + 1)) { if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue; val m = ny * W + nx; if (!seen[m] && fg[m].toInt() != 0 && !cov[m]) { seen[m] = true; st += m } } }
+                big = maxOf(big, n) }
+            val car = pool.minOf { it.second.mask.count { m -> m > 0.5f } }
+            uncovered[k] = big.toFloat() / car
+        }
+        // square canvas of CARD_S px: the picture as big as fits inside a CARD_M band, centred
+        val K = (CARD_S - 2 * CARD_M) / maxOf(snap.width, snap.height)
+        val ox = (CARD_S - snap.width * K) / 2; val oy = (CARD_S - snap.height * K) / 2
+        val polys = fits.map { f -> FloatArray(8) { j -> (if (j % 2 == 0) ox else oy) + f.quad[j] * (if (j % 2 == 0) snap.width else snap.height) * K } }
+        val sizes = fits.map { f -> (nice(f.racerId ?: "?").length * CARD_CHAR + 16f) to CARD_TAG_H }
+        val tags = LabelLayout.place(polys, sizes, 0f, 0f, CARD_S, CARD_S)
+        cardJson[k] = "{\"tids\":[${snap.boxes.joinToString(",") { "[${it.trackId},\"${owners(it.trackId).joinToString("+")}\"]" }}],\"w\":${snap.width},\"h\":${snap.height},\"K\":$K,\"S\":$CARD_S,\"ox\":$ox,\"oy\":$oy,\"line\":" + (snap.line?.joinToString(",", "[", "]") { "%.4f".format(it) } ?: "null") +
+            ",\"cars\":[" + fits.indices.joinToString(",") { j -> val f = fits[j]; val t = tags[j]
+                "{\"id\":${q(f.racerId)},\"score\":%.3f,\"poly\":[".format(f.score) + polys[j].joinToString(",") { "%.1f".format(it) } + "],\"tag\":[%.1f,%.1f,%.1f,%.1f,%.1f,%.1f]}".format(t.x, t.y, t.w, t.h, t.ax, t.ay) } + "]}"
+        val rgb = ByteArray(snap.width * snap.height * 3)
+        for (p in 0 until snap.width * snap.height) { val c = snap.argb[p]; rgb[3 * p] = (c shr 16).toByte(); rgb[3 * p + 1] = (c shr 8).toByte(); rgb[3 * p + 2] = c.toByte() }
+        File("$OUT/r10_$seed/g$k.pgm").outputStream().buffered().use { o -> o.write("P5\n${snap.width} ${snap.height}\n255\n".toByteArray()); o.write(ByteArray(snap.width * snap.height) { if (snap.fg!![it].toInt() != 0) -1 else 0 }) }
+        File("$OUT/r10_$seed/s$k.ppm").outputStream().buffered().use { o -> o.write("P6\n${snap.width} ${snap.height}\n255\n".toByteArray()); o.write(rgb) }
+    }
+    println("card outlines: ${cardJson.size} cards in ${System.currentTimeMillis() - tc} ms · uncovered moving patch ≥ 0.3 car: " + uncovered.filter { it.value >= 0.3f }.entries.sortedBy { it.key }.joinToString(" ") { "#${it.key}=%.2f".format(it.value) })
+
+    val frameWanted = HashSet<Int>()
     val sb = StringBuilder("{")
     sb.append("\"cars\":[${cars.joinToString(",") { q(it) }}],\"laps\":$laps,\"seed\":$seed,")
     sb.append("\"pace\":{${cars.joinToString(",") { "${q(it)}:%.3f".format(pace[it]) }}},\"grid\":[${grid.joinToString(",") { q(it) }}],")
@@ -183,9 +240,10 @@ fun main(args: Array<String>) {
     sb.append("\"truth\":[" + truth.sortedBy { it.t }.joinToString(",") { "{\"t\":%.4f,\"car\":${q(it.car)},\"lap\":${it.lap},\"speed\":%.1f,\"along\":%.3f,\"tag\":${q(it.tag)},\"angle\":%.0f}".format(it.t, it.speed, it.along, it.angle) } + "],")
     sb.append("\"events\":[" + events.withIndex().joinToString(",") { (k, e) ->
         val b = e.box
-        "{\"i\":$k,\"t\":%.4f,\"centre\":%.4f,\"named\":${q(e.racerId)},\"accepted\":${e.accepted},\"rescue\":${e.rescue},\"split\":${e.split},\"conf\":%.3f,\"match\":%.3f,\"size\":%.2f,\"along\":%.3f,\"speed\":%s,\"dir\":${e.direction},".format(e.timestampNs / 1e9, e.centreNs / 1e9, e.confidence, e.match, e.sizeRatio, e.along, e.speedKmh?.let { "%.1f".format(it) } ?: "null") +
+        "{\"i\":$k,\"tid\":${e.trackId},\"t\":%.4f,\"centre\":%.4f,\"named\":${q(e.racerId)},\"accepted\":${e.accepted},\"rescue\":${e.rescue},\"split\":${e.split},\"conf\":%.3f,\"match\":%.3f,\"size\":%.2f,\"along\":%.3f,\"speed\":%s,\"dir\":${e.direction},".format(e.timestampNs / 1e9, e.centreNs / 1e9, e.confidence, e.match, e.sizeRatio, e.along, e.speedKmh?.let { "%.1f".format(it) } ?: "null") +
             "\"box\":" + (if (b == null) "null" else "[%.4f,%.4f,%.4f,%.4f]".format(b.l, b.t, b.r, b.b)) + ",\"v\":[%.4f,%.4f],".format(e.vx, e.vy) +
             "\"quad\":" + (e.quad?.joinToString(",", "[", "]") { "%.4f".format(it) } ?: "null") + ",\"fit\":" + (e.fit?.let { f -> "{\"cars\":${f.cars},\"renamed\":${f.renamed},\"scores\":[" + f.scores.take(3).joinToString(",") { "[${q(it.first)},%.3f]".format(it.second) } + "]}" } ?: "null") + "," +
+            "\"card\":" + (cardJson[k] ?: "null") + "," +
             "\"cands\":[" + e.candidates.take(4).joinToString(",") { "[${q(it.first)},%.3f]".format(it.second) } + "]}"
     } + "],")
     sb.append("\"outs\":[" + outs.joinToString(",") { "{\"i\":${it.index},\"t\":%.4f,\"car\":${q(it.racer)},\"why\":${q(it.why.name)},\"note\":${q(it.note.replace("%", "%%"))}}".format(it.ns / 1e9) } + "]")
@@ -202,6 +260,17 @@ fun main(args: Array<String>) {
 }
 
 /** Wizard calibration from the minis' slow (3.5 m/s) and fast (7 m/s) passes; also measures nose-timing error on them. */
+fun inQuad(q: FloatArray, x: Float, y: Float, w: Int, h: Int): Boolean {
+    var sign = 0
+    for (k in 0 until 4) {
+        val ax = q[2 * k] * w; val ay = q[2 * k + 1] * h; val bx = q[(2 * k + 2) % 8] * w; val by = q[(2 * k + 3) % 8] * h
+        val c = (bx - ax) * (y * h - ay) - (by - ay) * (x * w - ax)
+        val sg = if (c > 0) 1 else if (c < 0) -1 else 0
+        if (sg != 0) { if (sign == 0) sign = sg else if (sg != sign) return false }
+    }
+    return true
+}
+
 fun calibrateMini(car: String, empty: Clip, errs: MutableList<Double>): RacerRef {
     val passes = listOf(Clip.load("minis_cal_${car}_+0.00_3.5_+0"), Clip.load("minis_cal_${car}_+0.00_7.0_+0"))
     val tl = Timeline(empty, seed = car.hashCode())

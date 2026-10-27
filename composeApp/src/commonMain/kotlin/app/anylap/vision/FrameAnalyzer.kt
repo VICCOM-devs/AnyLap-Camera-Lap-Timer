@@ -1213,19 +1213,32 @@ class FrameAnalyzer(
      */
     private fun snapshot(t: Track, f: AnalysisFrame): Snapshot? {
         if (t.bw <= 0 || t.bh <= 0) return null
-        val pad = (max(t.bw, t.bh) * 0.6f).roundToInt() + 6
-        val x0 = (t.bx - pad).coerceIn(0, w - 1)
-        val y0 = (t.by - pad).coerceIn(0, h - 1)
-        val x1 = (t.bx + t.bw + pad).coerceIn(x0 + 1, w)
-        val y1 = (t.by + t.bh + pad).coerceIn(y0 + 1, h)
+        val pad = max(t.bw, t.bh) + 6   // room for the cars round it, so each can be outlined on the card
+        var x0 = (t.bx - pad).coerceIn(0, w - 1)
+        var y0 = (t.by - pad).coerceIn(0, h - 1)
+        var x1 = (t.bx + t.bw + pad).coerceIn(x0 + 1, w)
+        var y1 = (t.by + t.bh + pad).coerceIn(y0 + 1, h)
+        // a neighbour cut by the edge is widened in whole (up to one more car size each way)
+        val grow = max(t.bw, t.bh) + 6
+        for (o in tracks) {
+            if (o === t || o.missed != 0 || o.bw <= 0 || o.bx >= x1 || o.bx + o.bw <= x0 || o.by >= y1 || o.by + o.bh <= y0) continue
+            x0 = max(min(x0, o.bx - 4), max(0, x0 - grow)); y0 = max(min(y0, o.by - 4), max(0, y0 - grow))
+            x1 = min(max(x1, o.bx + o.bw + 4), min(w, x1 + grow)); y1 = min(max(y1, o.by + o.bh + 4), min(h, y1 + grow))
+        }
         val sw = x1 - x0
         val sh = y1 - y0
         val out = IntArray(sw * sh)
+        val n0 = sw * sh
+        val yuv = ByteArray(3 * n0)
+        val fgc = ByteArray(n0)
         for (yy in 0 until sh) {
             val row = (y0 + yy) * w
             for (xx in 0 until sw) {
                 val i = row + x0 + xx
-                out[yy * sw + xx] = yuvToArgb(f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
+                val o = yy * sw + xx
+                out[o] = yuvToArgb(f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
+                yuv[o] = f.y[i]; yuv[n0 + o] = f.u[i]; yuv[2 * n0 + o] = f.v[i]
+                fgc[o] = if (i < rawFg.size) rawFg[i] else 0
             }
         }
         val boxes = tracks.filter { it.missed == 0 && it.bw > 0 && it.bx < x1 && it.bx + it.bw > x0 && it.by < y1 && it.by + it.bh > y0 }.map { o ->
@@ -1247,7 +1260,7 @@ class FrameAnalyzer(
         val line = floatArrayOf((l.x1 * w - x0) / sw, (l.y1 * h - y0) / sh, (l.x2 * w - x0) / sw, (l.y2 * h - y0) / sh)
         val n = t.pts.size
         val frameNs = if (n >= 2) t.pts[n - 1].ts - t.pts[n - 2].ts else 0L
-        return Snapshot(sw, sh, out, boxes, line, f.timestampNs, frameNs)
+        return Snapshot(sw, sh, out, boxes, line, f.timestampNs, frameNs, yuv, fgc, lastMedian, x0, y0, w, h)
     }
 
     private fun yuvToArgb(y: Int, u: Int, v: Int): Int {

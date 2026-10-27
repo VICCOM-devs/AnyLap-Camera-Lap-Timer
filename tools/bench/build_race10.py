@@ -149,6 +149,54 @@ def picture(t, involved, focus=None, scale=3, ghosts=None):
         for k, v in (('l', X0), ('r', X0), ('t', Y0), ('b', Y0)): bx[k] = (bx[k] - v) / ((X1 - X0) if k in 'lr' else (Y1 - Y0)) * 100
     return b64(crop), boxes
 
+def card_picture(e, focus_ids):
+    """The app's Check card: the crossing's own picture, every car outlined with its fitted calibration
+    picture, tags placed by the shared LabelLayout in a free band round the picture (never over a car)."""
+    c = e.get('card')
+    p = f"{B}/out/r10_{seed}/s{e['i']}.ppm"
+    if not c or not os.path.exists(p): return None
+    K = c['K']; S_ = int(c['S']); ox, oy = c['ox'], c['oy']
+    pw, ph = int(round(c['w'] * K)), int(round(c['h'] * K))
+    W_, H_ = S_, S_
+    can = Image.new('RGB', (W_, H_), (24, 24, 28))
+    can.paste(Image.open(p).convert('RGB').resize((pw, ph), Image.LANCZOS), (int(round(ox)), int(round(oy))))
+    M = ox; MY = oy
+    # outlines on their own layer, clipped to the picture (a car half out of frame is outlined where it is seen)
+    lay = Image.new('RGBA', (W_, H_), (0, 0, 0, 0)); d = ImageDraw.Draw(lay)
+    if c.get('line'):
+        L = c['line']; d.line([(M + L[0] * pw, MY + L[1] * ph), (M + L[2] * pw, MY + L[3] * ph)], fill=(255, 255, 255, 90), width=2)
+    for car in c['cars']:
+        q = car['poly']; poly = [(q[2 * k], q[2 * k + 1]) for k in range(4)]
+        on = car['id'] in focus_ids or not focus_ids
+        col = ORANGE if on else (255, 200, 120)
+        d.polygon(poly, outline=col + (255,), width=3)
+        d.line([poly[0], poly[1]], fill=(255, 255, 255, 235), width=3)   # nose edge
+    mask = Image.new('L', (W_, H_), 0); ImageDraw.Draw(mask).rectangle([M, MY, M + pw - 1, MY + ph - 1], fill=255)
+    can.paste(lay, (0, 0), Image.composite(lay.getchannel('A'), Image.new('L', (W_, H_), 0), mask))
+    d = ImageDraw.Draw(can, 'RGBA')
+    font = ImageFont.truetype(FONT, 13)
+    boxes = []
+    for car in c['cars']:
+        x, y, w, h, ax, ay = car['tag']
+        lx = min(max(ax, x), x + w); ly = min(max(ay, y), y + h)
+        on = car['id'] in focus_ids or not focus_ids
+        col = ORANGE if on else (255, 200, 120)
+        d.line([(ax, ay), (lx, ly)], fill=col + (235,), width=2)
+        d.ellipse([ax - 3, ay - 3, ax + 3, ay + 3], fill=col + (255,))
+        d.rounded_rectangle([x, y, x + w, y + h], radius=7, fill=(20, 20, 24, 235), outline=col + (255,), width=2)
+        lab = nice(car['id']) if car['id'] else '?'
+        tw = d.textlength(lab, font=font)
+        d.text((x + (w - tw) / 2, y + 5), lab, font=font, fill=(255, 255, 255))
+        q = car['poly']; xs = q[0::2]; ys = q[1::2]
+        boxes.append(dict(i=e['i'], l=max(min(xs), M) / W_ * 100, t=max(min(ys), MY) / H_ * 100, r=min(max(xs), M + pw) / W_ * 100, b=min(max(ys), MY + ph) / H_ * 100))
+    # race direction: arrow in the bottom-left of the band
+    vx, vy = e['v']; n = math.hypot(vx * W0, vy * H0) or 1; ux, uy = vx * W0 / n, vy * H0 / n
+    ax_, ay_ = 26, H_ - 22; ex, ey = ax_ + ux * 16, ay_ + uy * 16; sx, sy = ax_ - ux * 16, ay_ - uy * 16
+    d.line([(sx, sy), (ex, ey)], fill=(255, 255, 255, 235), width=4)
+    a = math.atan2(uy, ux)
+    d.polygon([(ex + 9 * math.cos(a), ey + 9 * math.sin(a)), (ex + 8 * math.cos(a + 2.4), ey + 8 * math.sin(a + 2.4)), (ex + 8 * math.cos(a - 2.4), ey + 8 * math.sin(a - 2.4))], fill=(255, 255, 255, 235))
+    return b64(can), boxes
+
 # ---------------------------------------------------------------- Check tray
 WHY = {'RENAMED_BY_TIMING': ('Renamed by lap timing', 'timing'), 'NAMED_BY_TIMING': ('Named by lap timing', 'timing'),
        'CHECK_LINE': ('Added from the check line', 'timing'), 'SECOND_IN_BLOB': ('Two cars in one blob', 'timing'),
@@ -221,7 +269,9 @@ EXPLAIN = ("<b>{sc}</b> = how closely this car matches {who}'s calibration (1 = 
 for k, it in enumerate(items):
     inv = involved_at(it['t'])
     focus = it.get('focus') or ({it['i']} if it['i'] is not None else set())
-    url, boxes = picture(it['t'], inv, focus)
+    head_ev = evByI.get(it['i']) if it['i'] is not None else None
+    cp = card_picture(head_ev, {o['car'] for o in it['outs'] if o['car']}) if head_ev else None
+    url, boxes = cp if cp else picture(it['t'], inv, focus)
     tr = it['truth']; trs = it.get('truths') or ([tr] if tr else [])
     decided = [o['car'] for o in it['outs'] if o['car']]
     good = (bool(trs) and all(any(abs(c['t'] - x['t']) < 0.15 for c in counted[x['car']]) for x in trs) and all(d in [x['car'] for x in trs] for d in decided)) if '(truth)' not in it['kind'] else False

@@ -175,7 +175,10 @@ private fun LiveContent(nav: Navigator) {
     // Exposure time for motion-blur-aware colour sampling (rounded so small AE wobble doesn't churn).
     val exposureMs = (camStats.exposureNs / 100_000L) / 10f
     LaunchedEffect(exposureMs) {
-        if (exposureMs > 0f) session.analyzer.config = session.analyzer.config.copy(exposureS = exposureMs / 1000f)
+        if (exposureMs > 0f) {
+            session.analyzer.config = session.analyzer.config.copy(exposureS = exposureMs / 1000f)
+            engine.cardExposureS = exposureMs / 1000f
+        }
     }
     val boxes by session.overlay.collectAsState()
 

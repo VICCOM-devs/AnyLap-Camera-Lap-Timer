@@ -194,6 +194,10 @@ data class ReviewBox(
     val atMs: Long? = null,
     /** The crossing the card is about. */
     val subject: Boolean = false,
+    /** The car's outline from its fitted calibration picture: 4 corners x,y (0..1), nose edge first. */
+    val quad: List<Float>? = null,
+    /** Who the race counted this car as (the tag on the card). */
+    val racerId: String? = null,
 )
 
 /**

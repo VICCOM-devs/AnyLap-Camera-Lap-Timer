@@ -14,7 +14,9 @@ import app.anylap.data.RaceMode
 import app.anylap.data.Racer
 import app.anylap.data.Session
 import app.anylap.data.SessionConfig
+import app.anylap.vision.CardFit
 import app.anylap.vision.CrossingEvent
+import app.anylap.vision.Snapshot
 import app.anylap.vision.IdSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -241,19 +243,70 @@ class RaceEngine(
         )
         reviews += item
         reviewTracks[id] = boxes.map { it.trackId }
+        if (snap?.yuv != null) reviewSnaps[id] = snap
         if (unassignedId != null) reviewUnassigned[unassignedId] = item.id
     }
 
     /** Review boxes get the crossing time of their track (known once every crossing is in). */
-    private fun reviewsWithTimes(): List<ReviewItem> = reviews.map { r ->
-        val ids = reviewTracks[r.id] ?: return@map r
-        r.copy(boxes = r.boxes.mapIndexed { i, b ->
-            if (b.atMs != null) b else {
-                val ns = ids.getOrNull(i)?.let { trackCross[it] }
-                val ms = ns?.let { (it - startNs) / 1_000_000 }
-                if (ms != null && kotlin.math.abs(ms - r.atMs) < 1000) b.copy(atMs = ms) else b
+    private fun reviewsWithTimes(): List<ReviewItem> {
+        val outlined = outlineCards()
+        return reviews.map { r ->
+            outlined[r.id]?.let { return@map r.copy(boxes = it) }
+            val ids = reviewTracks[r.id] ?: return@map r
+            r.copy(boxes = r.boxes.mapIndexed { i, b ->
+                if (b.atMs != null) b else {
+                    val ns = ids.getOrNull(i)?.let { trackCross[it] }
+                    val ms = ns?.let { (it - startNs) / 1_000_000 }
+                    if (ms != null && kotlin.math.abs(ms - r.atMs) < 1000) b.copy(atMs = ms) else b
+                }
+            })
+        }
+    }
+
+    /** Pictures of the Check cards, in memory only (colour planes + foreground for [CardFit]). */
+    private val reviewSnaps = HashMap<String, Snapshot>()
+    /** Shutter time, for how long the blur streak the outline must cover is. */
+    var cardExposureS = 1f / 120f
+
+    /**
+     * Every car on every Check card outlined with its own calibration picture, named as the race finally
+     * counted it (once the race is over, so the names are the final ones). Cards without a picture, or
+     * racers without calibration pictures, keep the tracker's boxes.
+     */
+    private fun outlineCards(): Map<String, List<ReviewBox>> {
+        if (reviewSnaps.isEmpty()) return emptyMap()
+        val pool = racers.mapNotNull { r -> r.topTemplate()?.let { r.id to it } }
+        if (pool.isEmpty()) return emptyMap()
+        val counted = racers.flatMap { r -> crossesOf(r.id).mapNotNull { c -> c.event?.let { r.id to it } } }
+        val out = HashMap<String, List<ReviewBox>>()
+        for (r in reviews) {
+            val snap = reviewSnaps[r.id] ?: continue
+            val near = counted.filter { kotlin.math.abs(it.second.timestampNs - snap.timestampNs) < 600_000_000L }
+            val owners = { tid: Int ->
+                val mine = counted.filter { it.second.trackId == tid }
+                (mine.filter { it in near }.ifEmpty { mine.sortedBy { kotlin.math.abs(it.second.timestampNs - snap.timestampNs) }.take(1) }).map { it.first }
             }
-        })
+            val seen = near.mapNotNull { (id, e) -> e.box?.let { CardFit.Seen(id, it, e.vx, e.vy, e.timestampNs) } }
+            val fits = try { CardFit.card(snap, owners, pool, cardExposureS, seen) } catch (t: Throwable) { continue }
+            if (fits.isEmpty()) continue
+            val subjectBox = r.boxes.firstOrNull { it.subject }
+            val sx = subjectBox?.let { (it.l + it.r) / 2 }; val sy = subjectBox?.let { (it.t + it.b) / 2 }
+            val subjectFit = fits.firstOrNull { r.decided != null && it.racerId == r.decided }
+                ?: if (sx != null && sy != null) fits.firstOrNull { it.contains(sx, sy) } else null
+            out[r.id] = fits.map { f ->
+                val xs = (0 until 4).map { f.quad[2 * it] }; val ys = (0 until 4).map { f.quad[2 * it + 1] }
+                val atNs = near.filter { it.first == f.racerId }.minByOrNull { kotlin.math.abs(it.second.timestampNs - snap.timestampNs) }?.second?.timestampNs
+                ReviewBox(
+                    xs.min().coerceIn(0f, 1f), ys.min().coerceIn(0f, 1f), xs.max().coerceIn(0f, 1f), ys.max().coerceIn(0f, 1f),
+                    f.vx, f.vy,
+                    atMs = if (f === subjectFit) r.atMs else atNs?.let { (it - startNs) / 1_000_000 },
+                    subject = f === subjectFit,
+                    quad = f.quad.toList(),
+                    racerId = f.racerId,
+                )
+            }
+        }
+        return out
     }
 
     private fun resolveReview(unassignedId: Long, to: String) {
