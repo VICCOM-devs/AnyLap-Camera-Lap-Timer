@@ -184,7 +184,7 @@ class FrameAnalyzer(
         for (yy in b.y until b.y + b.h) for (xx in b.x until b.x + b.w) {
             val i = yy * w + xx
             if (mask[i].toInt() == 0) continue
-            val mine = if (b.tag != 0) owner[i] == b.tag else bf.labelAt(i) == b.label
+            val mine = if (b.tag != 0) owner[i] == b.tag else (b.label < 0 || bf.labelAt(i) == b.label) // −1 = joined fragments: all of its box
             if (!mine) continue
             val sd = line.side(xx + 0.5f, yy + 0.5f)
             if (sd < lo) lo = sd; if (sd > hi) hi = sd
@@ -497,10 +497,15 @@ class FrameAnalyzer(
             loop@ for (i in list.indices) for (j in i + 1 until list.size) {
                 val a = list[i]; val b = list[j]
                 val exp = expectedArea(line.along((a.cx * a.area + b.cx * b.area) / (a.area + b.area), (a.cy * a.area + b.cy * b.area) / (a.area + b.area)), cfg) ?: continue
-                if (a.area > 0.85f * exp || b.area > 0.85f * exp || a.area + b.area > 1.3f * exp) continue
                 val gapX = max(0, max(a.x, b.x) - min(a.x + a.w, b.x + b.w))
                 val gapY = max(0, max(a.y, b.y) - min(a.y + a.h, b.y + b.h))
-                if (max(gapX, gapY) > 0.5f * sqrt(exp)) continue
+                val small = min(a.area, b.area); val big = max(a.area, b.area)
+                // two halves of one racer (dark windows the colour of the ground) …
+                val halves = big <= 0.85f * exp && a.area + b.area <= 1.3f * exp && max(gapX, gapY) <= 0.5f * sqrt(exp)
+                // … or a body plus a thin piece of itself the mask lost the link to (an open-wheeler's front
+                // wing ahead of a nose cone too narrow to show): the piece alone is far too small to be a racer
+                val appendix = small < APPENDIX_MAX * exp && big <= 1.15f * exp && a.area + b.area <= 1.45f * exp && max(gapX, gapY) <= 0.35f * sqrt(exp)
+                if (!halves && !appendix) continue
                 val x0 = min(a.x, b.x); val y0 = min(a.y, b.y)
                 val x1 = max(a.x + a.w, b.x + b.w); val y1 = max(a.y + a.h, b.y + b.h)
                 val n = a.area + b.area
@@ -820,8 +825,10 @@ class FrameAnalyzer(
         fun behind(p: TrackPoint, c: Float) = if (fwd) c - p.sMin else p.sMax - c
         val blurPx = abs(v) * 1e9f * cfg.exposureS
         val trim = EDGE_DIL_PX + EDGE_BLUR_K * blurPx
-        val off = if (cfg.timingEdge == TimingEdge.FRONT) (ahead(prev, prevSide) + ahead(cur, curSide)) / 2f - trim
+        var off = if (cfg.timingEdge == TimingEdge.FRONT) (ahead(prev, prevSide) + ahead(cur, curSide)) / 2f - trim
                   else (behind(prev, prevSide) + behind(cur, curSide)) / 2f - trim
+        // never further than about one racer's size ahead of its centre (a joined stray piece can't drag the time)
+        expectedArea(0.5f, cfg)?.let { off = min(off, sqrt(it)) }
         if (off <= 0f) return 0L
         val shift = (off / abs(v)).toLong().coerceAtMost(300_000_000L)
         return if (cfg.timingEdge == TimingEdge.FRONT) -shift else shift
@@ -1041,6 +1048,8 @@ class FrameAnalyzer(
                 source = IdSource.ONLY_RACER
                 confidence = 1f
             }
+            // a piece far too small to be a racer (a wing tip left over from a split) is never named
+            p.area > 0 && (expectedArea(p.along, cfg)?.let { p.area < FRAGMENT_MAX * it } ?: false) -> {}
             candidates.isNotEmpty() -> {
                 val (id, margin) = jointAppearance(p, fp!!, cfg)
                 confidence = margin
@@ -1220,6 +1229,10 @@ class FrameAnalyzer(
         const val ACROSS_FRAC = 0.7f
         /** Edge timing: px the cleaned-up mask reaches beyond the car (net dilation), and the share of the blur streak to take off. */
         var EDGE_DIL_PX = 3f
+        /** A piece smaller than this share of one racer next to a racer-sized blob is part of it (front wing). */
+        const val APPENDIX_MAX = 0.45f
+        /** Below this share of one racer's size a crossing blob is a fragment, never named. */
+        const val FRAGMENT_MAX = 0.4f
         var EDGE_BLUR_K = 0.25f
         var DEBUG_SPLIT = false
         /** Frames between exposure (median luma) updates for the fingerprint. */

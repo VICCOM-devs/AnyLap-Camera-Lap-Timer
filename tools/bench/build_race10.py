@@ -65,7 +65,10 @@ ORANGE = (255, 138, 0)
 def picture(t, involved, focus=None, scale=3, ghosts=None):
     """Frame at time t, cropped around the involved cars, every car boxed + labelled with a leader line,
     race-direction arrow and a tick on the finish line. Returns (data-url, box list in % for the tap layer)."""
-    fi = nearest_frame(t)
+    # the frame the engine took the focus car's box in (first frame after its centre crossed): no extrapolation for it
+    fe = [e for e in involved if focus and e['i'] in focus] or involved
+    fi = math.ceil(fe[0]['centre'] * FPS - 1e-6) if fe and not ghosts else None
+    if fi is None or frame(fi) is None: fi = nearest_frame(t)
     if fi is None: return '', []
     ft = fi / FPS
     im = frame(fi).resize((W0 * scale, H0 * scale), Image.LANCZOS)
@@ -169,17 +172,36 @@ for c in cars:
     for k in counted[c]:
         if (c, round(k['t'], 4)) not in mat: items.append(dict(t=k['t'], kind='EXTRA (truth)', note=f"counted for {nice(c)}, but no {nice(c)} crossed", i=k['i'], cands=evByI[k['i']]['cands'] if k['i'] in evByI else [], truth=truth_near(k['t']), outs=outsByI.get(k['i'], []), ev=evByI.get(k['i'])))
 items.sort(key=lambda x: x['t'])
+# one card per moment: everything within 60 ms (a split pair, its timing decision, a fragment) is one picture
+groups = []
+for it in items:
+    if groups and it['t'] - groups[-1][-1]['t'] < 0.06 and ('(truth)' in it['kind']) == ('(truth)' in groups[-1][0]['kind']): groups[-1].append(it)
+    else: groups.append([it])
+merged = []
+for g in groups:
+    head_ = max(g, key=lambda x: (x['kind'] in [v[0] for v in WHY.values()], len(x['cands'])))
+    kinds_ = []
+    for x in g:
+        if x['kind'] not in kinds_: kinds_.append(x['kind'])
+    m = dict(head_); m['kind'] = ' · '.join(kinds_); m['note'] = ' / '.join(dict.fromkeys(x['note'] for x in g if x['note']))
+    m['focus'] = {x['i'] for x in g if x['i'] is not None}
+    m['outs'] = [o for x in g for o in x['outs']]
+    trs = [x['truth'] for x in g if x['truth']]
+    m['truths'] = list({(t['car'], t['lap']): t for t in trs}.values())
+    merged.append(m)
+items = merged
 cards = []
 EXPLAIN = ("<b>{sc}</b> = how closely this car matches {who}'s calibration (1 = identical). The next ones are the runners-up. "
            "<i>Won by</i> = gap to the runner-up. <i>Lap timing</i>: each car has its own lap rhythm – a car can't lap in half its time, "
            "and a car whose lap is due is the likely owner of a doubtful crossing. <i>Split</i> = cut out of a blob of touching cars.")
 for k, it in enumerate(items):
     inv = involved_at(it['t'])
-    focus = {it['i']} if it['i'] is not None else set()
+    focus = it.get('focus') or ({it['i']} if it['i'] is not None else set())
     url, boxes = picture(it['t'], inv, focus)
-    tr = it['truth']
+    tr = it['truth']; trs = it.get('truths') or ([tr] if tr else [])
     decided = [o['car'] for o in it['outs'] if o['car']]
-    good = (tr is not None and tr['car'] in decided) if it['kind'] not in ('Not a racer?', 'MISSED (truth)', 'EXTRA (truth)') else (it['kind'] == 'Not a racer?' and tr is None)
+    good = (bool(trs) and all(any(abs(c['t'] - x['t']) < 0.15 for c in counted[x['car']]) for x in trs) and all(d in [x['car'] for x in trs] for d in decided)) if '(truth)' not in it['kind'] else False
+    if it['kind'] == 'Not a racer?': good = not trs
     verdict = ('Right' if good else 'Wrong') if it['kind'] not in ('MISSED (truth)', 'EXTRA (truth)') else 'Wrong'
     cand = ' · '.join(f"{nice(c)} {s:.2f}" for c, s in it['cands'][:3])
     who = nice(it['cands'][0][0]) if it['cands'] else 'a car'
@@ -190,7 +212,7 @@ for k, it in enumerate(items):
 <div class="pic">{'<img src="' + url + '" alt="overhead frame at the line">' if url else '<div class="noimg">no picture</div>'}{taps}</div>
 <div class="cb"><div class="kl"><b>{it['kind']}</b> · {fmt(it['t'])} s</div>
 <div class="sc" onclick="this.nextElementSibling.classList.toggle('on')">{cand or it['note']}</div><div class="ex">{EXPLAIN.format(sc=it['cands'][0][1] if it['cands'] else '–', who=who)}<br><br>{it['note']}</div>
-<div class="tru" onclick="this.classList.add('on')"><span>Show truth</span><em>{('Truth: ' + nice(tr['car']) + ' lap ' + str(tr['lap']) + (' · ' + tr['tag'] if tr['tag'] else '')) if tr else 'Truth: no car crossed'} · app decision <b class="{'ok' if verdict == 'Right' else 'no'}">{verdict.lower()}</b></em></div></div></div>''')
+<div class="tru" onclick="this.classList.add('on')"><span>Show truth</span><em>{('Truth: ' + ', '.join(nice(x['car']) + ' lap ' + str(x['lap']) + (' (' + x['tag'] + ')' if x['tag'] else '') for x in trs)) if trs else 'Truth: no car crossed'} · app decision <b class="{'ok' if verdict == 'Right' else 'no'}">{verdict.lower()}</b></em></div></div></div>''')
 nCheck = len(items)
 kinds = {}
 for it in items: kinds[it['kind']] = kinds.get(it['kind'], 0) + 1

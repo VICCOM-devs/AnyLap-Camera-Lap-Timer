@@ -64,10 +64,19 @@ fun main(args: Array<String>) {
     }
     // forced: photo finish on lap 4 (2nd car 1 frame behind, abreast) and a three-wide arrival on lap 7
     fun shiftCar(c: String, fromLap: Int, dt: Double) { for (e in evs) if (e.car == c && e.lap >= fromLap) e.t += dt }
-    val (pA, pB) = grid.take(2)
-    run { val a = evs.first { it.car == pA && it.lap == 4 }; val b = evs.first { it.car == pB && it.lap == 4 }; shiftCar(pB, 4, a.t + 1 / 60.0 - b.t); a.tag = "photo"; evs.first { it.car == pB && it.lap == 4 }.tag = "photo" }
-    val three = grid.drop(4).take(3)
-    run { val a = evs.first { it.car == three[0] && it.lap == 7 }; for ((k, c) in three.drop(1).withIndex()) { val e = evs.first { it.car == c && it.lap == 7 }; shiftCar(c, 7, a.t + 0.03 * (k + 1) - e.t) }; for (c in three) evs.first { it.car == c && it.lap == 7 }.tag = "three" }
+    // pick the cars that are already closest there, so the forced shift is small (a plausible lap, not a teleport)
+    fun at(c: String, l: Int) = evs.first { it.car == c && it.lap == l }.t
+    val pf = (3..5).flatMap { l -> cars.flatMap { x -> cars.filter { it > x }.map { y -> Triple(l, x, y) } } }.minByOrNull { (l, x, y) -> abs(at(x, l) - at(y, l)) }!!
+    run { val (l, x, y) = pf; val d = at(x, l) + 1 / 60.0 - at(y, l); shiftCar(y, l, d); evs.first { it.car == x && it.lap == l }.tag = "photo"; evs.first { it.car == y && it.lap == l }.tag = "photo"; println("photo finish: lap $l $x / $y (shifted %.2f s)".format(d)) }
+    val rest = cars.filter { it != pf.second && it != pf.third }
+    val tw = (6..8).flatMap { l -> rest.flatMap { x -> rest.filter { it > x }.flatMap { y -> rest.filter { it > y }.map { z -> listOf(l.toString(), x, y, z) } } } }
+        .minByOrNull { q -> val ts = q.drop(1).map { at(it, q[0].toInt()) }; ts.max() - ts.min() }!!
+    run {
+        val l = tw[0].toInt(); val tri = tw.drop(1).sortedBy { at(it, l) }
+        for ((k, c) in tri.withIndex()) if (k > 0) shiftCar(c, l, at(tri[0], l) + 0.03 * k - at(c, l))
+        for (c in tri) evs.first { it.car == c && it.lap == l }.tag = "three"
+        println("three wide: lap $l $tri")
+    }
     evs.sortBy { it.t }
 
     val lanesAll = listOf(-0.2, -0.1, 0.1, 0.2)
@@ -170,11 +179,11 @@ fun main(args: Array<String>) {
             "\"box\":" + (if (b == null) "null" else "[%.4f,%.4f,%.4f,%.4f]".format(b.l, b.t, b.r, b.b)) + ",\"v\":[%.4f,%.4f],".format(e.vx, e.vy) +
             "\"cands\":[" + e.candidates.take(4).joinToString(",") { "[${q(it.first)},%.3f]".format(it.second) } + "]}"
     } + "],")
-    sb.append("\"outs\":[" + outs.joinToString(",") { "{\"i\":${it.index},\"t\":%.4f,\"car\":${q(it.racer)},\"why\":${q(it.why.name)},\"note\":${q(it.note)}}".format(it.ns / 1e9) } + "]")
+    sb.append("\"outs\":[" + outs.joinToString(",") { "{\"i\":${it.index},\"t\":%.4f,\"car\":${q(it.racer)},\"why\":${q(it.why.name)},\"note\":${q(it.note.replace("%", "%%"))}}".format(it.ns / 1e9) } + "]")
     sb.append("}")
     File("$OUT/race10_$seed.json").writeText(sb.toString())
     // frames for cards: around every event that isn't a plain, confident engine crossing, plus the forced scenarios
-    for (e in events) { val fi = (e.timestampNs / 1e9 * FPS); frameWanted += fi.toInt(); frameWanted += fi.toInt() + 1 }
+    for (e in events) { val fi = (e.timestampNs / 1e9 * FPS); frameWanted += fi.toInt(); frameWanted += fi.toInt() + 1; frameWanted += kotlin.math.ceil(e.centreNs / 1e9 * FPS).toInt() }
     for (p in truth) { frameWanted += (p.t * FPS).toInt(); frameWanted += (p.t * FPS).toInt() + 1 }
     for (fi in frameWanted.filter { it in 0 until frames }) {
         val f = tl.frame(fi); val rgb = rgbOf(f)

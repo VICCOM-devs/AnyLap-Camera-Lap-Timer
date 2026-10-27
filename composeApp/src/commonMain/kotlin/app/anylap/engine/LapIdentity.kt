@@ -55,6 +55,11 @@ object LapIdentity {
     const val TRAY_MIN = 0.45f
     const val MISSING = 1.55
     const val BLOB_TWO = 1.4f
+    const val SWAP_GAP = 0.15f
+    const val ALT_GAP = 0.2f
+    const val NONE_VALUE = 0.55f
+    /** Smaller than this share of one car: a piece of a car (a wing tip), not a car. */
+    const val FRAGMENT = 0.4f
 
     fun solve(xs: List<In>, racers: List<String>, startNs: Long?, minLapNs: Long, nowNs: Long): List<Out> {
         val order = xs.indices.sortedBy { xs[it].ns }
@@ -108,6 +113,7 @@ object LapIdentity {
             val x = xs[i]
             if (x.locked != null) { put(i, x.locked.ifEmpty { null }, Why.HUMAN, "set by hand"); continue }
             if (x.gated) { put(i, null, Why.NOT_COUNTED, "gate turned it down"); continue }
+            if (x.named == null && x.sizeRatio > 0f && x.sizeRatio < FRAGMENT) { put(i, null, Why.IGNORED, "a fragment of a car (%.0f %% of one)".format(x.sizeRatio * 100)); continue }
             if (x.rescue) {
                 val c = x.cands.firstOrNull()
                 if (c != null && c.second >= RESCUE_MIN && c.first in times && due(c.first, x.ns) && !near(c.first, x.ns, minLapNs))
@@ -115,17 +121,23 @@ object LapIdentity {
                 else put(i, null, Why.IGNORED, "check line, nobody due")
                 continue
             }
-            val n = x.named
+            // the analyzer may have named a crossing after its runner-up because the best match was "used"
+            // by a weak, earlier crossing (it can't name a car twice in 2.5 s): look at the best match here
+            // and let the conflict rule decide which of the two crossings that car really owns
+            val top = x.cands.firstOrNull()
+            val n = if (x.named != null && top != null && top.first != x.named && top.first in times && top.second - sc(i, x.named) >= SWAP_GAP) top.first else x.named
             if (n != null && n in times) {
                 if (!tooSoon(n, x.ns)) { put(i, n, Why.ENGINE, ""); continue }
                 // conflict: n already crossed too recently
                 val prev = times[n]!!.filter { it.first < x.ns }.maxByOrNull { it.first }!!.second
-                val altCur = x.cands.filter { it.first != n && it.second >= ALT_MIN && it.first in times && due(it.first, x.ns) && !near(it.first, x.ns, minLapNs) }.maxByOrNull { it.second }
+                // a crossing can only be renamed to a due car that looks nearly as much like it as the name it had
+                val altCur = x.cands.filter { it.first != n && it.second >= maxOf(ALT_MIN, sc(i, n) - ALT_GAP) && it.first in times && due(it.first, x.ns) && !near(it.first, x.ns, minLapNs) }.maxByOrNull { it.second }
                 val prevLocked = xs[prev].locked != null
                 unput(prev)
-                val altPrev = if (prevLocked) null else xs[prev].cands.filter { it.first != n && it.second >= ALT_MIN && it.first in times && due(it.first, xs[prev].ns) && !near(it.first, xs[prev].ns, minLapNs) }.maxByOrNull { it.second }
-                val keepPrev = sc(prev, n) + (altCur?.second ?: 0f)
-                val keepCur = sc(i, n) + (altPrev?.second ?: 0f)
+                val altPrev = if (prevLocked) null else xs[prev].cands.filter { it.first != n && it.second >= maxOf(ALT_MIN, sc(prev, n) - ALT_GAP) && it.first in times && due(it.first, xs[prev].ns) && !near(it.first, xs[prev].ns, minLapNs) }.maxByOrNull { it.second }
+                // "no other car" is worth a neutral score, so a weak rename isn't preferred to leaving a crossing uncounted
+                val keepPrev = sc(prev, n) + (altCur?.second ?: NONE_VALUE)
+                val keepCur = sc(i, n) + (altPrev?.second ?: NONE_VALUE)
                 if (prevLocked || keepPrev >= keepCur) {
                     put(prev, n, dec[prev]?.why ?: Why.ENGINE, "")
                     if (altCur != null) put(i, altCur.first, Why.RENAMED_BY_TIMING, "looked like $n (%.2f) but $n crossed %.1f s earlier; ${altCur.first} (%.2f) was due".format(sc(i, n), (x.ns - xs[prev].ns) / 1e9, altCur.second))
