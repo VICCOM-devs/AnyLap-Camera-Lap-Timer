@@ -187,7 +187,7 @@ private fun LiveContent(nav: Navigator) {
             direction = direction,
             sport = config.sport,
             racers = racers.map { r ->
-                RacerRef(r.id, r.fingerprint.takeIf { it.isNotEmpty() }?.toFloatArray(), r.markerId, r.matchViews())
+                RacerRef(r.id, r.fingerprint.takeIf { it.isNotEmpty() }?.toFloatArray(), r.markerId, r.matchViews(), r.topTemplate())
             },
             metersPerProcPx = mpp,
             useMarkers = config.sport == Sport.RUNNING && racers.any { it.markerId != null },

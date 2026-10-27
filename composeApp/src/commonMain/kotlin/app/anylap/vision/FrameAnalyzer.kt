@@ -38,6 +38,11 @@ class FrameAnalyzer(
     private val markerDetector = MarkerDetector()
     private var exposure = Fingerprint.NORMAL
     private val lumaHist = IntArray(256)
+    private var rawFg = ByteArray(0)
+    private var lastMedian = Fingerprint.NORMAL_MEDIAN
+    /** Recently emitted crossings (racer, time, centre x, y) – a fitted second car must not repeat one. */
+    private val recentFits = ArrayList<FloatArray>()
+    private val recentIds = ArrayList<String>()
 
     private val tracks = ArrayList<Track>()
     private var nextTrackId = 1
@@ -75,8 +80,10 @@ class FrameAnalyzer(
         }
 
         val frac = m.apply(f.y, f.u, f.v, mask)
+        if (rawFg.size != mask.size) rawFg = ByteArray(mask.size)
+        mask.copyInto(rawFg)   // foreground before the clean-up: touching racers are not glued together here
         frameCount++
-        if (frameCount % EXPOSURE_EVERY == 1L) exposure = Fingerprint.Exposure(medianLuma(f))
+        if (frameCount % EXPOSURE_EVERY == 1L) { lastMedian = medianLuma(f); exposure = Fingerprint.Exposure(lastMedian) }
         if (!m.warmedUp) return
         if (frac > 0.45f) {
             // Lighting jumped or the camera moved: start over rather than invent crossings.
@@ -482,10 +489,15 @@ class FrameAnalyzer(
             loop@ for (i in list.indices) for (j in i + 1 until list.size) {
                 val a = list[i]; val b = list[j]
                 val exp = expectedArea(line.along((a.cx * a.area + b.cx * b.area) / (a.area + b.area), (a.cy * a.area + b.cy * b.area) / (a.area + b.area)), cfg) ?: continue
-                if (a.area > 0.85f * exp || b.area > 0.85f * exp || a.area + b.area > 1.3f * exp) continue
                 val gapX = max(0, max(a.x, b.x) - min(a.x + a.w, b.x + b.w))
                 val gapY = max(0, max(a.y, b.y) - min(a.y + a.h, b.y + b.h))
-                if (max(gapX, gapY) > 0.5f * sqrt(exp)) continue
+                val small = min(a.area, b.area); val big = max(a.area, b.area)
+                // two halves of one racer (dark windows the colour of the ground) …
+                val halves = big <= 0.85f * exp && a.area + b.area <= 1.3f * exp && max(gapX, gapY) <= 0.5f * sqrt(exp)
+                // … or a body plus a thin piece of itself the mask lost the link to (an open-wheeler's front
+                // wing ahead of a nose cone too narrow to show): the piece alone is far too small to be a racer
+                val appendix = small < APPENDIX_MAX * exp && big <= 1.15f * exp && a.area + b.area <= 1.45f * exp && max(gapX, gapY) <= 0.35f * sqrt(exp)
+                if (!halves && !appendix) continue
                 val x0 = min(a.x, b.x); val y0 = min(a.y, b.y)
                 val x1 = max(a.x + a.w, b.x + b.w); val y1 = max(a.y + a.h, b.y + b.h)
                 val n = a.area + b.area
@@ -778,7 +790,22 @@ class FrameAnalyzer(
 
     private fun lineGeom(l: LineSpec) = LineGeom(l.x1 * w, l.y1 * h, l.x2 * w, l.y2 * h)
 
-    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?, val along: Float, val area: Int, val split: Boolean, val rescue: Boolean = false)
+    private inner class Pending(val track: Track, var crossNs: Long, val direction: Int, val snapshot: Snapshot?, val along: Float, val area: Int, val split: Boolean, val rescue: Boolean = false, val centreNs: Long = crossNs) {
+        val box = OverlayBox(track.bx.toFloat() / w, track.by.toFloat() / h, (track.bx + track.bw).toFloat() / w, (track.by + track.bh).toFloat() / h, true)
+        val boxTs = track.lastTs
+        val vel: Pair<Float, Float> = track.pts.let { ps ->
+            if (ps.size < 2) 0f to 0f else {
+                val a = ps[maxOf(0, ps.size - 3)]; val b = ps.last(); val dt = ((b.ts - a.ts) / 1e9f).coerceAtLeast(1e-3f)
+                ((b.x - a.x) / w / dt) to ((b.y - a.y) / h / dt)
+            }
+        }
+        /** The frame around the racer at the crossing, kept for the calibration-picture fit (null = none). */
+        var crop: FitCrop? = null
+        fun capture(f: AnalysisFrame, line: LineGeom, prevSide: Float, curSide: Float, a: TrackPoint, b: TrackPoint, cfg: AnalyzerConfig) {
+            if (cfg.racers.none { it.template != null } && !cfg.captureTemplates) return
+            crop = cropFor(track, f, line, prevSide, curSide, a, b)
+        }
+    }
 
     private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame, unstable: Boolean) {
         val n = t.pts.size
@@ -810,7 +837,7 @@ class FrameAnalyzer(
             Direction.FORWARD -> dir == 1
             Direction.REVERSE -> dir == -1
         }
-        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0)
+        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0, centreNs = centreNs).also { it.capture(frame, line, prevSide, s, prev, cur, cfg) }
     }
 
     /**
@@ -981,6 +1008,61 @@ class FrameAnalyzer(
         return total to assign
     }
 
+    /** The frame around [t] (its box + a car length), raw foreground included, for the calibration-picture fit. */
+    private fun cropFor(t: Track, f: AnalysisFrame, line: LineGeom, prevSide: Float, curSide: Float, a: TrackPoint, b: TrackPoint): FitCrop {
+        val pad = max(t.bw, t.bh) + 4
+        val x0 = (t.bx - pad).coerceIn(0, w - 1); val y0 = (t.by - pad).coerceIn(0, h - 1)
+        val x1 = (t.bx + t.bw + pad).coerceIn(x0 + 1, w); val y1 = (t.by + t.bh + pad).coerceIn(y0 + 1, h)
+        val cw = x1 - x0; val ch = y1 - y0
+        val cy = ByteArray(cw * ch); val cu = ByteArray(cw * ch); val cv = ByteArray(cw * ch); val fg = ByteArray(cw * ch)
+        for (j in 0 until ch) for (i in 0 until cw) {
+            val q = (y0 + j) * w + x0 + i; val o = j * cw + i
+            cy[o] = f.y[q]; cu[o] = f.u[q]; cv[o] = f.v[q]; fg[o] = rawFg[q]
+        }
+        val n = t.pts.size
+        val o = t.pts[max(0, n - 4)]; val c = t.pts[n - 1]
+        val dt = max(1L, c.ts - o.ts) / 1e9f
+        val vx = (c.x - o.x) / dt; val vy = (c.y - o.y) / dt
+        val vAcross = (curSide - prevSide) / max(1L, b.ts - a.ts).toFloat()
+        return FitCrop(x0, y0, cw, ch, cy, cu, cv, fg, f.timestampNs, TemplateFit.heading(vx, vy), sqrt(vx * vx + vy * vy),
+            b.x, b.y, line.ax, line.ay, line.dx, line.dy, vAcross, lastMedian)
+    }
+
+    /** Time the chosen edge of a fitted outline crosses the line (from the crop frame and the speed across). */
+    private fun fitTime(c: FitCrop, pl: Placement, cfg: AnalyzerConfig): Long? {
+        if (abs(c.vAcross) < 1e-12f) return null
+        val sgn = if (c.vAcross > 0f) 1f else -1f
+        val q = pl.corners()
+        val sides = (0 until 4).map { c.side(q[2 * it], q[2 * it + 1]) * sgn }
+        val lead = when (cfg.finishEdge) {
+            app.anylap.data.FinishEdge.FRONT -> sides.max()
+            app.anylap.data.FinishEdge.REAR -> sides.min()
+            else -> c.side(pl.cx, pl.cy) * sgn
+        }
+        return c.ts - (lead / abs(c.vAcross)).toLong()
+    }
+
+    private fun quadOf(pl: Placement): FloatArray { val q = pl.corners(); return FloatArray(8) { if (it % 2 == 0) q[it] / w else q[it] / h } }
+
+    private fun inside(pl: Placement, x: Float, y: Float, slack: Float): Boolean {
+        val dx = x - pl.cx; val dy = y - pl.cy; val c = kotlin.math.cos(pl.angle); val s = kotlin.math.sin(pl.angle)
+        return abs(dx * c + dy * s) <= pl.lengthPx / 2 + slack && abs(-dx * s + dy * c) <= pl.widthPx / 2 + slack
+    }
+
+    /** Where a remembered crossing's racer is at time [tS] (moved on by its speed, px/s). */
+    private fun recentAt(k: Int, tS: Float): Pair<Float, Float> { val r = recentFits[k]; val d = tS - r[1]; return (r[2] + r[4] * d) to (r[3] + r[5] * d) }
+
+    private fun remember(id: String, ns: Long, x: Float, y: Float, vx: Float = 0f, vy: Float = 0f) {
+        recentIds += id; recentFits += floatArrayOf(0f, ns / 1e9f, x, y, vx, vy)
+        while (recentIds.size > 40) { recentIds.removeAt(0); recentFits.removeAt(0) }
+    }
+
+    /** A crossing worth a second look: touching or split racers, a piece of one, a close name, or another racer at the line at the same moment. */
+    private fun doubtful(p: Pending, cfg: AnalyzerConfig, sizeRatio: Float): Boolean =
+        p.split || sizeRatio >= 1.3f || (sizeRatio in 0.01f..0.7f) ||
+            pending.any { it !== p && abs(it.crossNs - p.crossNs) < 150_000_000L } ||
+            recentFits.any { abs(it[1] - p.crossNs / 1e9f) < 0.15f }
+
     private fun emit(p: Pending, cfg: AnalyzerConfig) {
         val t = p.track
         val fp = if (t.histFrames > 0) Fingerprint.normalize(t.hist) else null
@@ -1012,6 +1094,8 @@ class FrameAnalyzer(
                 source = IdSource.ONLY_RACER
                 confidence = 1f
             }
+            // a piece far too small to be a racer (a wing tip left over from a split) is never named
+            p.area > 0 && (expectedArea(p.along, cfg)?.let { p.area < FRAGMENT_MAX * it } ?: false) -> {}
             candidates.isNotEmpty() -> {
                 val (id, margin) = jointAppearance(p, fp!!, cfg)
                 confidence = margin
@@ -1021,7 +1105,60 @@ class FrameAnalyzer(
                 }
             }
         }
-        if (racerId != null && !p.rescue) claims[racerId] = p.crossNs
+        // ---- second look: fit the racers' calibration pictures onto the crossing
+        val sizeRatio = if (p.area > 0) expectedArea(p.along, cfg)?.let { p.area / it } ?: 0f else 0f
+        var quad: FloatArray? = null
+        var fitInfo: FitInfo? = null
+        var acceptedNow = accepted
+        val crop = p.crop
+        val extras = ArrayList<CrossingEvent>()
+        if (crop != null && cfg.captureTemplates) {
+            // calibration: keep this pass's picture
+        } else if (crop != null && !p.rescue && markerRacer == null && cfg.racers.count { it.template != null } >= 2 && (FIT_ALL || doubtful(p, cfg, sizeRatio))) {
+            // try the likely racers by colour, plus the racers that crossed at this very moment (they are the ones in the blob)
+            val nearIds = recentIds.indices.filter { abs(recentFits[it][1] - p.crossNs / 1e9f) < 0.4f }.map { recentIds[it] }
+            val pool = (candidates.take(FIT_CANDIDATES).map { it.first } + listOfNotNull(racerId) + nearIds).distinct()
+                .mapNotNull { id -> cfg.racers.firstOrNull { it.id == id }?.template?.let { id to it } }
+            val (pls, firstScores) = TemplateFit.fit(crop, pool, if (sizeRatio >= 1.3f) 3 else 2)
+            // the outline this crossing's own blob sits in (its centre inside the outline, 2 px slack)
+            val mine = pls.filter { inside(it, crop.cx, crop.cy, 2f) }.minByOrNull { hypot(it.cx - crop.cx, it.cy - crop.cy) }
+            if (mine != null && mine.score >= FIT_NAME_MIN) {
+                val before = racerId
+                // a piece of a racer that was already counted at this very moment (an over-split, a wing tip): not a racer of its own
+                val tNow = crop.ts / 1e9f
+                val dup = recentIds.indices.any { k -> recentIds[k] == mine.racerId && abs(recentFits[k][1] - p.crossNs / 1e9f) < 0.3f && recentAt(k, tNow).let { (x, y) -> hypot(x - mine.cx, y - mine.cy) } < 0.5f * mine.lengthPx }
+                if (dup) { racerId = null; source = IdSource.NONE; acceptedNow = false }
+                else {
+                    racerId = mine.racerId; source = IdSource.APPEARANCE
+                    val second = firstScores.firstOrNull { it.first != mine.racerId }?.second ?: 0f
+                    confidence = if (pls.size == 1) (mine.score - second).coerceAtLeast(0f) else max(confidence, 0.12f)
+                    fitTime(crop, mine, cfg)?.let { if (abs(it - p.crossNs) < MAX_FIT_SHIFT_NS) p.crossNs = it }
+                }
+                quad = quadOf(mine)
+                fitInfo = FitInfo(firstScores, pls.size, before != racerId)
+                // a second racer in the same blob that has no crossing of its own: report it too
+                for (o in pls) {
+                    if (o === mine || o.racerId == racerId) continue
+                    val tt = fitTime(crop, o, cfg) ?: continue
+                    if (abs(tt - p.crossNs) > 150_000_000L) continue
+                    if (o.score < (if (sizeRatio >= 1.3f) EXTRA_MIN_BIG else EXTRA_MIN)) continue
+                    // any other crossing (of any racer) already standing on that spot means the racer there is counted
+                    val seen = pending.any { it !== p && it.track.pts.isNotEmpty() && hypot(it.track.pts.last().x - o.cx, it.track.pts.last().y - o.cy) < 0.6f * o.lengthPx && abs(it.crossNs - tt) < 300_000_000L } ||
+                        recentIds.indices.any { k -> abs(recentFits[k][1] - tt / 1e9f) < 0.3f && recentAt(k, crop.ts / 1e9f).let { (x, y) -> hypot(x - o.cx, y - o.cy) } < 0.6f * o.lengthPx } ||
+                        recentIds.indices.any { k -> recentIds[k] == o.racerId && abs(recentFits[k][1] - tt / 1e9f) < 1.5f } ||
+                        (claims[o.racerId]?.let { abs(tt - it) < (cfg.sport.defaultMinLapSec * 1e9).toLong() } ?: false)
+                    if (seen) continue
+                    claims[o.racerId] = tt
+                    remember(o.racerId, tt, o.cx, o.cy, crop.speedPx * kotlin.math.cos(crop.heading), crop.speedPx * kotlin.math.sin(crop.heading))
+                    recentFits.last()[1] = crop.ts / 1e9f
+                    extras += CrossingEvent(timestampNs = tt, direction = p.direction, racerId = o.racerId, source = IdSource.APPEARANCE, confidence = 0.12f,
+                        speedKmh = speedAt(t, p.crossNs, cfg), fingerprint = null, candidates = listOf(o.racerId to o.score) + firstScores.filter { it.first != o.racerId }, markerSeen = null, snapshot = p.snapshot,
+                        match = o.score, accepted = true, area = 0, along = p.along, split = true, trackId = t.id, centreNs = tt, sizeRatio = sizeRatio,
+                        box = p.box, vx = p.vel.first, vy = p.vel.second, quad = quadOf(o), fit = FitInfo(firstScores, pls.size, true))
+                }
+            }
+        }
+        if (racerId != null && !p.rescue) { claims[racerId] = p.crossNs; (quad?.let { q -> ((q[0] + q[2] + q[4] + q[6]) / 4 * w) to ((q[1] + q[3] + q[5] + q[7]) / 4 * h) } ?: crop?.let { it.cx to it.cy })?.let { remember(racerId, crop?.ts ?: p.crossNs, it.first, it.second, crop?.let { c -> c.speedPx * kotlin.math.cos(c.heading) } ?: 0f, crop?.let { c -> c.speedPx * kotlin.math.sin(c.heading) } ?: 0f); recentFits.last()[0] = p.crossNs / 1e9f } }
         onCrossing(
             CrossingEvent(
                 timestampNs = p.crossNs,
@@ -1035,14 +1172,21 @@ class FrameAnalyzer(
                 markerSeen = markerEntry?.key,
                 snapshot = p.snapshot,
                 match = best,
-                accepted = accepted,
+                accepted = acceptedNow,
                 area = p.area,
                 along = p.along,
                 split = p.split,
                 rescue = p.rescue,
                 trackId = t.id,
+                centreNs = p.centreNs,
+                sizeRatio = sizeRatio,
+                box = p.box.let { b -> val k = (p.crossNs - p.boxTs) / 1e9f; OverlayBox(b.l + p.vel.first * k, b.t + p.vel.second * k, b.r + p.vel.first * k, b.b + p.vel.second * k, true) },
+                vx = p.vel.first, vy = p.vel.second,
+                quad = quad, fit = fitInfo,
+                template = if (cfg.captureTemplates && crop != null) TemplateFit.capture(crop, cfg.exposureS, BLUR_SEEN) else null,
             ),
         )
+        for (x in extras) onCrossing(x)
         // Learn how big one racer is at this point of the line (whole, confidently named blobs only).
         if (accepted && !p.split && !p.rescue && p.area > 0 && (source == IdSource.ONLY_RACER || source == IdSource.MARKER || (source == IdSource.APPEARANCE && confidence >= 2 * MIN_MARGIN))) {
             sizeSamples += floatArrayOf(p.along, p.area.toFloat())
@@ -1184,6 +1328,22 @@ class FrameAnalyzer(
         const val SPLIT_FACTOR = 1.7f
         /** Frames of box size used for a racer's length (leading-edge timing). */
         const val EDGE_FRAMES = 6
+        /** A piece smaller than this share of one racer next to a racer-sized blob is part of it (front wing). */
+        const val APPENDIX_MAX = 0.45f
+        /** Below this share of one racer's size a crossing blob is a fragment, never named. */
+        const val FRAGMENT_MAX = 0.4f
+        /** Fit the calibration pictures onto every crossing, not only doubtful ones (bench / photo finishes). */
+        var FIT_ALL = false
+        /** Candidates (by colour) whose pictures are tried. */
+        const val FIT_CANDIDATES = 5
+        /** A fitted outline names a racer only above this score. */
+        const val FIT_NAME_MIN = 0.45f
+        /** A second racer found in a blob is reported only when its picture fits this well. */
+        const val EXTRA_MIN = 0.6f
+        /** … or this well when the blob is clearly bigger than one racer. */
+        const val EXTRA_MIN_BIG = 0.5f
+        /** The fit may move a crossing time by at most this much. */
+        const val MAX_FIT_SHIFT_NS = 120_000_000L
         /** How far the clean-up (1 erosion, 4 dilations of 3×3) grows a blob on each side, px. */
         const val MASK_GROW_PX = 3f
         /** Share of the motion-blur smear that is solid enough to be in the mask (Blender bench: ~half). */

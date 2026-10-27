@@ -65,6 +65,22 @@ elif what == 'cars10':
         name = f"cars10_cal_{t['car']}_{t['speed']}" if t['kind'] == 'cal' else f"cars10_pass_{t['car']}_{t['lane']}_{t['speed']}"
         if os.path.exists(f'{OUT}/{name}.yuv') and os.path.getmtime(f'{OUT}/{name}.yuv') > os.path.getmtime(files[-1]): continue
         write(name, files, t)
+elif what == 'minis10':
+    src = f'{B}/form/minis10'
+    write('minis_empty', [f'{src}/empty.png'], {})
+    for d in sorted(glob.glob(f'{src}/*/')):
+        d = d.rstrip('/')
+        if not os.path.exists(f'{d}/truth.json'): continue
+        t = json.load(open(f'{d}/truth.json'))
+        files = sorted(glob.glob(f'{d}/*.png'))
+        if not files: continue
+        first = int(os.path.basename(files[0])[:4])
+        t['crossIdx'] = t['noseFrame'] - first       # the nose touching the line is the timing point
+        t['centreIdx'] = t['crossFrame'] - first
+        t['tailIdx'] = t['tailFrame'] - first
+        name = f"minis_{t['kind']}_{t['car']}_{t['lane']:+.2f}_{t['speed']}_{t['angle']:+.0f}"
+        if os.path.exists(f'{OUT}/{name}.yuv') and os.path.getmtime(f'{OUT}/{name}.yuv') > os.path.getmtime(files[-1]): continue
+        write(name, files, t)
 else:  # cal or pass dirs
     for d in sorted(glob.glob(f'{B}/{what}/*')):
         t = json.load(open(f'{d}/truth.json'))
