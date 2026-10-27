@@ -20,6 +20,9 @@ import kotlin.random.Random
 fun main(args: Array<String>) {
     val seed = args.getOrNull(0)?.toInt() ?: 1
     System.getenv("WEAK")?.let { FrameAnalyzer.SPLIT_WEAK = it.toFloat() }
+    val edge = System.getenv("FINISH")?.let { app.anylap.data.FinishEdge.valueOf(it) } ?: app.anylap.data.FinishEdge.CENTRE
+    // car lengths (m) from the Blender grid, for the true front/rear crossing time
+    val carLen = Regex("\\(\"([^\"]+)\",\\s*([0-9.]+)").findAll(File("/home/claude/blend/cars10.py").readText()).associate { it.groupValues[1].replace(' ', '_') to it.groupValues[2].toDouble() / 100 }
     val laps = args.getOrNull(1)?.toInt() ?: 50
     val metaTxt = File("/home/claude/blend/form/cars10/meta.json").readText()
     val nums = Regex("[-0-9.eE]+").findAll(metaTxt.substringAfter("\"line\"").substringBefore("]]")).map { it.value.toFloat() }.toList()
@@ -90,7 +93,10 @@ fun main(args: Array<String>) {
         val off = (e.t * FPS - crossIdx).toInt()
         val exact = (off + crossIdx) / FPS
         tl.placed += Placed(p, off, e.lane.toFloat())
-        val tr = Truth(exact, e.car, p.meta["speed"]!!.toDouble(), along(e.lane))
+        val sp = p.meta["speed"]!!.toDouble()
+        val halfT = (carLen[e.car] ?: 0.16) / 2 / sp
+        val tEdge = when (edge) { app.anylap.data.FinishEdge.FRONT -> exact - halfT; app.anylap.data.FinishEdge.REAR -> exact + halfT; else -> exact }
+        val tr = Truth(tEdge, e.car, sp, along(e.lane))
         truth += tr; truthLap[tr] = e.lap
     }
     val frames = ((truth.maxOf { it.t } + 2.0) * FPS).toInt()
@@ -110,7 +116,7 @@ fun main(args: Array<String>) {
     val boxes = HashMap<Int, List<OverlayBox>>()
     var cur = 0
     val a = FrameAnalyzer(onCrossing = { events += it }, onOverlay = { b -> boxes[cur] = b })
-    a.config = AnalyzerConfig(line = LINE, racers = racers, minMatch = FrameAnalyzer.MIN_MATCH, metersPerProcPx = MPP, sizeHints = HINTS.toList())
+    a.config = AnalyzerConfig(line = LINE, racers = racers, minMatch = FrameAnalyzer.MIN_MATCH, metersPerProcPx = MPP, sizeHints = HINTS.toList(), finishEdge = edge, captureSnapshots = true)
     val t0 = System.currentTimeMillis()
     for (i in 0 until frames) { cur = i; a.process(tl.frame(i)); if (i % 3000 == 0) println("  frame $i / $frames") }
     a.flush((frames * 1e9 / FPS).toLong())
@@ -126,69 +132,175 @@ fun main(args: Array<String>) {
     for ((_, e, p) in pairs) if (e !in used && p !in match) { used += e; match[p] = e }
     val extras = acc.filter { it !in used }
 
-    // app-side lap counting from the engine's named crossings (min lap 2.5 s), as RaceEngine does
+    // app-side lap counting from the engine's named crossings, as RaceEngine does: LapIdentity
+    // (lap timing as a second opinion), or the old rule (min lap 2.5 s) with IDENTITY=0
     data class Cross(val t: Double, val car: String, val e: CrossingEvent?)
-    val engCross = acc.filter { it.racerId != null }.map { Cross(it.timestampNs / 1e9, it.racerId!!, it) }.sortedBy { it.t }
-    fun lapsOf(cross: List<Cross>, car: String): List<Cross> { val out = ArrayList<Cross>(); var last = -99.0; for (c in cross) if (c.car == car && c.t - last >= 2.5) { out += c; last = c.t }; return out }
-    val engLaps = cars.associateWith { lapsOf(engCross, it) }
+    val useIdentity = System.getenv("IDENTITY") != "0"
+    val owner = HashMap<CrossingEvent, String?>()   // final owner of each named crossing (null = parked)
+    val how = HashMap<CrossingEvent, app.anylap.engine.LapIdentity.Reason>()
+    val named = acc.filter { it.racerId != null }.sortedBy { it.timestampNs }
+    if (useIdentity) {
+        val idn = app.anylap.engine.LapIdentity((2.5e9).toLong())
+        cars.forEach { idn.register(it) }
+        for (e in named) for (c in idn.place(e.racerId!!, app.anylap.engine.LapIdentity.Entry(e.timestampNs, e.candidates, payload = e)).also { chs ->
+            if (System.getenv("DEBUG_ID") != null && chs.any { it.reason == app.anylap.engine.LapIdentity.Reason.PARKED } && e.timestampNs < 100e9)
+                println("DBG place %s at %.2f → %s · list now %s · window %.1f s".format(e.racerId, e.timestampNs / 1e9, chs.joinToString { "%.2f %s→%s %s".format(it.entry.ns / 1e9, it.from, it.to, it.reason) }, idn.crossings(e.racerId!!).joinToString { "%.2f".format(it.ns / 1e9) }, idn.window(e.racerId!!) / 1e9))
+        }) {
+            val ev = c.entry.payload as CrossingEvent
+            owner[ev] = c.to
+            if (c.reason != app.anylap.engine.LapIdentity.Reason.NAMED && c.reason != app.anylap.engine.LapIdentity.Reason.REPLACED) how[ev] = c.reason
+        }
+    } else {
+        val last = HashMap<String, Double>()
+        for (e in named) { val t = e.timestampNs / 1e9; if (t - (last[e.racerId!!] ?: -99.0) >= 2.5) { owner[e] = e.racerId; last[e.racerId!!] = t } else owner[e] = null }
+    }
+    if (System.getenv("DEBUG_ID") != null) for ((ev, r) in how) {
+        val t = ev.timestampNs / 1e9
+        val same = named.filter { it.racerId == ev.racerId && it !== ev && abs(it.timestampNs / 1e9 - t) < 15 }.joinToString { "%.2f(%s)".format(it.timestampNs / 1e9, owner[it] ?: "-") }
+        val tru = match.entries.firstOrNull { it.value === ev }?.key?.car
+        println("  $r %.2f named %s (truth %s) cands %s · same-name nearby: %s".format(t, ev.racerId, tru, ev.candidates.take(2).joinToString { "%s %.2f".format(it.first, it.second) }, same))
+    }
+    val engLaps = cars.associateWith { c -> named.filter { owner[it] == c }.map { Cross(it.timestampNs / 1e9, c, it) } }
     val trueLaps = cars.associateWith { c -> truth.filter { it.car == c }.sortedBy { it.t } }
+    // lap-level score: what got counted for whom
+    var lapRight = 0; var lapWrong = 0; var lapTray = 0; var lapMissed = 0; var renamedOk = 0; var renamedBad = 0
+    for (p in truth) {
+        val e = match[p]
+        when {
+            e == null -> lapMissed++
+            e.racerId == null || (e in owner && owner[e] == null) -> lapTray++
+            owner[e] == p.car -> { lapRight++; if (how[e] == app.anylap.engine.LapIdentity.Reason.RENAMED) renamedOk++ }
+            else -> { lapWrong++; if (how[e] == app.anylap.engine.LapIdentity.Reason.RENAMED) renamedBad++ }
+        }
+    }
+    val falseLaps0 = extras.count { owner[it] != null }
+    // lap table view: does every true crossing have a counted crossing for the same car at that time?
+    run {
+        val counted = named.filter { owner[it] != null }.toMutableList()
+        var ok = 0
+        for (p in truth.sortedBy { it.t }) {
+            val c = counted.filter { owner[it] == p.car && abs(it.timestampNs / 1e9 - p.t) < 0.15 }.minByOrNull { abs(it.timestampNs / 1e9 - p.t) }
+            if (c != null) { ok++; counted.remove(c) }
+        }
+        println("lap table: ${ok} of ${truth.size} true laps counted for the right car at the right time · ${counted.size} counted laps that no car drove (wrong car or phantom)")
+        LAPTABLE[0] = ok; LAPTABLE[1] = counted.size
+    }
+    val falseLaps = falseLaps0
+    println("laps (${if (useIdentity) "lap-timing identity" else "old rule"}): right $lapRight · wrong car $lapWrong · false (no car) $falseLaps · not counted / tray $lapTray · missed $lapMissed · re-named by timing: $renamedOk right, $renamedBad wrong · parked ${how.values.count { it == app.anylap.engine.LapIdentity.Reason.PARKED }}")
 
     // ---------------------------------------------------------------- review items (troubled)
-    data class Review(val kind: String, val t: Double, val car: String?, val truthCar: String?, val cands: String, val note: String, val along: Float)
+    data class Review(val kind: String, val t: Double, val car: String?, val truthCar: String?, val cands: String, val note: String, val along: Float, val ev: CrossingEvent? = null)
     val reviews = ArrayList<Review>()
+    fun cs(e: CrossingEvent) = e.candidates.take(3).joinToString { "%s %.2f".format(it.first, it.second) }
     for (p in truth.sortedBy { it.t }) {
         val e = match[p]
         if (e == null) {
             val rej = events.firstOrNull { !it.accepted && !it.rescue && abs(it.timestampNs / 1e9 - p.t) < 0.15 }
             val res = events.firstOrNull { it.rescue && abs(it.timestampNs / 1e9 - p.t) < 0.3 }
-            reviews += Review(if (res != null) "MISSED?" else if (rej != null) "REJECTED" else "MISSED", p.t, null, p.car, (res ?: rej)?.candidates?.take(3)?.joinToString { "%s %.2f".format(it.first, it.second) } ?: "", if (res != null) "check line saw something uncounted" else if (rej != null) "gate turned it down (%.0f %%)".format(rej.match * 100) else "nothing seen at the line", p.along.toFloat())
+            reviews += Review(if (res != null) "MISSED?" else if (rej != null) "REJECTED" else "MISSED", p.t, null, p.car, (res ?: rej)?.candidates?.take(3)?.joinToString { "%s %.2f".format(it.first, it.second) } ?: "", if (res != null) "check line saw something uncounted" else if (rej != null) "gate turned it down (%.0f %%)".format(rej.match * 100) else "nothing seen at the line", p.along.toFloat(), res ?: rej)
             continue
         }
+        val o = if (e in owner) owner[e] else e.racerId
         when {
-            e.racerId == null -> reviews += Review("UNKNOWN", p.t, null, p.car, e.candidates.take(3).joinToString { "%s %.2f".format(it.first, it.second) }, "no clear match", e.along)
-            e.racerId != p.car -> reviews += Review("WRONG", p.t, e.racerId, p.car, e.candidates.take(3).joinToString { "%s %.2f".format(it.first, it.second) }, "named the wrong car", e.along)
-            e.split -> reviews += Review("SPLIT", p.t, e.racerId, p.car, e.candidates.take(3).joinToString { "%s %.2f".format(it.first, it.second) }, "separated from a touching car", e.along)
-            e.confidence < 0.12f -> reviews += Review("CLOSE CALL", p.t, e.racerId, p.car, e.candidates.take(3).joinToString { "%s %.2f".format(it.first, it.second) }, "won by %.2f".format(e.confidence), e.along)
+            e.racerId == null -> reviews += Review("UNKNOWN", p.t, null, p.car, cs(e), "no clear match", e.along, e)
+            how[e] == app.anylap.engine.LapIdentity.Reason.PARKED -> reviews += Review("NOT COUNTED", p.t, null, p.car, cs(e), "named ${e.racerId!!.replace('_', ' ')}, but that car had just crossed – lap timing parked it", e.along, e)
+            how[e] == app.anylap.engine.LapIdentity.Reason.RENAMED -> reviews += Review("RE-NAMED", p.t, o, p.car, cs(e), "named ${e.racerId!!.replace('_', ' ')}, moved by lap timing", e.along, e)
+            o != p.car -> reviews += Review("WRONG", p.t, o, p.car, cs(e), "named the wrong car", e.along, e)
+            e.split -> reviews += Review("SPLIT", p.t, o, p.car, cs(e), "separated from a touching car", e.along, e)
+            e.confidence < 0.12f && (e.candidates.firstOrNull()?.second ?: 0f) < 0.85f -> reviews += Review("CLOSE CALL", p.t, o, p.car, cs(e), "won by %.2f".format(e.confidence), e.along)
         }
     }
-    for (e in extras) reviews += Review("EXTRA", e.timestampNs / 1e9, e.racerId, null, e.candidates.take(3).joinToString { "%s %.2f".format(it.first, it.second) }, "counted, but no car crossed", e.along)
+    for (e in extras) {
+        val o = if (e in owner) owner[e] else e.racerId
+        if (o == null && e.racerId != null) reviews += Review("NOT COUNTED", e.timestampNs / 1e9, null, null, cs(e), "named ${e.racerId!!.replace('_', ' ')}, but that car had just crossed – lap timing parked it", e.along, e)
+        else reviews += Review("EXTRA", e.timestampNs / 1e9, o, null, cs(e), "counted, but no car crossed", e.along, e)
+    }
     for (e in events.filter { it.rescue && truth.none { p -> abs(p.t - it.timestampNs / 1e9) < 0.3 && match[p] == null } })
-        reviews += Review("MISSED? (false)", e.timestampNs / 1e9, null, null, e.candidates.take(2).joinToString { "%s %.2f".format(it.first, it.second) }, "check line fired, nothing was missed", e.along)
+        reviews += Review("MISSED? (false)", e.timestampNs / 1e9, null, null, e.candidates.take(2).joinToString { "%s %.2f".format(it.first, it.second) }, "check line fired, nothing was missed", e.along, e)
+    reviews.sortBy { it.t }
+    // one card per pair of touching cars, as the app does
+    run {
+        val keep = ArrayList<Review>()
+        for (r in reviews) {
+            val tid = r.ev?.trackId
+            if (r.kind == "SPLIT" && tid != null && keep.any { k -> k.kind == "SPLIT" && abs(k.t - r.t) < 0.4 && k.ev?.snapshot?.boxes?.any { it.trackId == tid } == true }) continue
+            keep += r
+        }
+        reviews.clear(); reviews += keep
+    }
 
-    // crops: the composed frame at each review time, ±48 px around the line at the reported position
+    fun q(s: String?) = if (s == null) "null" else "\"" + s.replace("\"", "'") + "\""
+    // pictures: the engine's own snapshot (with every car's box, the line and their motion), as the
+    // app stores it; a plain crop of the frame where there is none (a missed car)
     File("/home/claude/blend/out/crops$seed").mkdirs()
     val cropOf = HashMap<Review, String>()
+    val boxesOf = HashMap<Review, String>()
+    val evOfTrack = events.groupBy { it.trackId }
     for ((k, r) in reviews.withIndex()) {
-        val fi = (r.t * FPS).roundToInt().coerceIn(0, frames - 1)
-        val f = tl.frame(fi); val rgb = toRgb(f)
-        val lx = ((LINE.x1 + (LINE.x2 - LINE.x1) * r.along) * f.width).toInt(); val ly = ((LINE.y1 + (LINE.y2 - LINE.y1) * r.along) * f.height).toInt()
-        val cw = 96; val ch = 96
-        val x0 = (lx - cw / 2).coerceIn(0, f.width - cw); val y0 = (ly - ch / 2).coerceIn(0, f.height - ch)
         val path = "/home/claude/blend/out/crops$seed/r${k}.ppm"
-        File(path).outputStream().buffered().use { o ->
-            o.write("P6\n$cw $ch\n255\n".toByteArray())
-            for (yy in 0 until ch) o.write(rgb, ((y0 + yy) * f.width + x0) * 3, cw * 3)
+        val snap = r.ev?.snapshot
+        if (snap != null) {
+            File(path).outputStream().buffered().use { o ->
+                o.write("P6\n${snap.width} ${snap.height}\n255\n".toByteArray())
+                val row = ByteArray(snap.width * 3)
+                for (yy in 0 until snap.height) {
+                    for (xx in 0 until snap.width) { val c = snap.argb[yy * snap.width + xx]; row[xx * 3] = (c shr 16).toByte(); row[xx * 3 + 1] = (c shr 8).toByte(); row[xx * 3 + 2] = c.toByte() }
+                    o.write(row)
+                }
+            }
+            val shot = snap.timestampNs / 1e9
+            boxesOf[r] = "{\"line\":[" + (snap.line?.joinToString(",") { "%.4f".format(it) } ?: "") + "],\"shot\":%.4f,\"frameMs\":%.2f,\"boxes\":[".format(shot, snap.frameNs / 1e6) +
+                snap.boxes.joinToString(",") { b ->
+                    val ev = evOfTrack[b.trackId]?.filter { it.accepted && abs(it.timestampNs / 1e9 - shot) < 1.0 }?.minByOrNull { abs(it.timestampNs / 1e9 - shot) }
+                    val own = ev?.let { if (it in owner) owner[it] else it.racerId }
+                    val tru = ev?.let { x -> match.entries.firstOrNull { it.value === x }?.key?.car }
+                    "{\"l\":%.4f,\"t\":%.4f,\"r\":%.4f,\"b\":%.4f,\"vx\":%.4f,\"vy\":%.4f,\"at\":%s,\"car\":%s,\"truth\":%s,\"subject\":%s,\"cands\":[%s]}".format(
+                        b.l, b.t, b.r, b.b, b.vx, b.vy, ev?.let { "%.4f".format(it.timestampNs / 1e9) } ?: "null", q(own), q(tru), b.trackId == r.ev.trackId,
+                        ev?.candidates?.take(4)?.joinToString(",") { "[${q(it.first)},%.3f]".format(it.second) } ?: "")
+                } + "]}"
+        } else {
+            val fi = (r.t * FPS).roundToInt().coerceIn(0, frames - 1)
+            val f = tl.frame(fi); val rgb = toRgb(f)
+            val lx = ((LINE.x1 + (LINE.x2 - LINE.x1) * r.along) * f.width).toInt(); val ly = ((LINE.y1 + (LINE.y2 - LINE.y1) * r.along) * f.height).toInt()
+            val cw = 96; val ch = 96
+            val x0 = (lx - cw / 2).coerceIn(0, f.width - cw); val y0 = (ly - ch / 2).coerceIn(0, f.height - ch)
+            File(path).outputStream().buffered().use { o ->
+                o.write("P6\n$cw $ch\n255\n".toByteArray())
+                for (yy in 0 until ch) o.write(rgb, ((y0 + yy) * f.width + x0) * 3, cw * 3)
+            }
         }
         cropOf[r] = path
     }
 
     // ---------------------------------------------------------------- export
-    fun q(s: String?) = if (s == null) "null" else "\"" + s.replace("\"", "'") + "\""
     val sb = StringBuilder("{")
     sb.append("\"cars\":[${cars.joinToString(",") { q(it) }}],")
     sb.append("\"pace\":{${cars.joinToString(",") { "${q(it)}:%.3f".format(pace[it]) }}},")
     sb.append("\"incidents\":[${incidents.joinToString(",") { q(it) }}],")
-    sb.append("\"summary\":{\"crossings\":${truth.size},\"found\":${match.size},\"missed\":${truth.size - match.size},\"extra\":${extras.size},")
+    sb.append("\"summary\":{\"tableOk\":${LAPTABLE[0]},\"tableFalse\":${LAPTABLE[1]},\"lapRight\":$lapRight,\"lapWrong\":$lapWrong,\"falseLaps\":$falseLaps,\"lapTray\":$lapTray,\"crossings\":${truth.size},\"found\":${match.size},\"missed\":${truth.size - match.size},\"extra\":${extras.size},")
     sb.append("\"right\":${truth.count { match[it]?.racerId == it.car }},\"wrong\":${truth.count { match[it] != null && match[it]!!.racerId != null && match[it]!!.racerId != it.car }},\"unknown\":${truth.count { match[it] != null && match[it]!!.racerId == null }},")
     val tErr = truth.mapNotNull { p -> match[p]?.let { abs(it.timestampNs / 1e9 - p.t) * 1000 } }
     sb.append("\"timingMeanMs\":%.2f,\"timingMaxMs\":%.1f,\"durationS\":%.1f},".format(tErr.average(), tErr.max(), frames / FPS))
     sb.append("\"engineLaps\":{" + cars.joinToString(",") { c -> q(c) + ":[" + engLaps[c]!!.joinToString(",") { "{\"t\":%.4f,\"speed\":%s,\"conf\":%.3f,\"split\":%s}".format(it.t, it.e?.speedKmh?.let { s -> "%.1f".format(s) } ?: "null", it.e?.confidence ?: 1f, it.e?.split ?: false) } + "]" } + "},")
     sb.append("\"trueLaps\":{" + cars.joinToString(",") { c -> q(c) + ":[" + trueLaps[c]!!.joinToString(",") { "{\"t\":%.4f,\"speed\":%.1f}".format(it.t, it.speed) } + "]" } + "},")
-    sb.append("\"reviews\":[" + reviews.withIndex().joinToString(",") { (k, r) -> "{\"kind\":${q(r.kind)},\"t\":%.3f,\"car\":${q(r.car)},\"truth\":${q(r.truthCar)},\"cands\":${q(r.cands)},\"note\":${q(r.note)},\"crop\":${q(cropOf[r])}}".format(r.t) } + "]")
+    sb.append("\"reviews\":[" + reviews.withIndex().joinToString(",") { (k, r) -> "{\"kind\":${q(r.kind)},\"t\":%.3f,\"car\":${q(r.car)},\"truth\":${q(r.truthCar)},\"cands\":${q(r.cands)},\"note\":${q(r.note)},\"crop\":${q(cropOf[r])},\"pic\":${boxesOf[r] ?: "null"}}".format(r.t) } + "]")
     sb.append("}")
     File("/home/claude/blend/out/race50_$seed.json").writeText(sb.toString())
+    // photo-finish order: truth pairs within 60 ms of each other, both found – does the engine agree who was first?
+    val ts = truth.filter { match[it] != null }.sortedBy { it.t }
+    var pairN = 0; var pairOk = 0
+    for (i in ts.indices) for (j in i + 1 until ts.size) {
+        if (ts[j].t - ts[i].t > 0.06) break
+        pairN++
+        if ((match[ts[j]]!!.timestampNs - match[ts[i]]!!.timestampNs) >= 0) pairOk++
+    }
+    val signed = truth.mapNotNull { p -> match[p]?.let { (it.timestampNs / 1e9 - p.t) * 1000 } }
+    val bySpeed = truth.filter { match[it] != null }.groupBy { it.speed }.mapValues { (_, l) -> l.map { (match[it]!!.timestampNs / 1e9 - it.t) * 1000 }.average() }
+    println("close pairs (< 60 ms): $pairOk / $pairN in the right order · timing p95 %.1f ms · signed mean %+.2f ms · by speed %s".format(tErr.sorted()[(tErr.size * 0.95).toInt()], signed.average(), bySpeed.entries.joinToString { "%.1f m/s %+.1f".format(it.key, it.value) }))
     println("summary: ${truth.size} crossings, found ${match.size}, extra ${extras.size}, right ${truth.count { match[it]?.racerId == it.car }}, wrong ${truth.count { match[it] != null && match[it]!!.racerId != null && match[it]!!.racerId != it.car }}, unknown ${truth.count { match[it] != null && match[it]!!.racerId == null }}, timing %.1f ms; reviews ${reviews.size} (${reviews.groupingBy { it.kind }.eachCount()})".format(tErr.average()))
 }
+
+val LAPTABLE = IntArray(2)
 
 fun calibratePair(car: String, empty: Clip, slow: String, fast: String): RacerRef {
     val passes = listOf(Clip.load(slow), Clip.load(fast))
