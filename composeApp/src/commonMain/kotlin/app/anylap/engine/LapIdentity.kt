@@ -62,14 +62,21 @@ object LapIdentity {
         val dec = HashMap<Int, Out>()
         val extra = ArrayList<Out>()
         fun sc(i: Int, c: String) = xs[i].cands.firstOrNull { it.first == c }?.second ?: 0f
+        /** Median lap from crossing gaps, each divided by how many laps it spans (a missed lap is a gap of 2). */
+        fun robust(d: List<Double>): Double? {
+            if (d.isEmpty()) return null
+            val base = d.filter { it >= minLapNs }.minOrNull() ?: return null
+            val n = d.map { g -> g / maxOf(1.0, kotlin.math.round(g / base)) }.sorted()
+            return if (n.size % 2 == 1) n[n.size / 2] else (n[n.size / 2 - 1] + n[n.size / 2]) / 2
+        }
         fun field(): Double? {
             val d = times.values.flatMap { l -> l.sortedBy { it.first }.zipWithNext { a, b -> (b.first - a.first).toDouble() } }
-            return if (d.size >= 3) d.sorted()[d.size / 2] else null
+            return if (d.size >= 3) robust(d) else null
         }
         fun pace(c: String): Double? {
             val l = times[c]!!.map { it.first }.sorted()
-            val d = l.zipWithNext { a, b -> (b - a).toDouble() }.takeLast(5)
-            return if (d.size >= 2) d.sorted()[d.size / 2] else field()
+            val d = l.zipWithNext { a, b -> (b - a).toDouble() }.takeLast(6)
+            return if (d.size >= 2) robust(d) else field()
         }
         fun last(c: String, before: Long): Long? = times[c]!!.map { it.first }.filter { it < before }.maxOrNull() ?: startNs
         /** gap since the car's last crossing ÷ its pace (null = nothing to compare with). */
