@@ -1,5 +1,6 @@
 package app.anylap.ui.settings
 
+import app.anylap.data.FinishEdge
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -105,7 +106,7 @@ fun SettingsScreen(nav: Navigator) {
             RtCard(Modifier.fillMaxWidth()) {
                 Text("A car finishes when", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(8.dp))
-                val edges = listOf(app.anylap.data.FinishEdge.FRONT, app.anylap.data.FinishEdge.REAR)
+                val edges = listOf(FinishEdge.FRONT, FinishEdge.REAR)
                 PillTabs(
                     listOf("Front touches", "Whole car passed"),
                     edges.indexOf(settings.finishEdge).coerceAtLeast(0),

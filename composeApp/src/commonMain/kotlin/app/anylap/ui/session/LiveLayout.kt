@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.engine.RaceEngine
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -292,7 +293,7 @@ private fun StartLights(lit: Int) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            repeat(app.anylap.engine.RaceEngine.START_LIGHTS) { i ->
+            repeat(RaceEngine.START_LIGHTS) { i ->
                 // a column of two lamps per light, like a real gantry
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     repeat(2) {
@@ -307,7 +308,7 @@ private fun StartLights(lit: Int) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            if (lit < app.anylap.engine.RaceEngine.START_LIGHTS) "GET READY" else "LIGHTS OUT AND AWAY WE GO…",
+            if (lit < RaceEngine.START_LIGHTS) "GET READY" else "LIGHTS OUT AND AWAY WE GO…",
             style = MaterialTheme.typography.labelSmall.copy(color = Color.White, letterSpacing = 1.5.sp),
         )
     }
