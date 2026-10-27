@@ -17,28 +17,35 @@ import kotlin.random.Random
 const val DIR = "/home/claude/blend/clips"
 const val FPS = 60.0
 
-class Clip(val w: Int, val h: Int, val y: List<ByteArray>, val u: List<ByteArray>, val v: List<ByteArray>, val meta: Map<String, String>) {
+class Clip(val w: Int, val h: Int, val y: List<ByteArray>, val u: List<ByteArray>, val v: List<ByteArray>, val meta: Map<String, String>,
+           val fw: Int = 0, val fh: Int = 0, val full: List<ByteArray> = emptyList()) {
     val n get() = y.size
     companion object {
         fun load(name: String): Clip {
             val f = File("$DIR/$name.yuv")
             val bytes = f.readBytes()
-            val bb = ByteBuffer.wrap(bytes, 0, 12).order(ByteOrder.LITTLE_ENDIAN)
+            val j = File("$DIR/$name.json").takeIf { it.exists() }?.readText() ?: "{}"
+            val meta = flatJson(j)
+            val hasFull = meta["full"] == "true"
+            val bb = ByteBuffer.wrap(bytes, 0, 20).order(ByteOrder.LITTLE_ENDIAN)
             val w = bb.int; val h = bb.int; val n = bb.int
-            val ys = ArrayList<ByteArray>(); val us = ArrayList<ByteArray>(); val vs = ArrayList<ByteArray>()
-            var off = 12; val p = w * h
+            var off = 12
+            var fw = 0; var fh = 0
+            if (hasFull) { fw = bb.int; fh = bb.int; off = 20 }
+            val ys = ArrayList<ByteArray>(); val us = ArrayList<ByteArray>(); val vs = ArrayList<ByteArray>(); val fs = ArrayList<ByteArray>()
+            val p = w * h
             repeat(n) {
                 ys += bytes.copyOfRange(off, off + p); off += p
                 us += bytes.copyOfRange(off, off + p); off += p
                 vs += bytes.copyOfRange(off, off + p); off += p
+                if (hasFull) { fs += bytes.copyOfRange(off, off + fw * fh); off += fw * fh }
             }
-            val j = File("$DIR/$name.json").takeIf { it.exists() }?.readText() ?: "{}"
-            return Clip(w, h, ys, us, vs, flatJson(j))
+            return Clip(w, h, ys, us, vs, meta, fw, fh, fs)
         }
         /** Tiny flat JSON reader (strings and numbers only; arrays kept as raw text). */
         fun flatJson(s: String): Map<String, String> {
             val out = HashMap<String, String>()
-            Regex("\"(\\w+)\"\\s*:\\s*(\"[^\"]*\"|\\[[^\\]]*\\]|[-0-9.eE]+)").findAll(s).forEach { m ->
+            Regex("\"(\\w+)\"\\s*:\\s*(\"[^\"]*\"|\\[[^\\]]*\\]|true|false|[-0-9.eE]+)").findAll(s).forEach { m ->
                 out[m.groupValues[1]] = m.groupValues[2].trim('"')
             }
             return out
@@ -95,7 +102,26 @@ class Timeline(val empty: Clip, seed: Int = 3) {
             u[j] = ((u[j].toInt() and 0xFF) + (gauss[g] * 1.5f).toInt()).coerceIn(0, 255).toByte(); g = (g + 13) and 4095
             v[j] = ((v[j].toInt() and 0xFF) + (gauss[g] * 1.5f).toInt()).coerceIn(0, 255).toByte(); g = (g + 3) and 4095
         }
-        return AnalysisFrame((i * 1e9 / FPS).toLong(), w, h, y, u, v, w, h) { _, _, _, _ -> null }
+        // full-resolution luma for the split step, when the base clip carries one
+        val fullSrc: Pair<Clip, Int>? = b?.let { bb ->
+            val k = i - bb.second
+            when {
+                bb.first.full.isEmpty() -> null
+                k in 0 until bb.first.n -> bb.first to k
+                k >= bb.first.n -> bb.first to bb.first.n - 1
+                else -> (lead ?: bb.first).let { l -> if (l.full.isEmpty()) null else l to 0 }
+            }
+        }
+        if (fullSrc == null || System.getenv("FULLOFF") != null) return AnalysisFrame((i * 1e9 / FPS).toLong(), w, h, y, u, v, w, h) { _, _, _, _ -> null }
+        val (fc, fk) = fullSrc
+        val plane = fc.full[fk]
+        return AnalysisFrame((i * 1e9 / FPS).toLong(), w, h, y, u, v, fc.fw, fc.fh) { x0, y0, cw, ch ->
+            if (x0 < 0 || y0 < 0 || x0 + cw > fc.fw || y0 + ch > fc.fh) null else {
+                val out = ByteArray(cw * ch)
+                for (yy in 0 until ch) System.arraycopy(plane, (y0 + yy) * fc.fw + x0, out, yy * cw, cw)
+                out
+            }
+        }
     }
 }
 

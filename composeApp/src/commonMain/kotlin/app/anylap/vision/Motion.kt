@@ -37,6 +37,10 @@ class BackgroundModel(val width: Int, val height: Int) {
     /** Pixels marked as shadow in the last [apply], as a fraction of the frame. */
     var shadowFrac = 0f
         private set
+    /** How far each pixel was from its background in the last [apply]: |Δbrightness| + |ΔU| + |ΔV|. */
+    val strength = FloatArray(n)
+    /** Learned background brightness of pixel [i]. */
+    fun meanAt(i: Int): Float = mean[i]
 
     val warmedUp: Boolean get() = frames >= WARMUP
 
@@ -72,6 +76,7 @@ class BackgroundModel(val width: Int, val height: Int) {
             val dv = pv - meanV[i]
             val d2 = d * d
             val chroma = abs(du) + abs(dv)
+            strength[i] = abs(d) + chroma
             var fg = !warm && ((d2 > k2 * variance[i] && abs(d) > minDiff) || chroma > chromaDiff)
             var shadow = false
             if (fg && d < 0f) {

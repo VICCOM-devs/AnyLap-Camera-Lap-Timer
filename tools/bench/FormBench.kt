@@ -13,20 +13,26 @@ import kotlin.math.abs
 /** Formation clips under one camera rig: calibrate per rig, run each clip, score, dump review data. */
 fun main_form(args: Array<String>) {
     val cam = args[0]
-    val metaTxt = File("/home/claude/blend/form/$cam/meta.json").readText()
+    val metaTxt = File("/home/claude/blend/form/${cam.removePrefix("full_")}/meta.json").readText()
     val nums = Regex("[-0-9.eE]+").findAll(metaTxt.substringAfter("\"line\"").substringBefore("]]")).map { it.value.toFloat() }.toList()
     LINE = LineSpec(nums[0], nums[1], nums[2], nums[3])
     MPP = Clip.flatJson(metaTxt)["metersPerProcPx"]!!.toFloat()
     val alongMap = Regex("\"(-?[0-9.]+)\":\\s*(-?[0-9.eE]+)").findAll(metaTxt.substringAfter("\"along\"")).associate { it.groupValues[1].toDouble() to it.groupValues[2].toDouble() }
     fun along(lane: Double) = alongMap.minByOrNull { abs(it.key - lane) }!!.value
-    val empty = Clip.load(if (cam == "45") "empty" else "form_${cam}_empty")
-    val calPrefix = if (cam == "45") "cal_" else "form_${cam}_cal_"
+    // "full_<rig>" = the high-resolution variant: frames carry a full-res luma plane; shares the rig's calibration
+    val isFull = cam.startsWith("full_")
+    val rig = cam.removePrefix("full_")
+    val empty = Clip.load(if (rig == "45") "empty" else "form_${cam}_empty")
+    // calibration clips: the 45° rig uses the original ones; variants of a rig (e.g. topflat) reuse their rig's
+    val calCam = rig.removeSuffix("flat")
+    val calPrefix = if (cam == "45") "cal_" else "form_${calCam}_cal_"
     val cars = File(DIR).list()!!.filter { it.startsWith(calPrefix) && it.endsWith("_3.yuv") }.map { it.removePrefix(calPrefix).removeSuffix("_3.yuv") }.sorted()
     println("camera $cam · line $LINE · ${"%.2f".format(MPP * 1000)} mm/px · cars $cars")
     HINTS.clear()
     val racers = cars.map { calibrateFrom(it, empty, calPrefix) }
     File("/home/claude/blend/review").mkdirs()
     val clips = File(DIR).list()!!.filter { it.startsWith("form_${cam}_") && !it.contains("_cal_") && !it.endsWith("empty.yuv") && it.endsWith(".yuv") }.sorted()
+    println("clips: ${clips.size}${if (isFull) " (full-resolution luma)" else ""}")
     val summary = StringBuilder()
     for (cn in clips) {
         val name = cn.removePrefix("form_${cam}_").removeSuffix(".yuv")

@@ -28,6 +28,8 @@ class FrameAnalyzer(
     private var mask = ByteArray(0)
     /** Owner tag per pixel for blobs that were split this frame (0 = not split). */
     private var owner = IntArray(0)
+    private var eroded = ByteArray(0)
+    private var coreLabels = IntArray(0)
     /** Learned (along, area) of single racers this session. */
     private val sizeSamples = ArrayList<FloatArray>()
     private var tmpA = ByteArray(0)
@@ -82,6 +84,7 @@ class FrameAnalyzer(
         }
         // Clean up: remove speckles, then join the parts of a racer (legs, wheels…) into one blob.
         Morph.erode(mask, tmpA, tmpB, w, h)
+        tmpA.copyInto(eroded)   // racer cores before the dilations that join parts – and neighbours
         Morph.dilate(tmpA, mask, tmpB, w, h)
         Morph.dilate(mask, tmpA, tmpB, w, h)
         Morph.dilate(tmpA, mask, tmpB, w, h)
@@ -138,6 +141,8 @@ class FrameAnalyzer(
         blobFinder = BlobFinder(w, h)
         mask = ByteArray(w * h)
         owner = IntArray(w * h)
+        eroded = ByteArray(w * h)
+        coreLabels = IntArray(w * h)
         tmpA = ByteArray(w * h)
         tmpB = ByteArray(w * h)
         tracks.clear(); pending.clear()
@@ -391,6 +396,11 @@ class FrameAnalyzer(
             var seeds: List<Pair<Float, Float>>? = null
             var source = -1
             splitColour = 0f
+            // Cue 0 – gaps: the dilations that join a racer's parts also join racers a centimetre
+            // apart. If the un-dilated mask has two or more racer-sized cores inside this blob, those
+            // are the racers; no size guess needed. (Top-down and steep views; overlapping racers
+            // from a low camera have no gap and fall through to the cues below.)
+            val cores = if (exp != null && b.area > 1.2f * exp) (coreSeedsFull(b, exp, f) ?: coreSeeds(b, exp)) else null
             if (inside.size >= 2) {
                 seeds = inside.take(6).map { it.predict(ts) }
             } else {
@@ -409,15 +419,22 @@ class FrameAnalyzer(
                         // every part must also be the size of one racer (0.55–1.5×), which is what
                         // stops a low camera's overlapping pair from being cut into three.
                         var bestK = 0; var bestScore = -1f
+                        // candidate seedings: k0 and k0+1 equal parts along either axis, and the
+                        // un-dilated cores (racers a gap apart, seen from above)
+                        val candidates = ArrayList<Pair<List<Pair<Float, Float>>, Float>>()
                         for ((k, cw) in listOf(k0 to 0f, k0 to COLOUR_WEIGHT, k0 + 1 to 0f, k0 + 1 to COLOUR_WEIGHT)) {
                             if (k > 6 || (cw > 0f && COLOUR_WEIGHT <= 0f)) continue
-                            for (perp in listOf(false, true)) {
-                                val sd = axisSeeds(b, k, perpendicular = perp)
-                                val parts = kmeans(b, sd, f, cw) ?: continue
+                            for (perp in listOf(false, true)) candidates += axisSeeds(b, k, perpendicular = perp) to cw
+                        }
+                        if (cores != null && cores.size >= 2) candidates += cores to 0f
+                        for ((sd, cw) in candidates) {
+                            val k = sd.size
+                            run {
+                                val parts = kmeans(b, sd, f, cw) ?: return@run
                                 // the extra part is only believed when every part is the size of one racer
-                                if (k > k0 && parts.any { it.area < PART_MIN * exp || it.area > PART_MAX * exp }) continue
+                                if (k > k0 && parts.any { it.area < PART_MIN * exp || it.area > PART_MAX * exp }) return@run
                                 val sc = partsScore(b, f, cfg)
-                                if (sc.second.any { it == null } || sc.second.distinct().size < sc.second.size) continue
+                                if (sc.second.any { it == null } || sc.second.distinct().size < sc.second.size) return@run
                                 if (k > bestK || (k == bestK && sc.first > bestScore)) { bestK = k; bestScore = sc.first; seeds = sd; splitColour = cw }
                             }
                         }
@@ -478,6 +495,139 @@ class FrameAnalyzer(
             }
         }
         return list
+    }
+
+    /**
+     * Centroids of the racer-sized connected cores (un-dilated mask) inside blob [b], largest first,
+     * at most 6; null if fewer than two.
+     */
+    private var fullStrength = FloatArray(0)
+    private var fullLabels = IntArray(0)
+    private var fullStack = IntArray(0)
+
+    /**
+     * [coreSeeds] on the camera's full-resolution brightness (the ≤1280-wide stream the bib reader
+     * also uses): a 1 cm gap between racers is 2 px in the 480 px analysis image – one anti-aliased
+     * blend of car and ground that still reads as "changed" – but 5 px at 1280, where the valley
+     * test finds it. Strength = |brightness − background mean| (the background model's mean at the
+     * analysis pixel underneath). Null when the camera gives no full-resolution frame.
+     */
+    private fun coreSeedsFull(b: Blob, exp: Float, f: AnalysisFrame): List<Pair<Float, Float>>? {
+        if (f.fullWidth <= w) return null
+        val m = model ?: return null
+        val bf = blobFinder!!
+        val sx = f.fullWidth.toFloat() / w; val sy = f.fullHeight.toFloat() / h
+        val X0 = (b.x * sx).toInt().coerceIn(0, f.fullWidth - 2); val Y0 = (b.y * sy).toInt().coerceIn(0, f.fullHeight - 2)
+        val X1 = ((b.x + b.w) * sx).toInt().coerceIn(X0 + 2, f.fullWidth); val Y1 = ((b.y + b.h) * sy).toInt().coerceIn(Y0 + 2, f.fullHeight)
+        val cw = X1 - X0; val ch = Y1 - Y0
+        val luma = f.lumaCrop(X0, Y0, cw, ch) ?: return null
+        val n = cw * ch
+        if (fullStrength.size < n) { fullStrength = FloatArray(n); fullLabels = IntArray(n); fullStack = IntArray(n) }
+        // strength vs the background underneath; only inside this blob's (dilated) mask
+        for (yy in 0 until ch) for (xx in 0 until cw) {
+            val ax = ((X0 + xx) / sx).toInt().coerceIn(0, w - 1); val ay = ((Y0 + yy) / sy).toInt().coerceIn(0, h - 1)
+            val ai = ay * w + ax
+            val j = yy * cw + xx
+            fullLabels[j] = 0
+            fullStrength[j] = if (mask[ai].toInt() != 0 && bf.labelAt(ai) == b.label) abs((luma[j].toInt() and 0xFF) - m.meanAt(ai)) else 0f
+        }
+        val d = (2 * sx).roundToInt().coerceAtLeast(2)   // gap test distance ≈ 2 analysis px
+        val minS = (m.minDiff * 0.8f)
+        // The gap between two racers seen from above is a dark slot (you look down between two
+        // bodies), darker than the ground and than the racers on either side – a dark line in the
+        // brightness, two pixels wide at 480 px, four or five at 1280.
+        fun lumaAt(j: Int) = (luma[j].toInt() and 0xFF).toFloat()
+        fun core(j: Int): Boolean {
+            if (fullStrength[j] < minS) return false
+            val x = j % cw; val y = j / cw
+            val l = lumaAt(j)
+            val ax = ((X0 + x) / sx).toInt().coerceIn(0, w - 1); val ay = ((Y0 + y) / sy).toInt().coerceIn(0, h - 1)
+            if (l >= m.meanAt(ay * w + ax) - GAP_BELOW_GROUND) return true   // not darker than the ground: not a slot
+            val v = l * GAP_RATIO
+            if (x >= d && x + d < cw && v < lumaAt(j - d) && v < lumaAt(j + d)) return false
+            if (y >= d && y + d < ch && v < lumaAt(j - d * cw) && v < lumaAt(j + d * cw)) return false
+            return true
+        }
+        val found = ArrayList<Triple<Int, Float, Float>>()
+        var next = 1
+        val scale2 = sx * sy
+        for (start in 0 until n) {
+            if (fullLabels[start] != 0 || !core(start)) continue
+            var sp = 0; fullStack[sp++] = start; fullLabels[start] = next
+            var cnt = 0; var ax = 0L; var ay = 0L
+            while (sp > 0) {
+                val p = fullStack[--sp]
+                val x = p % cw; val y = p / cw
+                cnt++; ax += x; ay += y
+                for (dy in -1..1) { val ny = y + dy; if (ny < 0 || ny >= ch) continue
+                    for (dx in -1..1) { val nx = x + dx; if (nx < 0 || nx >= cw) continue
+                        val q = ny * cw + nx
+                        if (fullLabels[q] == 0 && core(q)) { fullLabels[q] = next; fullStack[sp++] = q }
+                    }
+                }
+            }
+            next++
+            if (cnt >= CORE_MIN_FRAC * exp * scale2) found += Triple(cnt, (X0 + ax.toFloat() / cnt) / sx, (Y0 + ay.toFloat() / cnt) / sy)
+        }
+        if (found.size < 2) return null
+        return found.sortedByDescending { it.first }.take(6).map { it.second to it.third }
+    }
+
+    private val strengthHist = IntArray(256)
+
+    private fun coreSeeds(b: Blob, exp: Float): List<Pair<Float, Float>>? {
+        val bf = blobFinder!!
+        val m = model ?: return null
+        val x0 = b.x; val y0 = b.y; val x1 = b.x + b.w; val y1 = b.y + b.h
+        // Strength threshold for this blob: pixels of a racer differ from the background by much
+        // more than the blended pixels of a gap a centimetre wide. Core = above half the blob's
+        // 80th-percentile strength (and in the un-dilated mask).
+        strengthHist.fill(0)
+        var cnt = 0
+        for (yy in y0 until y1) for (xx in x0 until x1) {
+            val i = yy * w + xx
+            coreLabels[i] = 0
+            if (eroded[i].toInt() != 0 && bf.labelAt(i) == b.label) { strengthHist[min(255, m.strength[i].toInt())]++; cnt++ }
+        }
+        if (cnt < 8) return null
+        // A gap pixel (a blend of racer and ground) is weaker than the racer pixels on both sides of
+        // it: a valley in the strength map along x or y, two pixels out – independent of how bright
+        // each racer is.
+        fun valley(i: Int): Boolean {
+            val st = m.strength
+            val x = i % w; val y = i / w
+            val v = st[i] * VALLEY_RATIO
+            if (x >= 2 && x + 2 < w && v < st[i - 2] && v < st[i + 2]) return true
+            if (y >= 2 && y + 2 < h && v < st[i - 2 * w] && v < st[i + 2 * w]) return true
+            return false
+        }
+        val thr = 0f
+        val found = ArrayList<Triple<Int, Float, Float>>() // area, cx, cy
+        var next = 1
+        if (px.size < b.w * b.h) { px = IntArray(b.w * b.h); py = IntArray(b.w * b.h); assignment = IntArray(b.w * b.h); pcode = IntArray(b.w * b.h) }
+        val stack = px
+        for (sy in y0 until y1) for (sx in x0 until x1) {
+            val start = sy * w + sx
+            if (eroded[start].toInt() == 0 || coreLabels[start] != 0 || bf.labelAt(start) != b.label || valley(start)) continue
+            var sp = 0; stack[sp++] = start; coreLabels[start] = next
+            var n = 0; var ax = 0L; var ay = 0L
+            while (sp > 0) {
+                val p = stack[--sp]
+                val cx = p % w; val cy = p / w
+                n++; ax += cx; ay += cy
+                for (dy in -1..1) { val ny = cy + dy; if (ny < y0 || ny >= y1) continue
+                    for (dx in -1..1) { val nx = cx + dx; if (nx < x0 || nx >= x1) continue
+                        val q = ny * w + nx
+                        if (eroded[q].toInt() != 0 && coreLabels[q] == 0 && bf.labelAt(q) == b.label && !valley(q) && sp < stack.size) { coreLabels[q] = next; stack[sp++] = q }
+                    }
+                }
+            }
+            next++
+            // a core is the racer minus its rim: ≥ 0.25 of a racer's dilated area is a racer, not a wheel
+            if (n >= CORE_MIN_FRAC * exp) found += Triple(n, ax.toFloat() / n, ay.toFloat() / n)
+        }
+        if (found.size < 2) return null
+        return found.sortedByDescending { it.first }.take(6).map { it.second to it.third }
     }
 
     private var assignment = IntArray(0)
@@ -985,6 +1135,14 @@ class FrameAnalyzer(
         const val SPLIT_FACTOR = 1.7f
         /** Each part of a size-based split must look at least this much like some racer. */
         const val SPLIT_PART_MATCH = 0.5f
+        /** A pixel is a gap (valley) when it is weaker than both neighbours two pixels out by this factor. */
+        const val VALLEY_RATIO = 1.6f
+        /** A slot between racers is darker than the ground by at least this (grey levels)… */
+        const val GAP_BELOW_GROUND = 10f
+        /** …and darker than both racers beside it by this factor. */
+        const val GAP_RATIO = 1.3f
+        /** An un-dilated core counts as a racer at this fraction of one racer's (dilated) size. */
+        const val CORE_MIN_FRAC = 0.25f
         /** A part of a size-based split must be this fraction of one racer's size, at least / at most. */
         const val PART_MIN = 0.55f
         const val PART_MAX = 1.5f

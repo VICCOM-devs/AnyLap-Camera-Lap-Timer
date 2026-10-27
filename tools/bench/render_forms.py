@@ -4,7 +4,9 @@ from the linear motion. Usage: python -I render_forms.py <cam>   (cam = 45 | ste
 import bpy, os, sys, json, math, time
 from mathutils import Vector
 from bpy_extras.object_utils import world_to_camera_view
-SRC = '/home/claude/blend/AnyLapBlender.blend'; OUT = '/home/claude/blend/form'
+import os
+SRC = '/home/claude/blend/AnyLabBlender.blend'.replace('AnyLab', 'AnyLap'); OUT = os.environ.get('FORM_OUT', '/home/claude/blend/form')
+RES = int(os.environ.get('FORM_RES', '480'))
 CAM = sys.argv[-1]
 LINE_Y = -0.075
 CARS = ['Vit bil', 'Blå bil', 'Röd bil', 'Grön bil', 'Orange bil', 'Gul bil', 'Rosa bil', 'Grå bil', 'Svart bil']
@@ -13,7 +15,7 @@ L = 0.16; W = 0.091  # car length (along travel) and width
 def setup():
     bpy.ops.wm.open_mainfile(filepath=SRC)
     sc = bpy.context.scene; r = sc.render
-    r.resolution_x, r.resolution_y, r.resolution_percentage = 480, 270, 100
+    r.resolution_x, r.resolution_y, r.resolution_percentage = RES, RES * 9 // 16, 100
     c = sc.cycles; c.device = 'CPU'; c.samples = 8; c.use_adaptive_sampling = True; c.use_denoising = True
     r.image_settings.file_format = 'PNG'
     sc.frame_set(1)
@@ -25,7 +27,7 @@ def setup():
         cam.location = (0.75, 0.125, 1.9)
         aim = Vector((0.0, LINE_Y, 0.0)) - cam.location
         cam.rotation_euler = aim.to_track_quat('-Z', 'Y').to_euler()
-    elif CAM == 'top':
+    elif CAM in ('top', 'topflat'):
         cam.location = (0.0, LINE_Y, 1.8)
         cam.rotation_euler = (0.0, 0.0, -math.pi / 2)   # straight down, track runs across the image
     for o in sc.objects:
@@ -33,6 +35,11 @@ def setup():
     if CAM != '45':
         # the floating icospheres sit between a high camera and the track; the legs stay
         for n in ('Icosphere', 'Icosphere.001'): sc.objects[n].hide_render = True
+    if CAM == 'topflat':
+        # no shadows at all: lights cast none, and no walking legs
+        for n in ('Cube.001', 'Cube.002'): sc.objects[n].hide_render = True
+        for o in sc.objects:
+            if o.type == 'LIGHT': o.data.cycles.cast_shadow = False
     return sc
 
 def img(sc, p):
@@ -49,7 +56,9 @@ def meta(sc):
         along[f"{x:.2f}"] = ((c[0] - a[0]) * dx + (c[1] - a[1]) * dy) / (dx * dx + dy * dy)
     return {"line": [a, b], "metersPerProcPx": mpp, "along": along, "cam": CAM, "camLoc": list(sc.camera.location)}
 
+ONLY = os.environ.get('FORM_ONLY', '').split(',') if os.environ.get('FORM_ONLY') else None
 def render_clip(name, cars, log):
+    if ONLY is not None and not any(name.startswith(o) for o in ONLY): return
     """cars: list of (carName, laneX, offsetM, speedMps, dir). y(t) = start + dir*speed*t + offset."""
     d = f'{OUT}/{CAM}/{name}'
     if os.path.exists(f'{d}/truth.json'): return
@@ -93,7 +102,7 @@ sc.render.filepath = f'{OUT}/{CAM}/empty.png'
 if not os.path.exists(sc.render.filepath): bpy.ops.render.render(write_still=True)
 
 # calibration (not for 45: already rendered earlier)
-if CAM != '45':
+if CAM not in ('45', 'topflat'):
     for i, c in enumerate(CARS):
         lane = [-0.1, 0.1][i % 2]
         render_clip(f'cal_{c.replace(" ", "_")}_3', [(c, lane, 0, 3.5, 1)], log)
