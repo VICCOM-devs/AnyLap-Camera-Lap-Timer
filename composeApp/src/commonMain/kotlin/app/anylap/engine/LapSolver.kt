@@ -116,7 +116,7 @@ object LapSolver {
             val x = xs[i]
             if (x.locked != null) { put(i, x.locked.ifEmpty { null }, Why.HUMAN, "set by hand"); continue }
             if (x.gated) { put(i, null, Why.NOT_COUNTED, "gate turned it down"); continue }
-            if (x.named == null && x.sizeRatio > 0f && x.sizeRatio < FRAGMENT) { put(i, null, Why.IGNORED, "a fragment of a car (%.0f %% of one)".format(x.sizeRatio * 100)); continue }
+            if (x.named == null && x.sizeRatio > 0f && x.sizeRatio < FRAGMENT) { put(i, null, Why.IGNORED, "a fragment of a car (${fx(x.sizeRatio * 100, 0)} % of one)"); continue }
             if (x.rescue) {
                 val c = x.cands.firstOrNull()
                 if (c != null && c.second >= RESCUE_MIN && c.first in times && due(c.first, x.ns) && !near(c.first, x.ns, minLapNs))
@@ -143,11 +143,11 @@ object LapSolver {
                 val keepCur = sc(i, n) + (altPrev?.second ?: NONE_VALUE)
                 if (prevLocked || keepPrev >= keepCur) {
                     put(prev, n, dec[prev]?.why ?: Why.ENGINE, "")
-                    if (altCur != null) put(i, altCur.first, Why.RENAMED_BY_TIMING, "looked like $n (%.2f) but $n crossed %.1f s earlier; ${altCur.first} (%.2f) was due".format(sc(i, n), (x.ns - xs[prev].ns) / 1e9, altCur.second))
-                    else put(i, null, Why.NOT_COUNTED, "looked like $n but $n crossed %.1f s earlier – no lap".format((x.ns - xs[prev].ns) / 1e9))
+                    if (altCur != null) put(i, altCur.first, Why.RENAMED_BY_TIMING, "looked like $n (${fx(sc(i, n), 2)}) but $n crossed ${fx((x.ns - xs[prev].ns) / 1e9, 1)} s earlier; ${altCur.first} (${fx(altCur.second, 2)}) was due")
+                    else put(i, null, Why.NOT_COUNTED, "looked like $n but $n crossed ${fx((x.ns - xs[prev].ns) / 1e9, 1)} s earlier – no lap")
                 } else {
-                    if (altPrev != null) put(prev, altPrev.first, Why.RENAMED_BY_TIMING, "first named $n, but $n fits the later crossing better; ${altPrev.first} (%.2f) was due".format(altPrev.second))
-                    else put(prev, null, Why.NOT_COUNTED, "named $n, but $n fits the crossing %.1f s later better".format((x.ns - xs[prev].ns) / 1e9))
+                    if (altPrev != null) put(prev, altPrev.first, Why.RENAMED_BY_TIMING, "first named $n, but $n fits the later crossing better; ${altPrev.first} (${fx(altPrev.second, 2)}) was due")
+                    else put(prev, null, Why.NOT_COUNTED, "named $n, but $n fits the crossing ${fx((x.ns - xs[prev].ns) / 1e9, 1)} s later better")
                     put(i, n, Why.ENGINE, "")
                 }
                 continue
@@ -157,7 +157,7 @@ object LapSolver {
             val best = dueC.maxByOrNull { it.second }
             val second = dueC.filter { it !== best }.maxOfOrNull { it.second } ?: 0f
             if (best != null && best.second >= NAME_MIN && best.second - second >= 0.05f)
-                put(i, best.first, Why.NAMED_BY_TIMING, "camera unsure; ${best.first} (%.2f) is the one due".format(best.second))
+                put(i, best.first, Why.NAMED_BY_TIMING, "camera unsure; ${best.first} (${fx(best.second, 2)}) is the one due")
             else put(i, null, Why.UNKNOWN, "no due car looks like it")
         }
 
@@ -189,10 +189,10 @@ object LapSolver {
                     }
                     if (bestJ < 0) continue
                     if (how == Why.SECOND_IN_BLOB) {
-                        extra += Out(bestJ, xs[bestJ].ns, c, how, "$c's lap was overdue; this blob was %.1f× one car and $c (%.2f) its runner-up".format(xs[bestJ].sizeRatio, sc(bestJ, c)))
+                        extra += Out(bestJ, xs[bestJ].ns, c, how, "$c's lap was overdue; this blob was ${fx(xs[bestJ].sizeRatio, 1)}× one car and $c (${fx(sc(bestJ, c), 2)}) its runner-up")
                         times[c]!!.add(xs[bestJ].ns to bestJ)
                     } else {
-                        put(bestJ, c, how, "$c's lap was overdue (%.1f s); this crossing near its expected time looks like it (%.2f)".format((xs[bestJ].ns - g) / 1e9, sc(bestJ, c)))
+                        put(bestJ, c, how, "$c's lap was overdue (${fx((xs[bestJ].ns - g) / 1e9, 1)} s); this crossing near its expected time looks like it (${fx(sc(bestJ, c), 2)})")
                     }
                 }
             }
@@ -203,4 +203,14 @@ object LapSolver {
     /** Counted crossing times per racer from [solve]'s decisions. */
     fun counted(out: List<Out>): Map<String, List<Long>> =
         out.filter { it.racer != null }.groupBy { it.racer!! }.mapValues { (_, v) -> v.map { it.ns }.sorted() }
+}
+
+/** Fixed decimals without String.format (common code: iOS has none). */
+internal fun fx(v: Number, digits: Int): String {
+    val x = v.toDouble()
+    var m = 1L; repeat(digits) { m *= 10 }
+    val r = kotlin.math.round(kotlin.math.abs(x) * m).toLong()
+    val sign = if (x < 0 && r != 0L) "-" else ""
+    val whole = r / m; val frac = r % m
+    return if (digits == 0) "$sign$whole" else "$sign$whole." + frac.toString().padStart(digits, '0')
 }
