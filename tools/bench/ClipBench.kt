@@ -17,28 +17,35 @@ import kotlin.random.Random
 const val DIR = "/home/claude/blend/clips"
 const val FPS = 60.0
 
-class Clip(val w: Int, val h: Int, val y: List<ByteArray>, val u: List<ByteArray>, val v: List<ByteArray>, val meta: Map<String, String>) {
+class Clip(val w: Int, val h: Int, val y: List<ByteArray>, val u: List<ByteArray>, val v: List<ByteArray>, val meta: Map<String, String>,
+           val fw: Int = 0, val fh: Int = 0, val full: List<ByteArray> = emptyList()) {
     val n get() = y.size
     companion object {
         fun load(name: String): Clip {
             val f = File("$DIR/$name.yuv")
             val bytes = f.readBytes()
-            val bb = ByteBuffer.wrap(bytes, 0, 12).order(ByteOrder.LITTLE_ENDIAN)
+            val j = File("$DIR/$name.json").takeIf { it.exists() }?.readText() ?: "{}"
+            val meta = flatJson(j)
+            val hasFull = meta["full"] == "true"
+            val bb = ByteBuffer.wrap(bytes, 0, 20).order(ByteOrder.LITTLE_ENDIAN)
             val w = bb.int; val h = bb.int; val n = bb.int
-            val ys = ArrayList<ByteArray>(); val us = ArrayList<ByteArray>(); val vs = ArrayList<ByteArray>()
-            var off = 12; val p = w * h
+            var off = 12
+            var fw = 0; var fh = 0
+            if (hasFull) { fw = bb.int; fh = bb.int; off = 20 }
+            val ys = ArrayList<ByteArray>(); val us = ArrayList<ByteArray>(); val vs = ArrayList<ByteArray>(); val fs = ArrayList<ByteArray>()
+            val p = w * h
             repeat(n) {
                 ys += bytes.copyOfRange(off, off + p); off += p
                 us += bytes.copyOfRange(off, off + p); off += p
                 vs += bytes.copyOfRange(off, off + p); off += p
+                if (hasFull) { fs += bytes.copyOfRange(off, off + fw * fh); off += fw * fh }
             }
-            val j = File("$DIR/$name.json").takeIf { it.exists() }?.readText() ?: "{}"
-            return Clip(w, h, ys, us, vs, flatJson(j))
+            return Clip(w, h, ys, us, vs, meta, fw, fh, fs)
         }
         /** Tiny flat JSON reader (strings and numbers only; arrays kept as raw text). */
         fun flatJson(s: String): Map<String, String> {
             val out = HashMap<String, String>()
-            Regex("\"(\\w+)\"\\s*:\\s*(\"[^\"]*\"|\\[[^\\]]*\\]|[-0-9.eE]+)").findAll(s).forEach { m ->
+            Regex("\"(\\w+)\"\\s*:\\s*(\"[^\"]*\"|\\[[^\\]]*\\]|true|false|[-0-9.eE]+)").findAll(s).forEach { m ->
                 out[m.groupValues[1]] = m.groupValues[2].trim('"')
             }
             return out
@@ -59,6 +66,8 @@ class Timeline(val empty: Clip, seed: Int = 3) {
     val placed = ArrayList<Placed>()
     /** Plain clip played from [offset], frames replacing the background entirely (e.g. Victor's full render). */
     var base: Pair<Clip, Int>? = null
+    /** Frames before the base clip starts (default: the base clip's own first frame). */
+    var lead: Clip? = null
 
     fun frame(i: Int): AnalysisFrame {
         val p = w * h
@@ -71,7 +80,8 @@ class Timeline(val empty: Clip, seed: Int = 3) {
             val k = b.first.n - 1; bgY = b.first.y[k]; bgU = b.first.u[k]; bgV = b.first.v[k]
         } else if (b != null) {
             // lead-in: the base clip's own first (empty) frame, so its shadows/props match
-            bgY = b.first.y[0]; bgU = b.first.u[0]; bgV = b.first.v[0]
+            val l = lead ?: b.first
+            bgY = l.y[0]; bgU = l.u[0]; bgV = l.v[0]
         } else { bgY = empty.y[0]; bgU = empty.u[0]; bgV = empty.v[0] }
         bgY.copyInto(y); bgU.copyInto(u); bgV.copyInto(v)
         // far lanes first so nearer cars cover them (camera stands at +x)
@@ -92,7 +102,26 @@ class Timeline(val empty: Clip, seed: Int = 3) {
             u[j] = ((u[j].toInt() and 0xFF) + (gauss[g] * 1.5f).toInt()).coerceIn(0, 255).toByte(); g = (g + 13) and 4095
             v[j] = ((v[j].toInt() and 0xFF) + (gauss[g] * 1.5f).toInt()).coerceIn(0, 255).toByte(); g = (g + 3) and 4095
         }
-        return AnalysisFrame((i * 1e9 / FPS).toLong(), w, h, y, u, v, w, h) { _, _, _, _ -> null }
+        // full-resolution luma for the split step, when the base clip carries one
+        val fullSrc: Pair<Clip, Int>? = b?.let { bb ->
+            val k = i - bb.second
+            when {
+                bb.first.full.isEmpty() -> null
+                k in 0 until bb.first.n -> bb.first to k
+                k >= bb.first.n -> bb.first to bb.first.n - 1
+                else -> (lead ?: bb.first).let { l -> if (l.full.isEmpty()) null else l to 0 }
+            }
+        }
+        if (fullSrc == null || System.getenv("FULLOFF") != null) return AnalysisFrame((i * 1e9 / FPS).toLong(), w, h, y, u, v, w, h) { _, _, _, _ -> null }
+        val (fc, fk) = fullSrc
+        val plane = fc.full[fk]
+        return AnalysisFrame((i * 1e9 / FPS).toLong(), w, h, y, u, v, fc.fw, fc.fh) { x0, y0, cw, ch ->
+            if (x0 < 0 || y0 < 0 || x0 + cw > fc.fw || y0 + ch > fc.fh) null else {
+                val out = ByteArray(cw * ch)
+                for (yy in 0 until ch) System.arraycopy(plane, (y0 + yy) * fc.fw + x0, out, yy * cw, cw)
+                out
+            }
+        }
     }
 }
 
@@ -186,6 +215,11 @@ fun runRace(name: String, tl: Timeline, frames: Int, racers: List<RacerRef>, tru
         }
     }
     val extras = acc.filter { it !in used }
+    val rescues = events.filter { it.rescue }
+    for (r in rescues) {
+        val hit = truth.firstOrNull { abs(it.t - r.timestampNs / 1e9) < 0.15 && match[it] == null }
+        notes += "RESCUE   %6.2f s  %s (est. finish) – %s".format(r.timestampNs / 1e9, r.candidates.firstOrNull()?.first ?: "?", if (hit != null) "WOULD RESCUE missed ${hit.car}" else "no missed crossing there (false alarm)")
+    }
     for (e in extras) notes += "EXTRA    %6.2f s  read as %s%s area %d".format(e.timestampNs / 1e9, e.racerId ?: "unknown", if (e.split) " (split)" else "", e.area)
 
     TOTAL.n += truth.size; TOTAL.found += used.size; TOTAL.extra += extras.size; TOTAL.right += ok; TOTAL.wrong += wrong; TOTAL.unknown += unknown
@@ -249,7 +283,7 @@ fun runRace(name: String, tl: Timeline, frames: Int, racers: List<RacerRef>, tru
     notes.forEach { println("  $it") }
 }
 
-fun main(args: Array<String>) {
+fun main_lap(args: Array<String>) {
     val empty = Clip.load("empty")
     val meta = Clip.flatJson(File("/home/claude/blend/meta.json").readText())
     val nums = Regex("[-0-9.eE]+").findAll(File("/home/claude/blend/meta.json").readText().substringAfter("\"line\"").substringBefore("]]")).map { it.value.toFloat() }.toList()

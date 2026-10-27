@@ -17,3 +17,13 @@ Dev tool, not part of the app build. Paths are hard-coded to a `/home/claude/ble
    times, with forced overtakes and dead heats; sensor noise added per frame).
 
 Results Oct 26 2026 are in `claude/plan-and-decisions.md` (claude.ai project) and PR #9.
+
+## 10-car, 50-lap race (cars10)
+
+`cars10.py` builds ten mini-z-sized cars (different lengths, heights, liveries, a metallic one, a black one, two whites) in the
+Blender scene; `render_cars10.py` renders each alone from 1.8 m straight above (2 calibration passes + 5 race passes per car,
+~2 h on 2 cores); `pack.py cars10` packs them; `Race50.kt <seed> <crossings>` composes a 50-lap race (per-car pace, lap noise,
+spins, rolling start, abreast arrivals in neighbouring lanes 10 cm apart) and runs the engine against the known truth, writing
+`out/race50_<seed>.json` + frame crops of every doubtful crossing; `build_race50.py <seed>` turns that into the app-style results
+page (standings, lap table, graphs, Check tray). Oct 27 result over two seeds (1020 crossings): 1018 found, 0 wrong names,
+2 phantom crossings from over-split two-tone cars, 2 misses of the grey car when touching another car.
