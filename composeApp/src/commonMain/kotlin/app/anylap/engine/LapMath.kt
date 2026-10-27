@@ -57,9 +57,38 @@ object LapMath {
         return s.copy(
             laps = laps,
             order = order(s.config, ids, s.crossings),
-            unassignedCrossings = s.reviews.count { it.kind == app.anylap.data.ReviewKind.UNKNOWN && it.resolvedTo == null },
+            unassignedCrossings = s.reviews.count { (it.kind == app.anylap.data.ReviewKind.UNKNOWN || it.kind == app.anylap.data.ReviewKind.NOT_COUNTED) && it.open },
         )
     }
+
+    /** Who the crossing at [atMs] is counted for now (null = nobody). */
+    fun ownerAt(s: Session, atMs: Long): String? =
+        s.crossings.entries.firstOrNull { (_, l) -> l.any { abs(it.atMs - atMs) <= 2 } }?.key
+
+    /**
+     * Re-names the crossing at [atMs] (one car in a review picture): taken from whoever it is
+     * counted for, given to [to] (a racer id, or "" = not a car), laps and order rebuilt, and the
+     * card marked as checked.
+     */
+    fun reassign(s: Session, itemId: String, atMs: Long, to: String): Session {
+        val minLapMs = (s.config.minLapSec * 1000).toLong()
+        val cr = s.crossings.mapValues { it.value.toMutableList() }.toMutableMap()
+        val old = cr.values.flatten().firstOrNull { abs(it.atMs - atMs) <= 2 }
+        for (l in cr.values) l.removeAll { abs(it.atMs - atMs) <= 2 }
+        if (to.isNotEmpty() && s.racers.any { it.id == to }) {
+            val list = cr.getOrPut(to) { ArrayList() }
+            if (list.none { abs(it.atMs - atMs) < minLapMs }) {
+                list += CrossRec(atMs, old?.speedKmh, LapSource.ASSIGNED, 1f)
+                list.sortBy { it.atMs }
+            }
+        }
+        val reviews = s.reviews.map { if (it.id == itemId) it.copy(checked = true, resolvedTo = if (abs(it.atMs - atMs) <= 2) to else it.resolvedTo) else it }
+        return rebuilt(s.copy(crossings = cr, reviews = reviews))
+    }
+
+    /** "Looks right": the card is done, nothing changes. */
+    fun check(s: Session, itemId: String): Session =
+        s.copy(reviews = s.reviews.map { if (it.id == itemId) it.copy(checked = true) else it })
 
     /**
      * Applies a human verdict on a review item: [to] = a racer id, or "" for "not a car". Removes the

@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.engine.RaceEngine
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -284,25 +285,32 @@ private fun RecChip() {
     }
 }
 
-/** Three red start lights that come on one by one (3 → 2 → 1). */
+/** Five red start lights that come on one per second; the race starts when they all go out. */
 @Composable
-private fun StartLights(countdown: Int) {
-    val lit = (4 - countdown).coerceIn(0, 3)
+private fun StartLights(lit: Int) {
     Column(
-        Modifier.clip(RoundedCornerShape(22.dp)).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 26.dp, vertical = 20.dp),
+        Modifier.clip(RoundedCornerShape(22.dp)).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 22.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            repeat(3) { i ->
-                Box(
-                    Modifier.size(54.dp).clip(CircleShape)
-                        .background(if (i < lit) Brush.radialGradient(listOf(RT.AccentHot, RT.Accent, RT.AccentDeep)) else Brush.radialGradient(listOf(RT.Surface3, RT.Surface)))
-                        .border(2.dp, Color.White.copy(alpha = 0.08f), CircleShape),
-                )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            repeat(RaceEngine.START_LIGHTS) { i ->
+                // a column of two lamps per light, like a real gantry
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    repeat(2) {
+                        Box(
+                            Modifier.size(40.dp).clip(CircleShape)
+                                .background(if (i < lit) Brush.radialGradient(listOf(RT.AccentHot, RT.Accent, RT.AccentDeep)) else Brush.radialGradient(listOf(RT.Surface3, RT.Surface)))
+                                .border(2.dp, Color.White.copy(alpha = 0.08f), CircleShape),
+                        )
+                    }
+                }
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("$countdown", style = Num.style(64.sp, FontWeight.Black, italic = true))
+        Text(
+            if (lit < RaceEngine.START_LIGHTS) "GET READY" else "LIGHTS OUT AND AWAY WE GO…",
+            style = MaterialTheme.typography.labelSmall.copy(color = Color.White, letterSpacing = 1.5.sp),
+        )
     }
 }
 

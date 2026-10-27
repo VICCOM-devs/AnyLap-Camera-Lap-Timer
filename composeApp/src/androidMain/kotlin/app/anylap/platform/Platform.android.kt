@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.view.WindowManager
@@ -33,6 +35,12 @@ actual object Platform {
     val context: Context get() = appContext
 
     actual val name: String = "Android"
+
+    private val tone: ToneGenerator? by lazy { try { ToneGenerator(AudioManager.STREAM_MUSIC, 80) } catch (t: Throwable) { null } }
+
+    actual fun beep() {
+        try { tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 160) } catch (t: Throwable) {}
+    }
 
     actual fun monotonicNanos(): Long = SystemClock.elapsedRealtimeNanos()
 

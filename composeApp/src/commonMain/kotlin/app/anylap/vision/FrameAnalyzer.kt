@@ -1,6 +1,7 @@
 package app.anylap.vision
 
 import app.anylap.data.Direction
+import app.anylap.data.FinishEdge
 import app.anylap.data.LineSpec
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -174,7 +175,8 @@ class FrameAnalyzer(
 
     // ------------------------------------------------------------------ tracks
 
-    private class TrackPoint(val ts: Long, val x: Float, val y: Float)
+    /** Position (centre) and box size of a track in one frame. */
+    private class TrackPoint(val ts: Long, val x: Float, val y: Float, val bw: Int = 0, val bh: Int = 0)
 
     private inner class Track(val id: Int) {
         val pts = ArrayList<TrackPoint>()
@@ -203,7 +205,7 @@ class FrameAnalyzer(
         }
 
         fun add(b: Blob, ts: Long) {
-            pts += TrackPoint(ts, b.cx, b.cy)
+            pts += TrackPoint(ts, b.cx, b.cy, b.w, b.h)
             if (pts.size > 60) pts.removeAt(0)
             bx = b.x; by = b.y; bw = b.w; bh = b.h
             tag = b.tag; area = b.area
@@ -797,9 +799,10 @@ class FrameAnalyzer(
         if (!plausibleSize(t, cfg)) return
         if (!reallyMoved(t, line, cur, s)) return
 
-        val crossNs = prev.ts + ((cur.ts - prev.ts) * f).toLong()
-        if (crossNs - t.lastCrossTs < 400_000_000L) return // wobbling on the line
-        t.lastCrossTs = crossNs
+        val centreNs = prev.ts + ((cur.ts - prev.ts) * f).toLong()
+        if (centreNs - t.lastCrossTs < 400_000_000L) return // wobbling on the line
+        t.lastCrossTs = centreNs
+        val crossNs = centreNs + edgeOffsetNs(t, line, cfg, abs(s - prevSide) / max(1L, cur.ts - prev.ts))
 
         val dir = if (prevSide < 0f) 1 else -1
         val wanted = when (cfg.direction) {
@@ -808,6 +811,25 @@ class FrameAnalyzer(
             Direction.REVERSE -> dir == -1
         }
         if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0)
+    }
+
+    /**
+     * Time from the racer's centre crossing the line to its front (negative) or rear (positive)
+     * edge crossing it: half its length across the line over its speed across the line. Length =
+     * median box extent across the line over the last frames, less the part of the motion blur the
+     * mask sees ([BLUR_SEEN] of speed × exposure – the smear fades out at its ends) and the mask's
+     * growth from the clean-up dilations. 0 for [FinishEdge.CENTRE].
+     */
+    private fun edgeOffsetNs(t: Track, line: LineGeom, cfg: AnalyzerConfig, vAcross: Float): Long {
+        if (cfg.finishEdge == FinishEdge.CENTRE || vAcross <= 0f) return 0L
+        val nx = abs(line.dy) / line.len
+        val ny = abs(line.dx) / line.len
+        val ext = t.pts.takeLast(EDGE_FRAMES).filter { it.bw > 0 }.map { it.bw * nx + it.bh * ny }.sorted()
+        if (ext.isEmpty()) return 0L
+        val blurPx = BLUR_SEEN * vAcross * cfg.exposureS * 1e9f
+        val half = ((ext[ext.size / 2] - blurPx - 2 * MASK_GROW_PX) / 2f).coerceAtLeast(0f)
+        val dt = (half / vAcross).toLong().coerceAtMost(MAX_EDGE_NS)
+        return if (cfg.finishEdge == FinishEdge.FRONT) -dt else dt
     }
 
     /**
@@ -1018,6 +1040,7 @@ class FrameAnalyzer(
                 along = p.along,
                 split = p.split,
                 rescue = p.rescue,
+                trackId = t.id,
             ),
         )
         // Learn how big one racer is at this point of the line (whole, confidently named blobs only).
@@ -1040,10 +1063,13 @@ class FrameAnalyzer(
         }
     }
 
-    /** RGB crop around the track (a little padding), at analysis resolution. */
+    /**
+     * RGB crop around the track (a little padding), at analysis resolution, with the boxes of every
+     * racer in it, the finish line and how they were moving – for the review tray's picture.
+     */
     private fun snapshot(t: Track, f: AnalysisFrame): Snapshot? {
         if (t.bw <= 0 || t.bh <= 0) return null
-        val pad = (max(t.bw, t.bh) * 0.25f).roundToInt() + 4
+        val pad = (max(t.bw, t.bh) * 0.6f).roundToInt() + 6
         val x0 = (t.bx - pad).coerceIn(0, w - 1)
         val y0 = (t.by - pad).coerceIn(0, h - 1)
         val x1 = (t.bx + t.bw + pad).coerceIn(x0 + 1, w)
@@ -1058,7 +1084,26 @@ class FrameAnalyzer(
                 out[yy * sw + xx] = yuvToArgb(f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF)
             }
         }
-        return Snapshot(sw, sh, out)
+        val boxes = tracks.filter { it.missed == 0 && it.bw > 0 && it.bx < x1 && it.bx + it.bw > x0 && it.by < y1 && it.by + it.bh > y0 }.map { o ->
+            val n = o.pts.size
+            var vx = 0f; var vy = 0f
+            if (n >= 2) {
+                val a = o.pts[n - 2]; val b = o.pts[n - 1]
+                val dt = max(1L, b.ts - a.ts) / 1e9f
+                vx = (b.x - a.x) / dt / sw; vy = (b.y - a.y) / dt / sh
+            }
+            SnapBox(
+                o.id,
+                (o.bx - x0).toFloat() / sw, (o.by - y0).toFloat() / sh,
+                (o.bx + o.bw - x0).toFloat() / sw, (o.by + o.bh - y0).toFloat() / sh,
+                vx, vy,
+            )
+        }
+        val l = config.line
+        val line = floatArrayOf((l.x1 * w - x0) / sw, (l.y1 * h - y0) / sh, (l.x2 * w - x0) / sw, (l.y2 * h - y0) / sh)
+        val n = t.pts.size
+        val frameNs = if (n >= 2) t.pts[n - 1].ts - t.pts[n - 2].ts else 0L
+        return Snapshot(sw, sh, out, boxes, line, f.timestampNs, frameNs)
     }
 
     private fun yuvToArgb(y: Int, u: Int, v: Int): Int {
@@ -1137,6 +1182,14 @@ class FrameAnalyzer(
          * ~1.5× stay merged – a higher camera is the fix for those, not a lower threshold.
          */
         const val SPLIT_FACTOR = 1.7f
+        /** Frames of box size used for a racer's length (leading-edge timing). */
+        const val EDGE_FRAMES = 6
+        /** How far the clean-up (1 erosion, 4 dilations of 3×3) grows a blob on each side, px. */
+        const val MASK_GROW_PX = 3f
+        /** Share of the motion-blur smear that is solid enough to be in the mask (Blender bench: ~half). */
+        const val BLUR_SEEN = 0.5f
+        /** A racer's half-length never takes longer than this to cross (a parked car at the line). */
+        const val MAX_EDGE_NS = 200_000_000L
         /** Each part of a size-based split must look at least this much like some racer. */
         const val SPLIT_PART_MATCH = 0.5f
         /** A split part is named only when it matches its racer at least this well (else left for review). */

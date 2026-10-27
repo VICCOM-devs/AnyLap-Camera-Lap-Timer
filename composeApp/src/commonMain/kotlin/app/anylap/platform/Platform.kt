@@ -37,6 +37,9 @@ expect object Platform {
 
     /** Camera screens: landscape, full screen, screen kept on. */
     fun setCameraMode(enabled: Boolean)
+
+    /** A short beep (start lights). No-op where not available. */
+    fun beep()
 }
 
 /** Spoken lap announcements. */

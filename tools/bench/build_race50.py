@@ -19,22 +19,8 @@ def b64png(ppm, scale=3):
 def laps_of(cross):  # list of crossings t -> list of lap times
     return [cross[i]['t'] - cross[i - 1]['t'] for i in range(1, len(cross))]
 tru = {c: R['trueLaps'][c] for c in cars}
-# app-side lap sanity (as RaceEngine should do): a lap shorter than 60 % of the car's median lap cannot be a lap
-# of this track – the crossing is parked in the Check tray instead of counted
-eng = {}; short = []
-for c in cars:
-    xs = R['engineLaps'][c]; med = statistics.median(laps_of(xs)) if len(xs) > 2 else 0
-    kept = []
-    for x in xs:
-        if kept and med and x['t'] - kept[-1]['t'] < 0.6 * med:
-            short.append(dict(kind='SHORT LAP', t=x['t'], car=c, truth=None, cands='', note=f"{x['t']-kept[-1]['t']:.2f} s after the same car's last crossing (median lap {med:.1f} s) – not counted", crop=None)); continue
-        kept.append(x)
-    eng[c] = kept
-reviews = R['reviews'] + short
-# the engine's own review card for the same crossing, if any, gets the short-lap note too
-for sh in short:
-    for r in R['reviews']:
-        if abs(r['t'] - sh['t']) < 0.02 and r['car'] == sh['car']: sh['crop'] = r['crop']; sh['truth'] = r['truth']; sh['cands'] = r['cands']
+eng = {c: R['engineLaps'][c] for c in cars}
+reviews = R['reviews']
 
 NL = max(len(v) for v in tru.values()) - 1
 # position after each lap: order by time of completing lap k
@@ -60,7 +46,6 @@ def standings(src):
     return rows
 stE = standings(eng); stT = standings(tru)
 S = dict(R['summary'])
-S['false_laps'] = S['extra'] + S['wrong'] - len([x for x in short if x['truth'] is None or x['truth'] != x['car']])
 # the lap table (engine), with flags where the engine's lap differs from truth by > 50 ms (miss/extra → whole lap shifts)
 def fmt(t): return '—' if t is None else (f"{int(t // 60)}:{t % 60:06.3f}" if t >= 60 else f"{t:.3f}")
 def tableRows():
@@ -147,17 +132,12 @@ for k, cells in enumerate(T):
     body.append(f'<tr><td class="pos">{k+1}</td>{"".join(tds)}</tr>')
 kinds = {}
 for r in reviews: kinds[r['kind']] = kinds.get(r['kind'], 0) + 1
-cards = []
-for i, r in enumerate(reviews):
-    img = b64png(r['crop']) if r.get('crop') and os.path.exists(r['crop']) else ''
-    who = nice(r['car']) if r['car'] else 'Unknown'
-    cands = r['cands'].replace('_', ' ')
-    cards.append(f'''<div class="card k-{r['kind'].split()[0].replace('?','').lower()}">
-  <img src="{img}" alt="crop at the line, t={r['t']:.2f} s">
-  <div class="cb"><div class="kind">{r['kind']}</div><div class="t">{r['t']:.2f} s · {r['note']}</div>
-  <div class="who">{swatch(r['car']) if r['car'] else ''}{who}</div><div class="cands">{cands}</div>
-  <div class="btns"><button class="pill" onclick="verdict(this,'ok')">Looks right</button><button class="pill ghost" onclick="verdict(this,'no')">Wrong</button></div>
-  <div class="truth">Truth: {nice(r['truth']) if r['truth'] else 'no car crossed'}</div></div></div>''')
+def card_data(r):
+    pic = r.get('pic')
+    img = b64png(r['crop'], 4 if pic else 3) if r.get('crop') and os.path.exists(r['crop']) else ''
+    return dict(kind=r['kind'], t=r['t'], car=r['car'], truth=r['truth'], cands=r['cands'], note=r['note'], img=img, pic=pic)
+cards_json = json.dumps([card_data(r) for r in reviews])
+colours_json = json.dumps({c: LIVERY[c] for c in cars})
 spins = '<br>'.join(R['incidents']).replace('_', ' ')
 html = f'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AnyLap · 10 cars · {NL} laps · simulated race</title>
@@ -181,6 +161,7 @@ td.bad{{background:rgba(242,176,30,.14);color:var(--warn)}}td.miss{{background:r
 .chart{{width:100%;height:auto;display:block}}.grid{{stroke:#24242c;stroke-width:1}}.tick{{fill:var(--faint);font-size:11px;font-family:var(--font)}}.lbl{{fill:var(--text);font-size:12px;font-weight:700;font-family:var(--font)}}.val{{fill:var(--dim);font-size:12px;font-family:var(--font)}}
 .ln{{transition:opacity .2s}}.chart:hover .ln{{opacity:.25}}.chart .ln:hover{{opacity:1;stroke-width:4}}
 .legend{{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--dim);margin-top:8px}}
+.pic{{position:relative;background:#000}}.pic img{{width:100%;display:block;image-rendering:pixelated;aspect-ratio:auto!important;object-fit:fill!important}}.pic svg{{position:absolute;inset:0;width:100%;height:100%}}.pf{{font-size:15px;font-weight:900;letter-spacing:-0.01em;margin:2px 0 4px}}.sc{{font-size:12px;color:var(--dim);cursor:pointer;padding:4px 0;font-variant-numeric:tabular-nums}}.ex{{display:none;font-size:12px;color:var(--text);line-height:1.45;margin:2px 0 8px}}.card.exp .ex{{display:block}}.chips{{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}}.chip{{border:1px solid var(--stroke);background:var(--s2);color:var(--text);border-radius:12px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;min-height:36px}}.hint{{font-size:11px;color:var(--faint)}}.top{{display:flex;align-items:center;gap:8px;padding:10px 12px}}.top .t{{margin:0;flex:1}}.okp{{border:1px solid rgba(44,194,107,.6);color:var(--good);background:transparent;border-radius:999px;padding:7px 12px;font-weight:800;font-size:12px;cursor:pointer}}
 .cards{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}}.card{{background:var(--s1);border:1px solid var(--stroke);border-radius:16px;overflow:hidden}}.card img{{width:100%;aspect-ratio:1;object-fit:cover;image-rendering:pixelated;display:block;background:#000}}.cb{{padding:12px 14px 14px}}.kind{{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--warn)}}.k-wrong .kind,.k-extra .kind,.k-missed .kind{{color:var(--bad)}}.k-short .kind{{color:var(--good)}}.k-split .kind,.k-close .kind{{color:var(--dim)}}.t{{font-size:12px;color:var(--dim);margin:3px 0 8px}}.who{{font-size:18px;font-weight:900;letter-spacing:-0.02em}}.cands{{font-size:12px;color:var(--faint);margin:4px 0 10px;font-variant-numeric:tabular-nums}}.btns{{display:flex;gap:8px}}.btns .pill{{flex:1;min-height:40px;padding:8px 10px}}.truth{{display:none;margin-top:10px;font-size:12px;color:var(--dim);border-top:1px solid var(--stroke);padding-top:8px}}.card.done .truth{{display:block}}.card.done .btns{{display:none}}
 .note{{font-size:13px;color:var(--dim);line-height:1.5}}.foot{{display:flex;justify-content:center;padding:12px}}.foot div{{background:var(--s2);border:1px solid var(--stroke);border-radius:999px;padding:10px 18px;font-size:12px;color:var(--dim);box-shadow:0 8px 30px rgba(0,0,0,.5)}}
 .cmp{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}@media(max-width:700px){{.cmp{{grid-template-columns:1fr}}h1{{font-size:26px}}}}
@@ -189,12 +170,11 @@ td.bad{{background:rgba(242,176,30,.14);color:var(--warn)}}td.miss{{background:r
 <header><h1><small>AnyLap · Simulated race · overhead camera · 60 fps</small>10 cars · {NL} laps</h1>
 <div class="pills"><span class="pill ghost">{S['durationS']/60:.1f} min</span><span class="pill ghost">{S['crossings']} crossings</span><span class="pill">Check ({len(reviews)})</span></div></header>
 <div class="kpis">
-<div class="kpi {'good' if S['missed']==0 else 'bad'}"><b>{S['missed']}</b><span>missed crossings</span></div>
-<div class="kpi {'good' if S['extra']==0 else 'bad'}"><b>{S['extra']}</b><span>false crossings</span></div>
-<div class="kpi {'good' if len(short)>0 or S['extra']==0 else 'warn'}"><b>{len(short)}</b><span>caught by lap sanity</span></div>
-<div class="kpi {'good' if S['wrong']==0 else 'bad'}"><b>{S['wrong']}</b><span>wrong car</span></div>
-<div class="kpi {'good' if S['unknown']==0 else 'warn'}"><b>{S['unknown']}</b><span>unknown car</span></div>
-<div class="kpi"><b>{S['timingMeanMs']:.1f}<span style="font-size:14px"> ms</span></b><span>mean timing error (max {S['timingMaxMs']:.0f})</span></div>
+<div class="kpi {'good' if S['lapWrong']+S['falseLaps']==0 else 'bad'}"><b>{S['lapWrong']+S['falseLaps']}</b><span>laps given to the wrong car</span></div>
+<div class="kpi {'good' if S['missed']==0 else 'bad'}"><b>{S['missed']}</b><span>crossings not seen</span></div>
+<div class="kpi warn"><b>{S['lapTray']}</b><span>left for you to check</span></div>
+<div class="kpi good"><b>{S['lapRight']}</b><span>of {S['crossings']} laps counted right</span></div>
+<div class="kpi"><b>{S['timingMeanMs']:.1f}<span style="font-size:14px"> ms</span></b><span>mean timing error, front of car (max {S['timingMaxMs']:.0f})</span></div>
 <div class="kpi {'good' if sameOrder else 'bad'}"><b>{'✓' if sameOrder else '✗'}</b><span>final order {'matches' if sameOrder else 'differs from'} truth</span></div>
 </div>
 <div class="tabs"><div class="tab on" onclick="show(0,this)">Standings</div><div class="tab" onclick="show(1,this)">Laps</div><div class="tab" onclick="show(2,this)">Graphs</div><div class="tab" onclick="show(3,this)">Check ({len(reviews)})</div><div class="tab" onclick="show(4,this)">Setup</div></div>
@@ -209,12 +189,64 @@ td.bad{{background:rgba(242,176,30,.14);color:var(--warn)}}td.miss{{background:r
 </section>
 <section class="panel"><div class="card0"><h2>Check · {len(reviews)} crossings the engine was not sure about ({', '.join(f"{k} {v}" for k,v in kinds.items())})</h2>
 <p class="note">Each card is the overhead frame at the moment the car hit the line (3× zoom). Tap a verdict to reveal what really happened. In the app these would be fixed with one tap and the lap table would update.</p>
-<div class="cards">{''.join(cards)}</div></div></section>
-<section class="panel"><div class="card0"><h2>How this race was made</h2><p class="note">Ten Blender mini-z-sized cars (16–19 cm, different heights, bodies, liveries, a metallic one, a black one, two white look-alikes told apart only by their stripe/roof colour), each rendered crossing the line alone from a camera 1.8 m straight above (480×270 engine resolution, 8 Cycles samples, 1/120 s shutter, 60 fps). The race is composited from those passes: each car has its own pace (17.4–18.6 s laps), ±0.3 s lap noise, 4 % chance of a 2–7 s spin per lap, a rolling start 0.45 s apart. Cars arriving within 0.12 s of each other take neighbouring lanes 10 cm apart, so they cross abreast with about 1 cm between bodies. Every crossing's true time and car are known, which is what the Check cards and the amber/red cells are scored against.</p>
+<div class="cards" id="cards"></div></div></section>
+<section class="panel"><div class="card0"><h2>How this race was made</h2><p class="note">Ten Blender mini-z-sized cars (16–19 cm, different heights, bodies, liveries, a metallic one, a black one, two white look-alikes told apart only by their stripe/roof colour), each rendered crossing the line alone from a camera 1.8 m straight above (480×270 engine resolution, 8 Cycles samples, 1/120 s shutter, 60 fps). The race is composited from those passes: each car has its own pace (17.4–18.6 s laps), ±0.3 s lap noise, 4 % chance of a 2–7 s spin per lap, a rolling start 0.45 s apart. Cars arriving within 0.12 s of each other take neighbouring lanes 10 cm apart, so they cross abreast with about 1 cm between bodies. Every crossing's true time and car are known, which is what the Check cards and the amber/red cells are scored against. Timing is at the front of each car (Settings → Timing → front touches the line), and laps go through the new lap-timing check: a car can't be named twice closer together than it can lap; the weaker of the two goes to a car that is due, or is left for you to check.</p>
 <p class="note">Pace: {', '.join(f"{nice(c)} {R['pace'][c]:.2f} s" for c in cars)}.<br>Spins: {spins or 'none'}</p></div></section>
 </div><div class="foot"><div>Seed {seed} · engine HEAD split-v2 · this is a simulation, not footage</div></div>
 <script>
 function show(i,el){{document.querySelectorAll('.panel').forEach((p,k)=>p.classList.toggle('on',k===i));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t===el));}}
+const CARDS={cards_json}, COL={colours_json};
+const nm=c=>c?c.replace(/_/g,' '):'?';
+const EXPL={{'SPLIT':'Cars touching: they were one blob at the line and the camera cut them apart.','CLOSE CALL':'Close call: the runner-up scored almost as high, and the match was not clear on its own.','UNKNOWN':'Unknown: no car matched well enough to be named, so it was not counted.','NOT COUNTED':'Not counted: it was named after a car that had just crossed, and no other car fitted, so nobody got the lap.','RE-NAMED':'Re-named: it was named after a car that had just crossed, so lap timing gave it to the runner-up that was due.','MISSED':'Missed: nothing was seen at the line.','MISSED?':'Missed?: something passed the second line beyond the finish without being counted at the finish.','EXTRA':'Counted, but no car crossed here.','WRONG':'Named the wrong car.','REJECTED':'It did not look enough like any car, so it was not counted.'}};
+function svgFor(c,i){{
+  const p=c.pic; if(!p) return '';
+  const W=1000,H=1000*(c.ih/c.iw);
+  let g='';
+  if(p.line&&p.line.length==4) g+=`<line x1="${{p.line[0]*W}}" y1="${{p.line[1]*H}}" x2="${{p.line[2]*W}}" y2="${{p.line[3]*H}}" stroke="#fff" stroke-opacity=".6" stroke-width="3"/>`;
+  const crossing=p.boxes.filter(b=>b.at!==null);
+  const times=crossing.map(b=>b.at).sort();
+  const ghosts=p.frameMs>0&&(c.kind=='SPLIT'||c.kind=='CLOSE CALL'||times.some((t,k)=>k>0&&t-times[k-1]<0.1));
+  p.boxes.forEach((b,k)=>{{
+    const who=b.now!==undefined?b.now:b.car, col=b.at===null?'rgba(255,255,255,.35)':(who?COL[who]:'#F2B01E');
+    if(ghosts&&b.at!==null){{
+      const fr=p.frameMs/1000, hit=Math.max(0,Math.min(10,Math.round((b.at-(p.shot-fr))/fr*10)));
+      for(let q=0;q<=10;q++){{const dt=-fr+fr*q/10;const dx=b.vx*dt*W,dy=b.vy*dt*H;
+        g+=`<rect x="${{b.l*W+dx}}" y="${{b.t*H+dy}}" width="${{(b.r-b.l)*W}}" height="${{(b.b-b.t)*H}}" fill="none" stroke="${{col}}" stroke-opacity="${{q==hit?.95:.28}}" stroke-width="${{q==hit?4:2}}"/>`;}}
+    }}
+    g+=`<rect x="${{b.l*W}}" y="${{b.t*H}}" width="${{(b.r-b.l)*W}}" height="${{(b.b-b.t)*H}}" fill="transparent" stroke="${{col}}" stroke-width="${{c.sel===k?8:5}}" ${{b.at!==null?`style="cursor:pointer" onclick="pick(${{i}},${{k}})"`:''}}/>`;
+    if(b.at!==null){{const lab=nm(who);const lw=lab.length*24+16;let ly=b.t*H-44;if(ly<0)ly=b.b*H+6;const lx=Math.min(Math.max(0,b.l*W),W-lw);
+      g+=`<rect x="${{lx}}" y="${{ly}}" width="${{lw}}" height="38" fill="${{col}}" onclick="pick(${{i}},${{k}})" style="cursor:pointer"/><text x="${{lx+8}}" y="${{ly+28}}" font-size="28" font-weight="800" fill="#000" font-family="system-ui" onclick="pick(${{i}},${{k}})" style="cursor:pointer">${{lab}}</text>`;}}
+  }});
+  const s=p.boxes.find(b=>b.subject)||p.boxes[0];
+  if(s){{const L=Math.hypot(s.vx*W,s.vy*H);if(L>0){{const ux=s.vx*W/L,uy=s.vy*H/L,cx=W-70,cy=H-70,r=40;
+    g+=`<circle cx="${{cx}}" cy="${{cy}}" r="52" fill="rgba(0,0,0,.55)"/><line x1="${{cx-ux*r}}" y1="${{cy-uy*r}}" x2="${{cx+ux*r*.6}}" y2="${{cy+uy*r*.6}}" stroke="#fff" stroke-width="9"/><polygon points="${{cx+ux*r}},${{cy+uy*r}} ${{cx+ux*r*.3-uy*22}},${{cy+uy*r*.3+ux*22}} ${{cx+ux*r*.3+uy*22}},${{cy+uy*r*.3-ux*22}}" fill="#fff"/>`;}}}}
+  return `<svg viewBox="0 0 ${{W}} ${{H}}" preserveAspectRatio="none">${{g}}</svg>`;
+}}
+function photoFinish(c){{
+  const p=c.pic;if(!p)return '';
+  const x=p.boxes.filter(b=>b.at!==null&&(b.now!==undefined?b.now:b.car)).sort((a,b)=>a.at-b.at);
+  if(x.length<2||x[1].at-x[0].at>=0.1)return '';
+  const d=Math.round((x[1].at-x[0].at)*1000), a=nm(x[0].now!==undefined?x[0].now:x[0].car), b=nm(x[1].now!==undefined?x[1].now:x[1].car);
+  return d<1?`${{a}} and ${{b}}: dead heat`:`${{a}} ahead of ${{b}} by ${{d}} ms`;
+}}
+function render(i){{
+  const c=CARDS[i], el=document.getElementById('c'+i);
+  const p=c.pic, sel=(c.sel!==undefined&&p)?p.boxes[c.sel]:null;
+  let chips='';
+  if(sel){{const ranked=(sel.cands||[]).map(x=>x[0]);const all=ranked.concat(Object.keys(COL).filter(k=>!ranked.includes(k)));
+    chips='<div class="hint">Who is this?</div><div class="chips">'+all.map(k=>{{const sc=(sel.cands||[]).find(x=>x[0]==k);return `<button class="chip" style="border-color:${{COL[k]}}" onclick="setCar(${{i}},'${{k}}')">${{nm(k)}}${{sc?' '+Math.round(sc[1]*100)+' %':''}}</button>`}}).join('')+`<button class="chip" onclick="setCar(${{i}},'')">Not a car</button></div>`;}}
+  const truth=p?p.boxes.filter(b=>b.at!==null).map(b=>nm(b.truth)||'no car').join(', '):(nm(c.truth)||'no car crossed');
+  el.innerHTML=`<div class="top"><span class="kind">${{c.kind}}</span><span class="t">${{c.t.toFixed(2)}} s</span>${{c.done?'<span class="ok">✓ checked</span>':`<button class="okp" onclick="done(${{i}})">Looks right</button>`}}</div>
+   <div class="pic"><img src="${{c.img}}" onload="CARDS[${{i}}].iw=this.naturalWidth;CARDS[${{i}}].ih=this.naturalHeight;if(!CARDS[${{i}}].drawn){{CARDS[${{i}}].drawn=1;render(${{i}})}}">${{c.iw?svgFor(c,i):''}}</div>
+   <div class="cb"><div class="pf">${{photoFinish(c)}}</div><div class="sc" onclick="this.closest('.card').classList.toggle('exp')">${{(c.cands||'no colour match').replace(/_/g,' ')}} &nbsp;ⓘ</div>
+   <div class="ex">${{c.cands?'The % is how closely this car matches that car&#39;s calibration photos and passes (100 % = identical); the next ones are the runners-up. ':''}}${{EXPL[c.kind]||''}}${{p&&p.frameMs>0?' The faint boxes show each car between the two frames, at its own speed; the solid one is when its front reached the line.':''}} ${{c.note}}.</div>
+   ${{chips||(c.done?'':'<div class="hint">Tap a car to change who it is.</div>')}}
+   ${{c.done?`<div class="truth" style="display:block">Truth: ${{truth}}</div>`:''}}</div>`;
+}}
+function pick(i,k){{CARDS[i].sel=CARDS[i].sel===k?undefined:k;render(i)}}
+function setCar(i,k){{const c=CARDS[i];c.pic.boxes[c.sel].now=k||null;c.sel=undefined;c.done=1;render(i)}}
+function done(i){{CARDS[i].done=1;render(i)}}
+(function(){{const box=document.getElementById('cards');CARDS.forEach((c,i)=>{{const d=document.createElement('div');d.className='card k-'+c.kind.split(' ')[0].replace('?','').toLowerCase();d.id='c'+i;box.appendChild(d);render(i)}})}})();
 function verdict(b,v){{const c=b.closest('.card');c.classList.add('done');c.querySelector('.truth').insertAdjacentHTML('afterbegin','<span class="'+(v==='ok'?'ok':'no')+'">You said: '+(v==='ok'?'looks right':'wrong')+'</span> · ');}}
 </script></body></html>'''
 open(f'{B}/out/race50_{seed}.html', 'w').write(html)

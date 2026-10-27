@@ -126,15 +126,19 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
     ) {
         item { Podium(s, ordered) }
         item {
-            val open = s.reviews.count { it.resolvedTo == null }
+            val open = s.reviews.count { it.open }
             val tabs = listOf("Overview", "Laps", "Charts", "Replays") + if (s.reviews.isNotEmpty()) listOf(if (open > 0) "Check ($open)" else "Checked") else emptyList()
             PillTabs(tabs, tab, { tab = it }, Modifier.fillMaxWidth())
         }
         if (tab == 4) {
             item { SectionLabel("Crossings the camera wasn't sure about") }
-            s.reviews.sortedWith(compareBy<ReviewItem> { it.resolvedTo != null }.thenBy { it.atMs }).forEach { item ->
+            s.reviews.sortedWith(compareBy<ReviewItem> { !it.open }.thenBy { it.atMs }).forEach { item ->
                 item(key = "rv-${item.id}") {
-                    ReviewCard(s, item) { to -> app.repo.saveSession(LapMath.resolve(s, item.id, to)) }
+                    ReviewCard(
+                        s, item,
+                        onReassign = { atMs, to -> app.repo.saveSession(LapMath.reassign(s, item.id, atMs, to)) },
+                        onCheck = { app.repo.saveSession(LapMath.check(s, item.id)) },
+                    )
                 }
             }
         }
