@@ -239,7 +239,7 @@ object SyntheticTrack {
     fun race(r: Renderer, racers: List<RacerRef>, passes: List<Pass>, sizeHints: List<FloatArray> = emptyList()): Score {
         val events = ArrayList<CrossingEvent>()
         val a = FrameAnalyzer(onCrossing = { events += it })
-        a.config = AnalyzerConfig(racers = racers, minMatch = FrameAnalyzer.MIN_MATCH, metersPerProcPx = 0.01f / r.pxPerCm, sizeHints = sizeHints)
+        a.config = AnalyzerConfig(racers = racers, minMatch = FrameAnalyzer.MIN_MATCH, metersPerProcPx = 0.01f / r.pxPerCm, sizeHints = sizeHints, timingEdge = TimingEdge.CENTRE) // truth here is the centre
         val dt = 1.0 / r.fps
         var t = 0.0
         val end = passes.maxOf { it.tCross } + 2.0

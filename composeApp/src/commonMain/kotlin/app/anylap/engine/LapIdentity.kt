@@ -155,7 +155,7 @@ object LapIdentity {
                     var bestJ = -1; var bestD = Double.MAX_VALUE; var how = Why.MISSING_LAP
                     for (j in xs.indices) {
                         val d = abs(xs[j].ns - expect)
-                        if (d > win || near(c, xs[j].ns, (EARLY * p).toLong())) continue
+                        if (d > win || xs[j].locked != null || near(c, xs[j].ns, (EARLY * p).toLong())) continue
                         if (sc(j, c) < TRAY_MIN) continue
                         val o = dec[j]
                         val ok = when {

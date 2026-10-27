@@ -161,9 +161,13 @@ class VisionTest {
         repeat(30) { a.process(scene.frame(ts, emptyList())); ts += 16_666_667L }
         a.flush(ts)
         assertEquals(1, events.size, "exactly one crossing")
-        val expected = start + ((240f + 40f) / speed * 1e9).toLong()
+        // timed by the nose (front edge, 15 px ahead of the centre) by default; the centre time is kept too
+        val expected = start + ((240f - 15f + 40f) / speed * 1e9).toLong()
         val err = abs(events[0].timestampNs - expected) / 1e6
-        assertTrue(err < 6.0, "timing error $err ms")
+        assertTrue(err < 6.0, "nose timing error $err ms")
+        val expectedCentre = start + ((240f + 40f) / speed * 1e9).toLong()
+        val errC = abs(events[0].centreNs - expectedCentre) / 1e6
+        assertTrue(errC < 6.0, "centre timing error $errC ms")
         // speed: 600 px/s * 0.01 m/px = 6 m/s = 21.6 km/h
         val kmh = assertNotNull(events[0].speedKmh)
         assertTrue(abs(kmh - 21.6f) < 2f, "speed $kmh km/h")
