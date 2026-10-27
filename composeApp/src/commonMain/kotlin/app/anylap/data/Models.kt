@@ -94,6 +94,17 @@ enum class RaceMode(val title: String, val short: String) {
 @Serializable
 enum class Direction { BOTH, FORWARD, REVERSE }
 
+/** Which part of a racer is timed at the line. */
+@Serializable
+enum class FinishEdge(val title: String, val detail: String) {
+    /** The front touches the line (as in motorsport). */
+    FRONT("Front touches the line", "Timed when the nose reaches the line, as in motorsport."),
+    /** The whole racer has passed (rear clears the line). */
+    REAR("Whole car has passed", "Timed when the back of the car clears the line."),
+    /** The middle of the racer (before Oct 2026; calibration). */
+    CENTRE("Middle of the car", "Timed when the middle of the car is on the line."),
+}
+
 /** Finish line, normalised 0..1 in the landscape camera image. */
 @Serializable
 data class LineSpec(
@@ -116,6 +127,7 @@ data class SessionConfig(
     val minLapSec: Float = sport.defaultMinLapSec,
     val direction: Direction = Direction.BOTH,
     val line: LineSpec = LineSpec(),
+    val finishEdge: FinishEdge = FinishEdge.FRONT,
 )
 
 @Serializable
@@ -148,10 +160,28 @@ enum class ReviewKind(val title: String) {
     REJECTED("Not a racer?"),
     /** Passed the check line beyond the finish without being counted there – a possible missed lap. */
     MISSED("Missed?"),
+    /** Named after a car that had just crossed; lap timing gave it to the runner-up that was due. */
+    RENAMED("Re-named by lap timing"),
+    /** Named after a car that had just crossed and no other car fits: not counted for anyone. */
+    NOT_COUNTED("Not counted"),
 }
 
 @Serializable
 data class ReviewCandidate(val racerId: String, val score: Float)
+
+/**
+ * A racer in a review picture: box in picture coordinates (0..1), speed in picture widths /
+ * heights per second, and – if it crossed around then – its crossing time ([atMs], session ms),
+ * which is how the card finds out who it is now and lets a tap re-name it.
+ */
+@Serializable
+data class ReviewBox(
+    val l: Float, val t: Float, val r: Float, val b: Float,
+    val vx: Float = 0f, val vy: Float = 0f,
+    val atMs: Long? = null,
+    /** The crossing the card is about. */
+    val subject: Boolean = false,
+)
 
 /**
  * A crossing the camera wasn't sure about, with its picture, for a human verdict after (or during)
@@ -171,7 +201,18 @@ data class ReviewItem(
     val resolvedTo: String? = null,
     val speedKmh: Float? = null,
     val direction: Int = 0,
-)
+    /** Every racer in the picture (photo-finish ghosts, tap to re-name). */
+    val boxes: List<ReviewBox> = emptyList(),
+    /** Finish line x1, y1, x2, y2 in picture coordinates. */
+    val line: List<Float> = emptyList(),
+    /** Session time of the picture's frame and the time to the frame before (ms). */
+    val shotMs: Long? = null,
+    val frameMs: Float = 0f,
+    /** The user looked at it and agreed (or re-named a car on it). */
+    val checked: Boolean = false,
+) {
+    val open: Boolean get() = resolvedTo == null && !checked
+}
 
 /** One counted crossing, kept so laps can be rebuilt after a review. */
 @Serializable
@@ -217,6 +258,8 @@ data class AppSettings(
     val announceLaps: Boolean = true,
     /** Pre-release only: Pro switched on for testing (no store yet). */
     val testingProUnlocked: Boolean = false,
+    /** Settings → Timing: which part of a car is timed at the line (copied into each session). */
+    val finishEdge: FinishEdge = FinishEdge.FRONT,
 )
 
 val RacerPalette: List<Long> = listOf(

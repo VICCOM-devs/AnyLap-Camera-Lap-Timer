@@ -1,6 +1,7 @@
 package app.anylap.vision
 
 import app.anylap.data.Direction
+import app.anylap.data.FinishEdge
 import app.anylap.data.LineSpec
 import app.anylap.data.Sport
 
@@ -58,6 +59,11 @@ data class AnalyzerConfig(
      * an indoor 60 fps session locks to; the app passes the real value once exposure is locked.
      */
     val exposureS: Float = 1f / 120f,
+    /**
+     * Which part of a racer is timed: the track's centre crosses the line to *detect* a crossing,
+     * and the time is moved to the front (or rear) edge by half the racer's length over its speed.
+     */
+    val finishEdge: FinishEdge = FinishEdge.CENTRE,
 )
 
 enum class IdSource { MARKER, APPEARANCE, ONLY_RACER, NONE }
@@ -91,10 +97,30 @@ class CrossingEvent(
      * for the review tray, never for timing; [timestampNs] is the estimated finish-line time.
      */
     val rescue: Boolean = false,
+    /** The track that crossed (matches [SnapBox.trackId] in other crossings' snapshots). */
+    val trackId: Int = 0,
 )
 
-/** Small RGB picture (ARGB pixels, row by row). */
-class Snapshot(val width: Int, val height: Int, val argb: IntArray)
+/**
+ * Small RGB picture (ARGB pixels, row by row) of a crossing, with every racer that was in it:
+ * [boxes] in picture coordinates 0..1, [line] = finish line x1,y1,x2,y2 in the same coordinates,
+ * [frameNs] = time between this frame and the one before (for photo-finish ghosts).
+ */
+class Snapshot(
+    val width: Int,
+    val height: Int,
+    val argb: IntArray,
+    val boxes: List<SnapBox> = emptyList(),
+    val line: FloatArray? = null,
+    val timestampNs: Long = 0,
+    val frameNs: Long = 0,
+)
+
+/**
+ * A racer's box in a [Snapshot]: [trackId] matches [CrossingEvent.trackId]; [vx], [vy] = its speed
+ * in picture widths / heights per second (ghost positions between frames).
+ */
+class SnapBox(val trackId: Int, val l: Float, val t: Float, val r: Float, val b: Float, val vx: Float, val vy: Float)
 
 /** Normalised (0..1) box around something moving. */
 data class OverlayBox(val l: Float, val t: Float, val r: Float, val b: Float, val nearLine: Boolean)

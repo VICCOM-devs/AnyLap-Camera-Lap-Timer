@@ -46,6 +46,9 @@ import platform.UIKit.setNeedsUpdateOfSupportedInterfaceOrientations
 import platform.posix.memcpy
 
 actual object Platform {
+    // iOS is not patched per change (house rule): no beep yet.
+    actual fun beep() {}
+
     actual val name: String = "iOS"
 
     actual fun monotonicNanos(): Long = (CACurrentMediaTime() * 1_000_000_000.0).toLong()

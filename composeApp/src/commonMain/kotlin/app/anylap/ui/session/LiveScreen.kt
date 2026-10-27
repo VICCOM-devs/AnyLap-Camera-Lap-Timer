@@ -136,11 +136,12 @@ private fun LiveContent(nav: Navigator) {
 
     val engine = remember {
         RaceEngine(
-            config = config.copy(line = line, direction = direction),
+            config = config.copy(line = line, direction = direction, finishEdge = settings.finishEdge),
             racers = racers,
             scope = scope,
             onLap = { f -> if (tts.enabled) tts.say(announcement(f)) },
             onFinished = { finishedSignal = true },
+            onLight = { Platform.beep() },
         )
     }
     val race by engine.state.collectAsState()
@@ -196,6 +197,8 @@ private fun LiveContent(nav: Navigator) {
             sizeHints = racers.flatMap { it.sizeHints() },
             // Pictures of what crossed, for the "Check these" tray.
             captureSnapshots = true,
+            // Settings → Timing: front of the car (default) or the whole car past the line.
+            finishEdge = settings.finishEdge,
         )
     }
     LaunchedEffect(session, engine) {

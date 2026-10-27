@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Tune
@@ -96,6 +97,23 @@ fun SettingsScreen(nav: Navigator) {
                         colors = SwitchDefaults.colors(checkedTrackColor = RT.Accent),
                     )
                 }
+            }
+        }
+
+        item { SectionLabel("Timing", Icons.Rounded.Flag) }
+        item {
+            RtCard(Modifier.fillMaxWidth()) {
+                Text("A car finishes when", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                val edges = listOf(app.anylap.data.FinishEdge.FRONT, app.anylap.data.FinishEdge.REAR)
+                PillTabs(
+                    listOf("Front touches", "Whole car passed"),
+                    edges.indexOf(settings.finishEdge).coerceAtLeast(0),
+                    { i -> app.repo.updateSettings { it.copy(finishEdge = edges[i]) } },
+                    Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(settings.finishEdge.detail + " Used for every lap of a session, so lap times stay comparable either way.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
