@@ -177,6 +177,9 @@ class Blob(
     var tag: Int = 0
     /** Track this part grew out of (inherits its motion history if it becomes a new track); −1 = none. */
     var source: Int = -1
+    /** Signed distance (px) of the blob's nearest/farthest pixel from the finish line (for edge timing). */
+    var sMin: Float = 0f
+    var sMax: Float = 0f
 }
 
 /** Connected components (8-connected) of a 0/1 mask. Reuses its buffers between frames. */

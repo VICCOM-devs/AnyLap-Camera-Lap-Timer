@@ -94,6 +94,7 @@ class FrameAnalyzer(
         val minArea = max(12, (cfg.sport.minBlobAreaFrac * w * h).toInt())
         val line = lineGeom(cfg.line)
         val blobs = splitMerged(blobFinder!!.find(mask, minArea), f, line, cfg)
+        for (b in blobs) extents(b, line)
         updateTracks(blobs, f.timestampNs)
 
         // A lot of the frame "moving" at once is a lighting transient (auto-exposure, a cloud, a
@@ -174,7 +175,23 @@ class FrameAnalyzer(
 
     // ------------------------------------------------------------------ tracks
 
-    private class TrackPoint(val ts: Long, val x: Float, val y: Float)
+    private class TrackPoint(val ts: Long, val x: Float, val y: Float, val sMin: Float = 0f, val sMax: Float = 0f)
+
+    /** Nearest and farthest pixel of the blob from the finish line (signed side distance, px). */
+    private fun extents(b: Blob, line: LineGeom) {
+        val bf = blobFinder!!
+        var lo = Float.MAX_VALUE; var hi = -Float.MAX_VALUE
+        for (yy in b.y until b.y + b.h) for (xx in b.x until b.x + b.w) {
+            val i = yy * w + xx
+            if (mask[i].toInt() == 0) continue
+            val mine = if (b.tag != 0) owner[i] == b.tag else bf.labelAt(i) == b.label
+            if (!mine) continue
+            val sd = line.side(xx + 0.5f, yy + 0.5f)
+            if (sd < lo) lo = sd; if (sd > hi) hi = sd
+        }
+        if (lo > hi) { lo = line.side(b.cx, b.cy); hi = lo }
+        b.sMin = lo; b.sMax = hi
+    }
 
     private inner class Track(val id: Int) {
         val pts = ArrayList<TrackPoint>()
@@ -203,7 +220,7 @@ class FrameAnalyzer(
         }
 
         fun add(b: Blob, ts: Long) {
-            pts += TrackPoint(ts, b.cx, b.cy)
+            pts += TrackPoint(ts, b.cx, b.cy, b.sMin, b.sMax)
             if (pts.size > 60) pts.removeAt(0)
             bx = b.x; by = b.y; bw = b.w; bh = b.h
             tag = b.tag; area = b.area
@@ -248,7 +265,7 @@ class FrameAnalyzer(
             if (src != null && src.pts.size >= 2) {
                 val last = src.pts.last()
                 val dx = b.cx - last.x; val dy = b.cy - last.y
-                for (p in src.pts.dropLast(1)) t.pts += TrackPoint(p.ts, p.x + dx, p.y + dy)
+                for (p in src.pts.dropLast(1)) t.pts += TrackPoint(p.ts, p.x + dx, p.y + dy, p.sMin, p.sMax)
             }
             t.add(b, ts)
             tracks += t
@@ -776,7 +793,39 @@ class FrameAnalyzer(
 
     private fun lineGeom(l: LineSpec) = LineGeom(l.x1 * w, l.y1 * h, l.x2 * w, l.y2 * h)
 
-    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?, val along: Float, val area: Int, val split: Boolean, val rescue: Boolean = false)
+    private inner class Pending(val track: Track, val crossNs: Long, val direction: Int, val snapshot: Snapshot?, val along: Float, val area: Int, val split: Boolean, val rescue: Boolean = false, val centreNs: Long = crossNs) {
+        val box = OverlayBox(track.bx.toFloat() / w, track.by.toFloat() / h, (track.bx + track.bw).toFloat() / w, (track.by + track.bh).toFloat() / h, true)
+        val boxTs = track.lastTs
+        val vel: Pair<Float, Float> = track.pts.let { ps ->
+            if (ps.size < 2) 0f to 0f else {
+                val a = ps[maxOf(0, ps.size - 3)]; val b = ps.last(); val dt = ((b.ts - a.ts) / 1e9f).coerceAtLeast(1e-3f)
+                ((b.x - a.x) / w / dt) to ((b.y - a.y) / h / dt)
+            }
+        }
+    }
+
+    /**
+     * Shift from the centre's crossing time to the chosen edge's: the nose reaches the line
+     * (offset ÷ speed across the line) earlier, the tail later. Offset = blob extent ahead of / behind
+     * the centroid, averaged over the two frames around the crossing, less what the mask adds that the
+     * car doesn't have: the dilation rim and half the motion-blur streak.
+     */
+    private fun edgeShiftNs(prev: TrackPoint, cur: TrackPoint, prevSide: Float, curSide: Float, cfg: AnalyzerConfig): Long {
+        if (cfg.timingEdge == TimingEdge.CENTRE) return 0L
+        val dt = (cur.ts - prev.ts).coerceAtLeast(1L)
+        val v = (curSide - prevSide) / dt                      // px per ns across the line (signed)
+        if (abs(v) < 1e-12f) return 0L
+        val fwd = v > 0f
+        fun ahead(p: TrackPoint, c: Float) = if (fwd) p.sMax - c else c - p.sMin
+        fun behind(p: TrackPoint, c: Float) = if (fwd) c - p.sMin else p.sMax - c
+        val blurPx = abs(v) * 1e9f * cfg.exposureS
+        val trim = EDGE_DIL_PX + EDGE_BLUR_K * blurPx
+        val off = if (cfg.timingEdge == TimingEdge.FRONT) (ahead(prev, prevSide) + ahead(cur, curSide)) / 2f - trim
+                  else (behind(prev, prevSide) + behind(cur, curSide)) / 2f - trim
+        if (off <= 0f) return 0L
+        val shift = (off / abs(v)).toLong().coerceAtMost(300_000_000L)
+        return if (cfg.timingEdge == TimingEdge.FRONT) -shift else shift
+    }
 
     private fun checkCrossing(t: Track, line: LineGeom, cfg: AnalyzerConfig, frame: AnalysisFrame, unstable: Boolean) {
         val n = t.pts.size
@@ -797,9 +846,10 @@ class FrameAnalyzer(
         if (!plausibleSize(t, cfg)) return
         if (!reallyMoved(t, line, cur, s)) return
 
-        val crossNs = prev.ts + ((cur.ts - prev.ts) * f).toLong()
-        if (crossNs - t.lastCrossTs < 400_000_000L) return // wobbling on the line
-        t.lastCrossTs = crossNs
+        val centreNs = prev.ts + ((cur.ts - prev.ts) * f).toLong()
+        if (centreNs - t.lastCrossTs < 400_000_000L) return // wobbling on the line
+        t.lastCrossTs = centreNs
+        val crossNs = centreNs + edgeShiftNs(prev, cur, prevSide, s, cfg)
 
         val dir = if (prevSide < 0f) 1 else -1
         val wanted = when (cfg.direction) {
@@ -807,7 +857,7 @@ class FrameAnalyzer(
             Direction.FORWARD -> dir == 1
             Direction.REVERSE -> dir == -1
         }
-        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0)
+        if (wanted) pending += Pending(t, crossNs, dir, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0, centreNs = centreNs)
     }
 
     /**
@@ -842,9 +892,10 @@ class FrameAnalyzer(
         val dt = (cur.ts - p.ts).coerceAtLeast(1L)
         val vAcross = abs(s - line.side(p.x, p.y)) / dt   // px per ns
         if (vAcross <= 0f) return
-        val finishNs = cur.ts - (abs(s) / vAcross).toLong()
-        t.lastCrossTs = finishNs // one rescue per pass
-        pending += Pending(t, finishNs, if (s > 0f) 1 else -1, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0, rescue = true)
+        val centreFinish = cur.ts - (abs(s) / vAcross).toLong()
+        val finishNs = centreFinish + edgeShiftNs(p, cur, line.side(p.x, p.y), s, cfg)
+        t.lastCrossTs = centreFinish // one rescue per pass
+        pending += Pending(t, finishNs, if (s > 0f) 1 else -1, if (cfg.captureSnapshots) snapshot(t, frame) else null, along, t.area, t.tag != 0, rescue = true, centreNs = centreFinish)
     }
 
     /**
@@ -1018,6 +1069,11 @@ class FrameAnalyzer(
                 along = p.along,
                 split = p.split,
                 rescue = p.rescue,
+                centreNs = p.centreNs,
+                sizeRatio = if (p.area > 0) expectedArea(p.along, cfg)?.let { p.area / it } ?: 0f else 0f,
+                // box moved from the frame it was taken in to the crossing moment
+                box = p.box.let { b -> val k = (p.crossNs - p.boxTs) / 1e9f; OverlayBox(b.l + p.vel.first * k, b.t + p.vel.second * k, b.r + p.vel.first * k, b.b + p.vel.second * k, true) },
+                vx = p.vel.first, vy = p.vel.second,
             ),
         )
         // Learn how big one racer is at this point of the line (whole, confidently named blobs only).
@@ -1162,6 +1218,9 @@ class FrameAnalyzer(
         const val RESCUE_WINDOW_NS = 700_000_000L
         /** Share of a crossing's recent travel that must be across the line (0.7 ≈ within 45°). */
         const val ACROSS_FRAC = 0.7f
+        /** Edge timing: px the cleaned-up mask reaches beyond the car (net dilation), and the share of the blur streak to take off. */
+        var EDGE_DIL_PX = 3f
+        var EDGE_BLUR_K = 0.25f
         var DEBUG_SPLIT = false
         /** Frames between exposure (median luma) updates for the fingerprint. */
         const val EXPOSURE_EVERY = 15L

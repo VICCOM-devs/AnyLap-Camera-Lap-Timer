@@ -34,6 +34,8 @@ data class Unassigned(
     val speedKmh: Float?,
     /** Racer ids ordered by how likely they are. */
     val suggestions: List<String>,
+    /** The camera crossing behind it (index into the engine's crossing list), −1 = none. */
+    val autoIndex: Int = -1,
 )
 
 data class Standing(
@@ -76,7 +78,14 @@ class RaceEngine(
     private val onLap: (LapFlash) -> Unit = {},
     private val onFinished: () -> Unit = {},
 ) {
-    private class Cross(val ns: Long, val speed: Float?, val source: LapSource, val confidence: Float)
+    private class Cross(val ns: Long, val speed: Float?, val source: LapSource, val confidence: Float, val auto: Int = -1)
+
+    /** Every camera crossing of the session (named, unnamed, gated out, check-line rescues), re-decided by [LapIdentity] after each one. */
+    private class Auto(var input: LapIdentity.In, val speed: Float?, val event: CrossingEvent)
+    private val autos = ArrayList<Auto>()
+    /** Laps added or assigned by hand, kept apart from the camera's. */
+    private val handCrosses = HashMap<String, MutableList<Cross>>()
+    private val timingReviewed = HashSet<Int>()
 
     private val _state = MutableStateFlow(RaceState())
     val state: StateFlow<RaceState> = _state
@@ -144,34 +153,79 @@ class RaceEngine(
     fun onCrossing(e: CrossingEvent) {
         if (_state.value.phase != Phase.RUNNING) return
         if (e.timestampNs < startNs) return
-        val id = e.racerId
-        if (id == null || crosses[id] == null) {
+        val id = e.racerId?.takeIf { crosses[it] != null }
+        val idx = autos.size
+        autos += Auto(LapIdentity.In(e.timestampNs, id, e.candidates, e.confidence, e.split, rescue = false, gated = false, sizeRatio = e.sizeRatio), e.speedKmh, e)
+        val outs = rebuild(e.timestampNs)
+        val mine = outs.firstOrNull { it.index == idx && it.why != LapIdentity.Why.SECOND_IN_BLOB }
+        if (mine?.racer == null) {
             if (racers.isEmpty()) return
             val suggestions = e.candidates.map { it.first }.filter { s -> racers.any { it.id == s } }
             val ordered = suggestions + racers.map { it.id }.filterNot { it in suggestions }
             val uid = nextUnassignedId++
-            unassigned += Unassigned(uid, e.timestampNs, (e.timestampNs - startNs) / 1_000_000, e.speedKmh, ordered)
-            review(e, ReviewKind.UNKNOWN, decided = null, unassignedId = uid)
-            publish(null)
-            return
+            unassigned += Unassigned(uid, e.timestampNs, (e.timestampNs - startNs) / 1_000_000, e.speedKmh, ordered, idx)
+            if (mine?.why != LapIdentity.Why.NOT_COUNTED) review(e, ReviewKind.UNKNOWN, decided = null, unassignedId = uid)
+        } else if (mine.why == LapIdentity.Why.ENGINE) {
+            // Things a human should glance at afterwards: a split pair, or a name that only just won.
+            when {
+                e.split -> review(e, ReviewKind.SPLIT, decided = mine.racer)
+                e.source == IdSource.APPEARANCE && e.confidence < LOW_MARGIN -> review(e, ReviewKind.LOW_MARGIN, decided = mine.racer)
+            }
         }
-        val source = when (e.source) {
-            IdSource.MARKER -> LapSource.MARKER
-            else -> LapSource.AUTO
-        }
-        // Things a human should glance at afterwards: a split pair, or a name that only just won.
-        when {
-            e.split -> review(e, ReviewKind.SPLIT, decided = id)
-            e.source == IdSource.APPEARANCE && e.confidence < LOW_MARGIN -> review(e, ReviewKind.LOW_MARGIN, decided = id)
-        }
-        add(id, Cross(e.timestampNs, e.speedKmh, source, e.confidence))
+        afterRebuild(outs, flashFor = mine?.racer?.let { it to e.timestampNs })
     }
 
-    /** A crossing the appearance gate turned down: kept with its picture so a missed car can be rescued. */
+    /** A crossing the appearance gate turned down, or a check-line rescue: kept, and counted if lap timing says a due car owns it. */
     fun onRejected(e: CrossingEvent) {
         if (_state.value.phase != Phase.RUNNING) return
-        if (e.timestampNs < startNs || e.snapshot == null) return
-        review(e, if (e.rescue) ReviewKind.MISSED else ReviewKind.REJECTED, decided = null)
+        if (e.timestampNs < startNs) return
+        val idx = autos.size
+        autos += Auto(LapIdentity.In(e.timestampNs, null, e.candidates, e.confidence, e.split, rescue = e.rescue, gated = !e.rescue, sizeRatio = e.sizeRatio), e.speedKmh, e)
+        val outs = rebuild(e.timestampNs)
+        val mine = outs.firstOrNull { it.index == idx }
+        if (mine?.racer == null && e.snapshot != null) review(e, if (e.rescue) ReviewKind.MISSED else ReviewKind.REJECTED, decided = null)
+        afterRebuild(outs, flashFor = mine?.racer?.let { it to e.timestampNs })
+    }
+
+    /** Re-decides every camera crossing with [LapIdentity] and rebuilds the per-racer crossing lists. */
+    private fun rebuild(nowNs: Long): List<LapIdentity.Out> {
+        val outs = LapIdentity.solve(autos.map { it.input }, racers.map { it.id }, if (isRace) startNs else null, minLapNs, nowNs)
+        racers.forEach { r -> crosses[r.id] = ArrayList(handCrosses[r.id] ?: emptyList()) }
+        for (o in outs.sortedBy { it.ns }) {
+            val rid = o.racer ?: continue
+            val list = crosses[rid] ?: continue
+            if (list.any { kotlin.math.abs(it.ns - o.ns) < minLapNs }) continue      // double trigger
+            if (isRace && o.ns - startNs < minLapNs / 2) continue                      // still on the grid
+            val a = autos[o.index]
+            list += Cross(o.ns, a.speed, if (a.event.source == IdSource.MARKER) LapSource.MARKER else LapSource.AUTO, if (o.why == LapIdentity.Why.ENGINE) a.event.confidence else 0f, o.index)
+        }
+        crosses.values.forEach { it.sortBy { c -> c.ns } }
+        return outs
+    }
+
+    private fun afterRebuild(outs: List<LapIdentity.Out>, flashFor: Pair<String, Long>?) {
+        // the tray: every crossing lap timing decided (once per crossing, with the picture taken at the line)
+        for (o in outs) {
+            if (o.why !in TIMING_KINDS || !timingReviewed.add(o.index)) continue
+            review(autos[o.index].event, ReviewKind.TIMING, decided = o.racer)
+        }
+        // unknowns that lap timing has since given to a car leave the "assign" list
+        val countedAutos = crosses.values.flatten().map { it.auto }.toSet()
+        unassigned.removeAll { it.autoIndex >= 0 && it.autoIndex in countedAutos }
+        var flash: LapFlash? = null
+        if (flashFor != null) {
+            val (racerId, ns) = flashFor
+            val laps = lapsFor(racerId)
+            val newLap = laps.lastOrNull { it.atMs == (ns - startNs) / 1_000_000 }
+            if (newLap != null) {
+                val racer = racers.first { it.id == racerId }
+                val best = laps.minOf { it.timeMs }
+                val overall = allLaps().minOfOrNull { it.timeMs }
+                flash = LapFlash(racer, newLap, 0, personalBest = newLap.timeMs == best && laps.size > 1, fastest = newLap.timeMs == overall)
+            }
+        }
+        publish(flash)
+        if (isRace && racers.all { isFinished(it.id) }) finish()
     }
 
     private val reviews = ArrayList<ReviewItem>()
@@ -212,49 +266,43 @@ class RaceEngine(
         val u = unassigned.firstOrNull { it.id == unassignedId } ?: return
         unassigned.remove(u)
         resolveReview(unassignedId, racerId)
-        if (!add(racerId, Cross(u.elapsedNs, u.speedKmh, LapSource.ASSIGNED, 1f))) publish(null)
+        if (u.autoIndex >= 0) lock(u.autoIndex, racerId)
+        else {
+            handCrosses.getOrPut(racerId) { ArrayList() } += Cross(u.elapsedNs, u.speedKmh, LapSource.ASSIGNED, 1f)
+            afterRebuild(rebuild(Platform.monotonicNanos()), null)
+        }
     }
 
     fun dismiss(unassignedId: Long) {
+        val u = unassigned.firstOrNull { it.id == unassignedId }
         unassigned.removeAll { it.id == unassignedId }
         resolveReview(unassignedId, "")
-        publish(null)
+        if (u != null && u.autoIndex >= 0) lock(u.autoIndex, "") else publish(null)
+    }
+
+    /** A human verdict on a camera crossing: a racer id, or "" = not a car. Lap timing re-decides the rest around it. */
+    private fun lock(autoIndex: Int, to: String) {
+        val a = autos.getOrNull(autoIndex) ?: return
+        val i = a.input
+        a.input = LapIdentity.In(i.ns, i.named, i.cands, i.margin, i.split, i.rescue, i.gated, i.sizeRatio, locked = to)
+        afterRebuild(rebuild(Platform.monotonicNanos()), null)
     }
 
     /** Manual lap at this moment (e.g. the camera missed one). */
     fun addManualLap(racerId: String) {
         if (_state.value.phase != Phase.RUNNING) return
-        add(racerId, Cross(Platform.monotonicNanos(), null, LapSource.MANUAL, 1f))
+        val c = Cross(Platform.monotonicNanos(), null, LapSource.MANUAL, 1f)
+        handCrosses.getOrPut(racerId) { ArrayList() } += c
+        afterRebuild(rebuild(c.ns), racerId to c.ns)
     }
 
     fun removeLastLap(racerId: String) {
-        val list = crosses[racerId] ?: return
-        if (list.isEmpty()) return
-        list.removeAt(list.lastIndex)
-        publish(null)
-    }
-
-    /** @return true if the crossing was used. */
-    private fun add(racerId: String, c: Cross): Boolean {
-        val list = crosses[racerId] ?: return false
-        if (isFinished(racerId) && (list.lastOrNull()?.ns ?: 0) < c.ns) return false
-        if (list.any { kotlin.math.abs(it.ns - c.ns) < minLapNs }) return false // double trigger
-        if (isRace && c.ns - startNs < minLapNs / 2) return false // still on the grid
-        list += c
-        list.sortBy { it.ns }
-
-        val laps = lapsFor(racerId)
-        val newLap = laps.lastOrNull { it.atMs == (c.ns - startNs) / 1_000_000 }
-        val flash = if (newLap != null) {
-            val racer = racers.first { it.id == racerId }
-            val best = laps.minOf { it.timeMs }
-            val overall = allLaps().minOfOrNull { it.timeMs }
-            LapFlash(racer, newLap, 0, personalBest = newLap.timeMs == best && laps.size > 1, fastest = newLap.timeMs == overall)
-        } else null
-        publish(flash)
-
-        if (isRace && racers.all { isFinished(it.id) }) finish()
-        return true
+        val last = crosses[racerId]?.lastOrNull() ?: return
+        if (last.auto >= 0) lock(last.auto, "")
+        else {
+            handCrosses[racerId]?.removeAll { it.ns == last.ns }
+            afterRebuild(rebuild(Platform.monotonicNanos()), null)
+        }
     }
 
     // ------------------------------------------------------------------ derived
@@ -395,5 +443,9 @@ class RaceEngine(
         const val LOW_MARGIN = 0.12f
         /** Pictures kept per session. */
         const val MAX_REVIEWS = 60
+        private val TIMING_KINDS = setOf(
+            LapIdentity.Why.RENAMED_BY_TIMING, LapIdentity.Why.NAMED_BY_TIMING, LapIdentity.Why.CHECK_LINE,
+            LapIdentity.Why.SECOND_IN_BLOB, LapIdentity.Why.MISSING_LAP, LapIdentity.Why.NOT_COUNTED,
+        )
     }
 }

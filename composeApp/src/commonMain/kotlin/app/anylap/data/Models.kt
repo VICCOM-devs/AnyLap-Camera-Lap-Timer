@@ -148,6 +148,8 @@ enum class ReviewKind(val title: String) {
     REJECTED("Not a racer?"),
     /** Passed the check line beyond the finish without being counted there – a possible missed lap. */
     MISSED("Missed?"),
+    /** Named, renamed or added by the car's lap timing (a car can't lap in half its time; a due car owns a doubtful crossing). */
+    TIMING("Decided by lap timing"),
 }
 
 @Serializable

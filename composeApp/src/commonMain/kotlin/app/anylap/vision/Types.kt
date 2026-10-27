@@ -58,7 +58,12 @@ data class AnalyzerConfig(
      * an indoor 60 fps session locks to; the app passes the real value once exposure is locked.
      */
     val exposureS: Float = 1f / 120f,
+    /** Which part of a racer times a crossing: the nose touching the line (motorsport rule, default), its centre, or its tail clearing the line. */
+    val timingEdge: TimingEdge = TimingEdge.FRONT,
 )
+
+/** Settings → Timing → "Finish counts when": the front touches the line / the whole car has passed. */
+enum class TimingEdge { FRONT, CENTRE, REAR }
 
 enum class IdSource { MARKER, APPEARANCE, ONLY_RACER, NONE }
 
@@ -91,6 +96,17 @@ class CrossingEvent(
      * for the review tray, never for timing; [timestampNs] is the estimated finish-line time.
      */
     val rescue: Boolean = false,
+    /** When the racer's centre crossed (the [timestampNs] is the chosen [TimingEdge]). */
+    val centreNs: Long = timestampNs,
+    /**
+     * Blob size at the crossing ÷ one racer's expected size there (0 = no size model yet). Clearly
+     * above 1 (≥ 1.5) means more than one racer was in the blob – one of them may be uncounted.
+     */
+    val sizeRatio: Float = 0f,
+    /** The racer's box (0..1) in the frame where it crossed, and its velocity (frame widths/heights per second) – for Check-card overlays and photo-finish ghosts. */
+    val box: OverlayBox? = null,
+    val vx: Float = 0f,
+    val vy: Float = 0f,
 )
 
 /** Small RGB picture (ARGB pixels, row by row). */
