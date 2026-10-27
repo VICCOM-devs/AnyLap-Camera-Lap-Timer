@@ -921,7 +921,11 @@ class FrameAnalyzer(
         val (alt, _) = maxAssignment(sc)
         sc[0][col] = saved
         val margin = total - alt
-        return (if (own >= MIN_SIMILARITY && margin >= MIN_MARGIN) free[col].id else null) to margin
+        // A piece cut out of a merged blob is only named when it clearly looks like the racer it is
+        // given: a stray piece (a white body cut from its coloured roof) resembles the look-alike
+        // racer only weakly, and a lap for the wrong car is worse than a crossing left for review.
+        val needed = if (p.split) SPLIT_WEAK else MIN_SIMILARITY
+        return (if (own >= needed && margin >= MIN_MARGIN) free[col].id else null) to margin
     }
 
     /** Maximum-weight assignment of every row to a distinct column (rows ≤ columns): Hungarian, O(n²m). */
@@ -1135,6 +1139,8 @@ class FrameAnalyzer(
         const val SPLIT_FACTOR = 1.7f
         /** Each part of a size-based split must look at least this much like some racer. */
         const val SPLIT_PART_MATCH = 0.5f
+        /** A split part is named only when it matches its racer at least this well (else left for review). */
+        var SPLIT_WEAK = 0.75f
         /** A pixel is a gap (valley) when it is weaker than both neighbours two pixels out by this factor. */
         const val VALLEY_RATIO = 1.6f
         /** A slot between racers is darker than the ground by at least this (grey levels)… */

@@ -50,6 +50,21 @@ elif what in ('form', 'formfull'):
         first = int(os.path.basename(files[0])[:4])
         for c in t['cars']: c['crossIdx'] = c['crossFrame'] - first
         write(f'form_{tag}{cam}_{name}', [prep(f) for f in files], t, full=files if what == 'formfull' else None)
+elif what == 'cars10':
+    src = f'{B}/form/cars10'
+    write('cars10_empty', [f'{src}/empty.png'], {})
+    for d in sorted(glob.glob(f'{src}/*/')):
+        d = d.rstrip('/')
+        if not os.path.exists(f'{d}/truth.json'): continue
+        t = json.load(open(f'{d}/truth.json'))
+        files = sorted(glob.glob(f'{d}/*.png'))
+        if not files: continue
+        first = int(os.path.basename(files[0])[:4])
+        t['crossIdx'] = t['crossFrame'] - first
+        t['car'] = t['car'].replace(' ', '_')
+        name = f"cars10_cal_{t['car']}_{t['speed']}" if t['kind'] == 'cal' else f"cars10_pass_{t['car']}_{t['lane']}_{t['speed']}"
+        if os.path.exists(f'{OUT}/{name}.yuv') and os.path.getmtime(f'{OUT}/{name}.yuv') > os.path.getmtime(files[-1]): continue
+        write(name, files, t)
 else:  # cal or pass dirs
     for d in sorted(glob.glob(f'{B}/{what}/*')):
         t = json.load(open(f'{d}/truth.json'))
