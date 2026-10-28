@@ -1,5 +1,6 @@
 package app.anylap.pro
 
+import app.anylap.i18n.tr
 import app.anylap.data.Repository
 import app.anylap.data.Session
 import app.anylap.data.Sport
@@ -23,14 +24,14 @@ enum class Tier {
 
 /** Things Pro unlocks. Used to tailor the paywall headline to what the user just tried to do. */
 enum class ProFeature(val headline: String, val body: String) {
-    MORE_RACERS("Race the whole grid", "Free races up to ${Limits.FREE_RACERS} at once. Pro lifts that to the full grid for every sport."),
-    HISTORY("Keep every race", "Free keeps your last ${Limits.FREE_HISTORY} sessions. Pro keeps all of them – nothing you already timed is ever deleted."),
-    CHARTS("See your progress", "Lap-time trends, consistency and speed charts across every session you've timed."),
-    BIBS("Print marker bibs", "Printable bibs with markers the camera reads from metres away – the most reliable way to tell racers apart."),
-    CLEAN_SHARE("Share without branding", "Share results without the \"Timed with AnyLap\" line."),
-    EVENTS("Run a race day", "Heats, a points table and a final seeded from the heats – for clubs, birthdays and track days."),
-    LIVE("Live timing screen", "Friends follow the timing tower live on their own phones, no app needed."),
-    SYNC("Your races on every phone", "Sign in to back up every session, time on a friend's phone and have the laps land in your own history."),
+    MORE_RACERS(tr("Race the whole grid"), tr("Free races up to {0} at once. Pro lifts that to the full grid for every sport.", Limits.FREE_RACERS)),
+    HISTORY(tr("Keep every race"), tr("Free keeps your last {0} sessions. Pro keeps all of them – nothing you already timed is ever deleted.", Limits.FREE_HISTORY)),
+    CHARTS(tr("See your progress"), tr("Lap-time trends, consistency and speed charts across every session you've timed.")),
+    BIBS(tr("Print marker bibs"), tr("Printable bibs with markers the camera reads from metres away – the most reliable way to tell racers apart.")),
+    CLEAN_SHARE(tr("Share without branding"), tr("Share results without the \"Timed with AnyLap\" line.")),
+    EVENTS(tr("Run a race day"), tr("Heats, a points table and a final seeded from the heats – for clubs, birthdays and track days.")),
+    LIVE(tr("Live timing screen"), tr("Friends follow the timing tower live on their own phones, no app needed.")),
+    SYNC(tr("Your races on every phone"), tr("Sign in to back up every session, time on a friend's phone and have the laps land in your own history.")),
 }
 
 /**
@@ -61,9 +62,9 @@ object Limits {
 
 /** Store products. Prices here are placeholders shown until the store reports localised prices. */
 enum class Plan(val productId: String, val title: String, val placeholderPrice: String, val note: String) {
-    YEARLY("anylap_pro_yearly", "Yearly", "€24.99 / year", "7-day free trial · best value"),
-    MONTHLY("anylap_pro_monthly", "Monthly", "€3.49 / month", "No trial · cancel anytime"),
-    LIFETIME("anylap_pro_lifetime", "Lifetime", "€39.99 once", "Pay once, keep it forever"),
+    YEARLY("anylap_pro_yearly", tr("Yearly"), tr("€24.99 / year"), tr("7-day free trial · best value")),
+    MONTHLY("anylap_pro_monthly", tr("Monthly"), tr("€3.49 / month"), tr("No trial · cancel anytime")),
+    LIFETIME("anylap_pro_lifetime", tr("Lifetime"), tr("€39.99 once"), tr("Pay once, keep it forever")),
 }
 
 sealed interface PurchaseResult {

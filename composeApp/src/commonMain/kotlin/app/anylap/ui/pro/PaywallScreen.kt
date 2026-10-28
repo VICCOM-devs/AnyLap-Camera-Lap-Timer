@@ -1,5 +1,6 @@
 package app.anylap.ui.pro
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -54,14 +55,14 @@ import kotlinx.coroutines.launch
 private data class Row3(val label: String, val free: String?, val pro: String)
 
 private val comparison = listOf(
-    Row3("Lap timing, speed, live leaderboard", "✓", "✓"),
-    Row3("Voice announcements & slow-mo replays", "✓", "✓"),
-    Row3("Racers per session", "${Limits.FREE_RACERS}", "Full grid"),
-    Row3("Saved sessions", "Last ${Limits.FREE_HISTORY}", "Unlimited"),
-    Row3("Trend, consistency & speed charts", null, "✓"),
-    Row3("Printable marker bibs", null, "✓"),
-    Row3("Share without branding", null, "✓"),
-    Row3("Accounts, cloud sync & events", null, "Coming"),
+    Row3(tr("Lap timing, speed, live leaderboard"), "✓", "✓"),
+    Row3(tr("Voice announcements & slow-mo replays"), "✓", "✓"),
+    Row3(tr("Racers per session"), "${Limits.FREE_RACERS}", tr("Full grid")),
+    Row3(tr("Saved sessions"), tr("Last {0}", Limits.FREE_HISTORY), tr("Unlimited")),
+    Row3(tr("Trend, consistency & speed charts"), null, "✓"),
+    Row3(tr("Printable marker bibs"), null, "✓"),
+    Row3(tr("Share without branding"), null, "✓"),
+    Row3(tr("Accounts, cloud sync & events"), null, tr("Coming")),
 )
 
 @Composable
@@ -73,7 +74,7 @@ fun PaywallScreen(nav: Navigator, feature: ProFeature?) {
     var plan by remember { mutableStateOf(Plan.YEARLY) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    ScreenScaffold("AnyLap Pro", onBack = { nav.pop() }, bottomPadding = 40.dp) {
+    ScreenScaffold(tr("AnyLap Pro"), onBack = { nav.pop() }, bottomPadding = 40.dp) {
         item {
             val shape = RoundedCornerShape(26.dp)
             Column(
@@ -85,25 +86,25 @@ fun PaywallScreen(nav: Navigator, feature: ProFeature?) {
                 ProBadge()
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    if (tier.isPro) "You're on Pro" else (feature?.headline ?: "Time like a pro"),
+                    if (tier.isPro) tr("You're on Pro") else (feature?.headline ?: tr("Time like a pro")),
                     style = MaterialTheme.typography.headlineMedium,
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    if (tier.isPro) "Everything is unlocked. Thanks for supporting AnyLap."
-                    else feature?.body ?: "Unlimited history, the full grid, charts and printable bibs – for every sport.",
+                    if (tier.isPro) tr("Everything is unlocked. Thanks for supporting AnyLap.")
+                    else feature?.body ?: tr("Unlimited history, the full grid, charts and printable bibs – for every sport."),
                     style = MaterialTheme.typography.bodyMedium, color = RT.TextDim,
                 )
             }
         }
 
-        item { SectionLabel("Free vs Pro") }
+        item { SectionLabel(tr("Free vs Pro")) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
                     Spacer(Modifier.weight(1f))
-                    Text("Free", style = MaterialTheme.typography.labelMedium, color = RT.TextDim, modifier = Modifier.width(72.dp), textAlign = TextAlign.Center)
-                    Text("Pro", style = MaterialTheme.typography.labelMedium, color = RT.Gold, modifier = Modifier.width(72.dp), textAlign = TextAlign.Center)
+                    Text(tr("Free"), style = MaterialTheme.typography.labelMedium, color = RT.TextDim, modifier = Modifier.width(72.dp), textAlign = TextAlign.Center)
+                    Text(tr("Pro"), style = MaterialTheme.typography.labelMedium, color = RT.Gold, modifier = Modifier.width(72.dp), textAlign = TextAlign.Center)
                 }
                 comparison.forEach { r ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -116,7 +117,7 @@ fun PaywallScreen(nav: Navigator, feature: ProFeature?) {
         }
 
         if (!tier.isPro) {
-            item { SectionLabel("Choose a plan") }
+            item { SectionLabel(tr("Choose a plan")) }
             Plan.entries.forEach { p ->
                 item(key = p.name) {
                     PlanCard(p, billing.price(p) ?: p.placeholderPrice, p == plan) { plan = p }
@@ -126,16 +127,16 @@ fun PaywallScreen(nav: Navigator, feature: ProFeature?) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     PrimaryButton(
                         when {
-                            !billing.storeAvailable -> "Store opens at launch"
-                            plan == Plan.YEARLY -> "Start free trial"
-                            else -> "Continue"
+                            !billing.storeAvailable -> tr("Store opens at launch")
+                            plan == Plan.YEARLY -> tr("Start free trial")
+                            else -> tr("Continue")
                         },
                         onClick = {
                             scope.launch {
                                 message = when (val r = billing.purchase(plan)) {
                                     PurchaseResult.Success -> null
                                     PurchaseResult.Cancelled -> null
-                                    PurchaseResult.StoreUnavailable -> "Purchases open when AnyLap is in the stores."
+                                    PurchaseResult.StoreUnavailable -> tr("Purchases open when AnyLap is in the stores.")
                                     is PurchaseResult.Failed -> r.message
                                 }
                             }
@@ -145,11 +146,11 @@ fun PaywallScreen(nav: Navigator, feature: ProFeature?) {
                         enabled = billing.storeAvailable,
                     )
                     TextButton(onClick = {
-                        scope.launch { message = if (billing.restore()) "Purchase restored." else "No previous purchase found." }
-                    }) { Text("Restore purchases", color = RT.TextDim) }
+                        scope.launch { message = if (billing.restore()) tr("Purchase restored.") else tr("No previous purchase found.") }
+                    }) { Text(tr("Restore purchases"), color = RT.TextDim) }
                     message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = RT.Amber, textAlign = TextAlign.Center) }
                     Text(
-                        "Subscriptions renew automatically until cancelled in your store account. Nothing you've timed is ever deleted if Pro ends – older sessions are just hidden again.",
+                        tr("Subscriptions renew automatically until cancelled in your store account. Nothing you've timed is ever deleted if Pro ends – older sessions are just hidden again."),
                         style = MaterialTheme.typography.bodySmall, color = RT.TextFaint, textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 6.dp),
                     )
@@ -158,13 +159,13 @@ fun PaywallScreen(nav: Navigator, feature: ProFeature?) {
         }
 
         if (billing is LocalBilling) {
-            item { SectionLabel("Pre-release testing") }
+            item { SectionLabel(tr("Pre-release testing")) }
             item {
                 RtCard(Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Unlock Pro for testing", style = MaterialTheme.typography.titleSmall)
-                            Text("Testers only. Goes away when store purchases are live.", style = MaterialTheme.typography.bodySmall)
+                            Text(tr("Unlock Pro for testing"), style = MaterialTheme.typography.titleSmall)
+                            Text(tr("Testers only. Goes away when store purchases are live."), style = MaterialTheme.typography.bodySmall)
                         }
                         Switch(
                             checked = tier.isPro,
@@ -182,8 +183,8 @@ fun PaywallScreen(nav: Navigator, feature: ProFeature?) {
 private fun Cell(value: String?, color: Color) {
     Box(Modifier.width(72.dp), contentAlignment = Alignment.Center) {
         when (value) {
-            null -> Icon(Icons.Rounded.Remove, "Not included", tint = RT.TextFaint, modifier = Modifier.size(16.dp))
-            "✓" -> Icon(Icons.Rounded.Check, "Included", tint = color, modifier = Modifier.size(18.dp))
+            null -> Icon(Icons.Rounded.Remove, tr("Not included"), tint = RT.TextFaint, modifier = Modifier.size(16.dp))
+            "✓" -> Icon(Icons.Rounded.Check, tr("Included"), tint = color, modifier = Modifier.size(18.dp))
             else -> Text(value, style = MaterialTheme.typography.labelMedium, color = color, textAlign = TextAlign.Center)
         }
     }

@@ -1,5 +1,7 @@
 package app.anylap.engine
 
+import app.anylap.i18n.tr
+import app.anylap.i18n.trn
 import app.anylap.platform.Platform
 import app.anylap.data.CrossRec
 import app.anylap.data.Lap
@@ -274,7 +276,7 @@ class RaceEngine(
         val counted = crossesOf(id).map { (it.ns - startNs) / 1_000_000 }.minByOrNull { kotlin.math.abs(it - r.atMs) } ?: return null
         if (kotlin.math.abs(counted - r.atMs) > 150) return null
         val name = racers.firstOrNull { it.id == id }?.name ?: return null
-        return "A second piece of $name, cut out of the touching cars – $name is already counted at ${Format.lap(counted)}. Nothing to fix."
+        return tr("A second piece of {0}, cut out of the touching cars – {1} is already counted at {2}. Nothing to fix.", name, name, Format.lap(counted))
     }
 
     /** Pictures of the Check cards, in memory only (colour planes + foreground for [CardFit]). */
@@ -484,14 +486,14 @@ class RaceEngine(
         val standings = ordered.mapIndexed { i, row ->
             val best = row.laps.minOfOrNull { it.timeMs }
             val gap = when {
-                i == 0 || leader == null -> if (isRace) "Leader" else (if (best != null) "Fastest" else "—")
+                i == 0 || leader == null -> if (isRace) tr("Leader") else (if (best != null) tr("Fastest") else "—")
                 !isRace -> {
                     val lb = leader.laps.minOfOrNull { it.timeMs }
                     if (best != null && lb != null) "+" + Format.lap(best - lb) else "—"
                 }
                 row.laps.size < leader.laps.size -> {
                     val d = leader.laps.size - row.laps.size
-                    "+$d lap" + if (d > 1) "s" else ""
+                    trn(d, "+{0} lap", "+{0} laps")
                 }
                 else -> {
                     val k = row.laps.size

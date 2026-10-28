@@ -1,5 +1,6 @@
 package app.anylap.ui.account
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -77,26 +78,26 @@ fun AccountScreen(nav: Navigator) {
         }
     }
 
-    ScreenScaffold("Account & sync", onBack = { nav.pop() }, bottomPadding = 40.dp) {
+    ScreenScaffold(tr("Account & sync"), onBack = { nav.pop() }, bottomPadding = 40.dp) {
         if (!tier.isPro) {
             item { ProLockCard(nav, ProFeature.SYNC) }
         }
 
-        item { SectionLabel("Account", Icons.Rounded.Person) }
+        item { SectionLabel(tr("Account"), Icons.Rounded.Person) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 when (val a = account) {
-                    Account.Loading -> Text("Connecting…", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim)
+                    Account.Loading -> Text(tr("Connecting…"), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim)
                     Account.SignedOut -> {
-                        Text("Sync is off", style = MaterialTheme.typography.titleMedium)
+                        Text(tr("Sync is off"), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Everything stays on this phone. Turn on sync to back up your racers and sessions and use them on other phones.",
+                            tr("Everything stays on this phone. Turn on sync to back up your racers and sessions and use them on other phones."),
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Spacer(Modifier.height(12.dp))
                         PrimaryButton(
-                            "Turn on sync",
-                            { run({ cloud.startGuest() }, "Sync is on.") },
+                            tr("Turn on sync"),
+                            { run({ cloud.startGuest() }, tr("Sync is on.")) },
                             Modifier.fillMaxWidth(),
                             icon = Icons.Rounded.CloudSync,
                             enabled = tier.isPro && !busy,
@@ -104,20 +105,20 @@ fun AccountScreen(nav: Navigator) {
                     }
                     is Account.Guest -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Syncing as guest", style = MaterialTheme.typography.titleMedium)
-                            Tag("This phone only", RT.Amber)
+                            Text(tr("Syncing as guest"), style = MaterialTheme.typography.titleMedium)
+                            Tag(tr("This phone only"), RT.Amber)
                         }
                         Text(
-                            "Add your email to sign in on other phones – and to get everything back if you lose this one.",
+                            tr("Add your email to sign in on other phones – and to get everything back if you lose this one."),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                     is Account.WithEmail -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(a.email, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f, fill = false))
-                            Tag("Signed in", RT.Green)
+                            Tag(tr("Signed in"), RT.Green)
                         }
-                        Text("Sign in with this email on any phone to get your racers and history.", style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Sign in with this email on any phone to get your racers and history."), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -128,30 +129,30 @@ fun AccountScreen(nav: Navigator) {
             item {
                 RtCard(Modifier.fillMaxWidth()) {
                     Text(
-                        if (account is Account.Guest) "Add email" else "Already have an account?",
+                        if (account is Account.Guest) tr("Add email") else tr("Already have an account?"),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Spacer(Modifier.height(8.dp))
-                    RtTextField(email, { email = it }, "Email", keyboardType = KeyboardType.Email, enabled = !codeSent)
+                    RtTextField(email, { email = it }, tr("Email"), keyboardType = KeyboardType.Email, enabled = !codeSent)
                     Spacer(Modifier.height(10.dp))
                     if (!codeSent) {
-                        SecondaryButton("Send code", {
-                            if (!email.contains('@')) { message = "Enter a valid email."; return@SecondaryButton }
+                        SecondaryButton(tr("Send code"), {
+                            if (!email.contains('@')) { message = tr("Enter a valid email."); return@SecondaryButton }
                             scope.launch {
                                 busy = true
                                 val r = cloud.requestEmailCode(email)
                                 busy = false
-                                r.onSuccess { linking = it; codeSent = true; message = "We sent a 6-digit code to $email." }
+                                r.onSuccess { linking = it; codeSent = true; message = tr("We sent a 6-digit code to {0}.", email) }
                                     .onFailure { message = friendlyAuthError(it) }
                             }
                         }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Email)
                     } else {
-                        RtTextField(code, { code = it.filter(Char::isDigit).take(8) }, "Code", keyboardType = KeyboardType.Number)
+                        RtTextField(code, { code = it.filter(Char::isDigit).take(8) }, tr("Code"), keyboardType = KeyboardType.Number)
                         Spacer(Modifier.height(10.dp))
-                        PrimaryButton("Verify", {
-                            run({ cloud.verifyEmailCode(email, code, linking).onSuccess { codeSent = false; code = "" } }, "Email confirmed.")
+                        PrimaryButton(tr("Verify"), {
+                            run({ cloud.verifyEmailCode(email, code, linking).onSuccess { codeSent = false; code = "" } }, tr("Email confirmed."))
                         }, Modifier.fillMaxWidth(), enabled = code.length >= 6 && !busy)
-                        TextButton(onClick = { codeSent = false; code = "" }) { Text("Use another email", color = RT.TextDim) }
+                        TextButton(onClick = { codeSent = false; code = "" }) { Text(tr("Use another email"), color = RT.TextDim) }
                     }
                 }
             }
@@ -160,50 +161,50 @@ fun AccountScreen(nav: Navigator) {
         if (account.userId != null) {
             item {
                 RtCard(Modifier.fillMaxWidth()) {
-                    Text("Display name", style = MaterialTheme.typography.titleSmall)
-                    Text("Shown to friends when you share a racer or time their laps.", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Display name"), style = MaterialTheme.typography.titleSmall)
+                    Text(tr("Shown to friends when you share a racer or time their laps."), style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(8.dp))
-                    RtTextField(name, { name = it.take(40) }, "Name")
+                    RtTextField(name, { name = it.take(40) }, tr("Name"))
                     Spacer(Modifier.height(10.dp))
-                    SecondaryButton("Save name", { run({ cloud.setDisplayName(name) }, "Saved.") }, Modifier.fillMaxWidth())
+                    SecondaryButton(tr("Save name"), { run({ cloud.setDisplayName(name) }, tr("Saved.")) }, Modifier.fillMaxWidth())
                 }
             }
 
-            item { SectionLabel("Sync", Icons.Rounded.CloudDone) }
+            item { SectionLabel(tr("Sync"), Icons.Rounded.CloudDone) }
             item {
                 RtCard(Modifier.fillMaxWidth()) {
                     Text(
                         when {
-                            status.running -> "Syncing…"
+                            status.running -> tr("Syncing…")
                             status.lastSyncAt != null -> "Last synced " + Platform.formatDate(status.lastSyncAt!!, "d MMM · HH:mm")
-                            else -> "Not synced yet"
+                            else -> tr("Not synced yet")
                         },
                         style = MaterialTheme.typography.titleSmall,
                     )
                     status.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = RT.Amber) }
                     Text(
-                        "Racers and lap data sync automatically. Videos stay on the phone that recorded them.",
+                        tr("Racers and lap data sync automatically. Videos stay on the phone that recorded them."),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(10.dp))
-                    SecondaryButton("Sync now", { cloud.syncSoon() }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Sync)
+                    SecondaryButton(tr("Sync now"), { cloud.syncSoon() }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Sync)
                 }
             }
 
-            item { SectionLabel("Your data") }
+            item { SectionLabel(tr("Your data")) }
             item {
                 RtCard(Modifier.fillMaxWidth()) {
-                    SecondaryButton("Export my data", {
+                    SecondaryButton(tr("Export my data"), {
                         scope.launch {
                             cloud.exportData().onSuccess { Platform.shareFile(it, "application/json", "AnyLap data export") }
                                 .onFailure { message = friendlyAuthError(it) }
                         }
                     }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Download)
                     Spacer(Modifier.height(8.dp))
-                    SecondaryButton("Sign out", { run({ cloud.signOut() }, "Signed out. Your data is still on this phone.") }, Modifier.fillMaxWidth(), icon = Icons.AutoMirrored.Rounded.Logout)
+                    SecondaryButton(tr("Sign out"), { run({ cloud.signOut() }, tr("Signed out. Your data is still on this phone.")) }, Modifier.fillMaxWidth(), icon = Icons.AutoMirrored.Rounded.Logout)
                     Spacer(Modifier.height(8.dp))
                     TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Delete my cloud data", color = RT.Accent)
+                        Text(tr("Delete my cloud data"), color = RT.Accent)
                     }
                 }
             }
@@ -215,7 +216,7 @@ fun AccountScreen(nav: Navigator) {
         item {
             Column {
                 Text(
-                    "Stored in the EU (Stockholm). We keep your racers' names, numbers, colours and appearance data, and your lap times – no video, no location, no contacts.",
+                    tr("Stored in the EU (Stockholm). We keep your racers' names, numbers, colours and appearance data, and your lap times – no video, no location, no contacts."),
                     style = MaterialTheme.typography.bodySmall, color = RT.TextFaint,
                 )
             }
@@ -227,20 +228,20 @@ fun AccountScreen(nav: Navigator) {
             onDismissRequest = { confirmDelete = false },
             containerColor = RT.Surface2,
             icon = { androidx.compose.material3.Icon(Icons.Rounded.Delete, null, tint = RT.Accent) },
-            title = { Text("Delete cloud data?") },
+            title = { Text(tr("Delete cloud data?")) },
             text = {
                 Text(
-                    "Removes your racers, sessions and profile from AnyLap's servers and signs you out. Everything on this phone stays.",
+                    tr("Removes your racers, sessions and profile from AnyLap's servers and signs you out. Everything on this phone stays."),
                     color = RT.TextDim,
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    run({ cloud.deleteCloudData() }, "Your cloud data is deleted.")
-                }) { Text("Delete", color = RT.Accent) }
+                    run({ cloud.deleteCloudData() }, tr("Your cloud data is deleted."))
+                }) { Text(tr("Delete"), color = RT.Accent) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = RT.Text) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Cancel"), color = RT.Text) } },
         )
     }
 }
@@ -253,6 +254,6 @@ internal fun friendlyAuthError(e: Throwable): String {
         "anonymous" in m && "disabled" in m -> "Guest sign-in is turned off on the server."
         "not found or expired" in m -> "That share code is wrong or has expired."
         "unable to resolve" in m || "timeout" in m || "failed to connect" in m -> "You're offline. Try again when you have signal."
-        else -> "Something went wrong. Try again."
+        else -> tr("Something went wrong. Try again.")
     }
 }

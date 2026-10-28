@@ -1,5 +1,7 @@
 package app.anylap.ui.events
 
+import app.anylap.data.count
+import app.anylap.i18n.tr
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -72,7 +74,7 @@ fun EventScreen(nav: Navigator, eventId: String) {
     var confirmDelete by remember { mutableStateOf(false) }
 
     if (e == null) {
-        ScreenScaffold("Event", onBack = { nav.pop() }) { item { Text("Event not found.", color = RT.TextDim) } }
+        ScreenScaffold(tr("Event"), onBack = { nav.pop() }) { item { Text(tr("Event not found."), color = RT.TextDim) } }
         return
     }
     val standings = remember(e, sessions) { EventLogic.standings(e, sessions) }
@@ -86,15 +88,15 @@ fun EventScreen(nav: Navigator, eventId: String) {
         subtitle = formatLine(e),
         onBack = { nav.pop() },
         actions = {
-            CircleIconButton(Icons.Rounded.Share, { shareStandings(app, e, sessions) }, contentDescription = "Share standings")
-            CircleIconButton(Icons.Rounded.Delete, { confirmDelete = true }, contentDescription = "Delete event")
+            CircleIconButton(Icons.Rounded.Share, { shareStandings(app, e, sessions) }, contentDescription = tr("Share standings"))
+            CircleIconButton(Icons.Rounded.Delete, { confirmDelete = true }, contentDescription = tr("Delete event"))
         },
         bottomPadding = 40.dp,
     ) {
         if (next != null) {
             item {
                 PrimaryButton(
-                    "Run ${next.name}",
+                    tr("Run {0}", next.name),
                     { runRound(app, nav, e, next) },
                     Modifier.fillMaxWidth(),
                     icon = Icons.Rounded.PlayArrow,
@@ -109,9 +111,9 @@ fun EventScreen(nav: Navigator, eventId: String) {
                                 RacerAvatar(champ, 52.dp, ring = RT.Gold)
                                 Spacer(Modifier.width(14.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text("WINNER", style = MaterialTheme.typography.labelSmall, color = RT.Gold)
+                                    Text(tr("WINNER"), style = MaterialTheme.typography.labelSmall, color = RT.Gold)
                                     Text(champ.name, style = MaterialTheme.typography.headlineSmall)
-                                    Text("${s.points} points · ${s.wins} wins", style = MaterialTheme.typography.bodySmall)
+                                    Text(tr("{0} points · {1} wins", s.points, s.wins), style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
@@ -120,7 +122,7 @@ fun EventScreen(nav: Navigator, eventId: String) {
             }
         }
 
-        item { SectionLabel("Standings", Icons.Rounded.Leaderboard) }
+        item { SectionLabel(tr("Standings"), Icons.Rounded.Leaderboard) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 standings.forEach { s ->
@@ -133,7 +135,7 @@ fun EventScreen(nav: Navigator, eventId: String) {
                         Column(Modifier.weight(1f)) {
                             Text(r.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
                             Text(
-                                "${s.roundsRun} raced · ${s.wins} wins · best ${Format.lap(s.bestLapMs)}",
+                                tr("{0} raced · {1} wins · best {2}", s.roundsRun, s.wins, Format.lap(s.bestLapMs)),
                                 style = MaterialTheme.typography.bodySmall, maxLines = 1,
                             )
                         }
@@ -141,13 +143,13 @@ fun EventScreen(nav: Navigator, eventId: String) {
                     }
                 }
                 Text(
-                    "Points ${e.points.joinToString("-")} by finishing position. Finals count ×${e.finalMultiplier}.",
+                    tr("Points {0} by finishing position. Finals count ×{1}.", e.points.joinToString("-"), e.finalMultiplier),
                     style = MaterialTheme.typography.bodySmall, color = RT.TextFaint,
                 )
             }
         }
 
-        item { SectionLabel("Rounds", Icons.Rounded.Flag) }
+        item { SectionLabel(tr("Rounds"), Icons.Rounded.Flag) }
         e.rounds.forEach { round ->
             item(key = round.id) {
                 val s = round.sessionId?.let { id -> sessions.firstOrNull { it.id == id } }
@@ -164,14 +166,14 @@ fun EventScreen(nav: Navigator, eventId: String) {
                         Column(Modifier.weight(1f)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(round.name, style = MaterialTheme.typography.titleMedium)
-                                if (round.kind == RoundKind.FINAL) Tag("×${e.finalMultiplier} points", RT.Gold)
+                                if (round.kind == RoundKind.FINAL) Tag(tr("×{0} points", e.finalMultiplier), RT.Gold)
                             }
                             Text(
                                 when {
-                                    winner != null -> "Won by ${winner.name}"
-                                    s != null -> "Done"
-                                    round == next -> "Up next – tap to run"
-                                    else -> "${round.racerIds.size} ${e.sport.unitName}s"
+                                    winner != null -> tr("Won by {0}", winner.name)
+                                    s != null -> tr("Done")
+                                    round == next -> tr("Up next – tap to run")
+                                    else -> e.sport.count(round.racerIds.size)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                             )
@@ -185,17 +187,17 @@ fun EventScreen(nav: Navigator, eventId: String) {
         if (heatsDone && !e.hasFinal && e.racerIds.size >= 2) {
             item {
                 RtCard(Modifier.fillMaxWidth()) {
-                    Text("Add a final", style = MaterialTheme.typography.titleSmall)
-                    Text("The top of the points table after the heats, best qualifier listed first.", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Add a final"), style = MaterialTheme.typography.titleSmall)
+                    Text(tr("The top of the points table after the heats, best qualifier listed first."), style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Racers in the final", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
+                        Text(tr("Racers in the final"), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
                         Stepper(finalSize, { finalSize = it }, 2..minOf(maxGrid, e.racerIds.size), "")
                     }
                     Spacer(Modifier.height(8.dp))
-                    SecondaryButton("Add final", {
+                    SecondaryButton(tr("Add final"), {
                         val grid = EventLogic.finalGrid(e, sessions, finalSize)
-                        app.repo.upsertEvent(e.copy(rounds = e.rounds + Round(Uuid.random().toString(), "Final", RoundKind.FINAL, grid)))
+                        app.repo.upsertEvent(e.copy(rounds = e.rounds + Round(Uuid.random().toString(), tr("Final"), RoundKind.FINAL, grid)))
                     }, Modifier.fillMaxWidth(), icon = Icons.Rounded.EmojiEvents)
                 }
             }
@@ -206,20 +208,20 @@ fun EventScreen(nav: Navigator, eventId: String) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = RT.Surface2,
-            title = { Text("Delete ${e.name}?") },
-            text = { Text("The sessions stay in your history; only the event and its points table go.", color = RT.TextDim) },
+            title = { Text(tr("Delete {0}?", e.name)) },
+            text = { Text(tr("The sessions stay in your history; only the event and its points table go."), color = RT.TextDim) },
             confirmButton = {
-                TextButton(onClick = { confirmDelete = false; nav.pop(); app.repo.deleteEvent(e.id) }) { Text("Delete", color = RT.Accent) }
+                TextButton(onClick = { confirmDelete = false; nav.pop(); app.repo.deleteEvent(e.id) }) { Text(tr("Delete"), color = RT.Accent) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = RT.Text) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Cancel"), color = RT.Text) } },
         )
     }
 }
 
 private fun formatLine(e: Event): String = when (e.mode) {
-    RaceMode.TIME -> "${e.timeLimitSec / 60}-min races"
-    else -> "${e.targetLaps}-lap races"
-} + " · ${e.racerIds.size} ${e.sport.unitName}s"
+    RaceMode.TIME -> tr("{0}-min races", e.timeLimitSec / 60)
+    else -> tr("{0}-lap races", e.targetLaps)
+} + " · " + e.sport.count(e.racerIds.size)
 
 /** Opens the live screen for a round with the event's format and the round's racers. */
 private fun runRound(app: AppState, nav: Navigator, e: Event, round: Round) {
@@ -240,7 +242,7 @@ private fun shareStandings(app: AppState, e: Event, sessions: List<app.anylap.da
     sb.appendLine("${e.name} – ${Platform.formatDate(e.createdAt, "d MMM yyyy")}")
     EventLogic.standings(e, sessions).forEach { s ->
         val name = app.repo.racer(s.racerId)?.name ?: "?"
-        sb.appendLine("P${s.position} $name – ${s.points} pts (${s.wins} wins)")
+        sb.appendLine(tr("P{0} {1} – {2} pts ({3} wins)", s.position, name, s.points, s.wins))
     }
-    Platform.shareText(sb.toString(), "Share standings")
+    Platform.shareText(sb.toString(), tr("Share standings"))
 }

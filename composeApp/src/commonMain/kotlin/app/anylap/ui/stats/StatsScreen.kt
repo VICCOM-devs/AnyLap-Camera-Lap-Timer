@@ -1,5 +1,7 @@
 package app.anylap.ui.stats
 
+import app.anylap.i18n.tr
+import app.anylap.i18n.trn
 import app.anylap.platform.Platform
 import app.anylap.util.fixed
 import app.anylap.ui.LocalApp
@@ -81,12 +83,12 @@ fun StatsScreen(nav: Navigator) {
     val selected = sportRacers.firstOrNull { it.id == selectedId } ?: sportRacers.firstOrNull()
     val allTime = remember(sessions, sportRacers) { sportRacers.map { Stats.allTime(sessions, it) } }
 
-    ScreenScaffold(title = "Stats", subtitle = "Personal bests, trends and rankings") {
-        if (otherSports) item { PillTabs(listOf("RC cars", "Running"), tab, { tab = it }, Modifier.fillMaxWidth()) }
+    ScreenScaffold(title = tr("Stats"), subtitle = tr("Personal bests, trends and rankings")) {
+        if (otherSports) item { PillTabs(listOf(tr("RC cars"), tr("Running")), tab, { tab = it }, Modifier.fillMaxWidth()) }
 
         if (sportRacers.isEmpty() || allTime.all { it.sessions == 0 }) {
             item {
-                EmptyState(Icons.Rounded.BarChart, "No stats yet", "Finish a session and your numbers land here – best laps, consistency, speed and head-to-head rankings.")
+                EmptyState(Icons.Rounded.BarChart, tr("No stats yet"), tr("Finish a session and your numbers land here – best laps, consistency, speed and head-to-head rankings."))
             }
             return@ScreenScaffold
         }
@@ -115,42 +117,42 @@ fun StatsScreen(nav: Navigator) {
 
         val st = allTime.firstOrNull { it.racer.id == selected?.id }
         if (st != null) {
-            item { SectionLabel("${st.racer.name} · all time", Icons.Rounded.Insights) }
+            item { SectionLabel(tr("{0} · all time", st.racer.name), Icons.Rounded.Insights) }
             item {
                 TileRow {
                     StatTile(
-                        "Best lap", Format.lap(st.bestLapMs), Modifier.weight(1f), Icons.Rounded.Timer,
+                        tr("Best lap"), Format.lap(st.bestLapMs), Modifier.weight(1f), Icons.Rounded.Timer,
                         sub = st.bestLapAt?.let { Platform.formatDate(it, "d MMM yyyy") },
                         valueColor = RT.Purple,
                     )
-                    StatTile("Top speed", Format.speed(st.topSpeedKmh, settings.speedUnitKmh), Modifier.weight(1f), Icons.Rounded.Speed)
+                    StatTile(tr("Top speed"), Format.speed(st.topSpeedKmh, settings.speedUnitKmh), Modifier.weight(1f), Icons.Rounded.Speed)
                 }
             }
             item {
                 TileRow {
-                    StatTile("Sessions", st.sessions.toString(), Modifier.weight(1f), Icons.Rounded.Flag)
-                    StatTile("Laps", st.laps.toString(), Modifier.weight(1f), Icons.Rounded.Loop)
-                    StatTile("Wins", "${st.wins}", Modifier.weight(1f), Icons.Rounded.EmojiEvents, sub = "${st.podiums} podiums", accent = RT.Gold)
+                    StatTile(tr("Sessions"), st.sessions.toString(), Modifier.weight(1f), Icons.Rounded.Flag)
+                    StatTile(tr("Laps"), st.laps.toString(), Modifier.weight(1f), Icons.Rounded.Loop)
+                    StatTile(tr("Wins"), "${st.wins}", Modifier.weight(1f), Icons.Rounded.EmojiEvents, sub = tr("{0} podiums", st.podiums), accent = RT.Gold)
                 }
             }
             if (sport == Sport.RUNNING && st.distanceM > 0) {
                 item {
                     StatTile(
-                        "Distance timed", "${(st.distanceM / 1000).fixed(2)} km", Modifier.fillMaxWidth(), Icons.Rounded.Timeline,
+                        tr("Distance timed"), tr("{0} km", (st.distanceM / 1000).fixed(2)), Modifier.fillMaxWidth(), Icons.Rounded.Timeline,
                     )
                 }
             }
             if (!tier.isPro) {
-                item { SectionLabel("Trends") }
+                item { SectionLabel(tr("Trends")) }
                 item {
                     ProLockCard(
                         nav, ProFeature.CHARTS,
-                        body = "Best lap, consistency and top speed per session for ${st.racer.name}" +
-                            if (locked > 0) " – plus $locked older session${if (locked == 1) "" else "s"} counted in." else ".",
+                        body = tr("Best lap, consistency and top speed per session for {0}", st.racer.name) +
+                            if (locked > 0) trn(locked, " – plus {0} older session counted in.", " – plus {0} older sessions counted in.") else ".",
                     )
                 }
             }
-            if (tier.isPro) item { SectionLabel("Best lap per session") }
+            if (tier.isPro) item { SectionLabel(tr("Best lap per session")) }
             if (tier.isPro) item {
                 RtCard(Modifier.fillMaxWidth()) {
                     LineChart(
@@ -160,30 +162,30 @@ fun StatsScreen(nav: Navigator) {
                         highlightMin = true,
                         showLegend = false,
                     )
-                    Text("Lower is faster. Purple ring = all-time best.", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Lower is faster. Purple ring = all-time best."), style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (tier.isPro) item { SectionLabel("Consistency per session") }
+            if (tier.isPro) item { SectionLabel(tr("Consistency per session")) }
             if (tier.isPro) item {
                 RtCard(Modifier.fillMaxWidth()) {
                     LineChart(
-                        series = listOf(ChartSeries("Consistency", RT.Green, st.consistencyTrend.mapIndexed { i, (_, c) -> (i + 1).toFloat() to c.toFloat() })),
+                        series = listOf(ChartSeries(tr("Consistency"), RT.Green, st.consistencyTrend.mapIndexed { i, (_, c) -> (i + 1).toFloat() to c.toFloat() })),
                         yLabel = { "${(it).fixed(0)}%" },
                         xLabel = { "#${it.toInt()}" },
                         showLegend = false,
                         height = 180.dp,
                     )
-                    Text("How close your laps are to each other. 100 % = every lap identical.", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("How close your laps are to each other. 100 % = every lap identical."), style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (tier.isPro && st.speedTrend.size > 1) {
-                item { SectionLabel("Top speed per session") }
+                item { SectionLabel(tr("Top speed per session")) }
                 item {
                     RtCard(Modifier.fillMaxWidth()) {
                         LineChart(
                             series = listOf(
                                 ChartSeries(
-                                    "Top speed", RT.Accent,
+                                    tr("Top speed"), RT.Accent,
                                     st.speedTrend.mapIndexed { i, (_, kmh) ->
                                         (i + 1).toFloat() to (if (settings.speedUnitKmh) kmh else kmh / 1.609344f)
                                     },
@@ -194,13 +196,13 @@ fun StatsScreen(nav: Navigator) {
                             showLegend = false,
                             height = 180.dp,
                         )
-                        Text("Fastest pass over the line each session, in ${if (settings.speedUnitKmh) "km/h" else "mph"}.", style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Fastest pass over the line each session, in {0}.", if (settings.speedUnitKmh) "km/h" else "mph"), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         }
 
-        item { SectionLabel("All-time ranking · best lap", Icons.Rounded.Leaderboard) }
+        item { SectionLabel(tr("All-time ranking · best lap"), Icons.Rounded.Leaderboard) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 BarList(
@@ -209,11 +211,11 @@ fun StatsScreen(nav: Navigator) {
                 )
             }
         }
-        item { SectionLabel("All-time ranking · wins") }
+        item { SectionLabel(tr("All-time ranking · wins")) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 val winners = allTime.filter { it.wins > 0 }.sortedByDescending { it.wins }
-                if (winners.isEmpty()) Text("No races finished yet.", style = MaterialTheme.typography.bodySmall)
+                if (winners.isEmpty()) Text(tr("No races finished yet."), style = MaterialTheme.typography.bodySmall)
                 else BarList(
                     winners.map { Triple(it.racer.name, it.racer.uiColor, it.wins.toFloat()) },
                     valueLabel = { "${it.toInt()}" },

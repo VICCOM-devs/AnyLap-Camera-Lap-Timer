@@ -1,5 +1,7 @@
 package app.anylap.ui.session
 
+import app.anylap.i18n.I18n
+import app.anylap.i18n.tr
 import app.anylap.util.fixed
 import app.anylap.ui.LocalApp
 import app.anylap.ui.Navigator
@@ -166,8 +168,8 @@ private fun LiveContent(nav: Navigator) {
     if (session == null) {
         Box(Modifier.fillMaxSize().background(RT.Bg), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("The camera couldn't be started on this device.", color = RT.TextDim)
-                TextButton(onClick = { nav.pop() }) { Text("Back", color = RT.Accent) }
+                Text(tr("The camera couldn't be started on this device."), color = RT.TextDim)
+                TextButton(onClick = { nav.pop() }) { Text(tr("Back"), color = RT.Accent) }
             }
         }
         return
@@ -268,7 +270,7 @@ private fun LiveContent(nav: Navigator) {
                 else -> scope.launch {
                     app.cloud.startLive(tier.isPro)
                         .onSuccess { liveCode = it; liveError = null; liveDialog = true }
-                        .onFailure { liveError = "Couldn't start the sync. Check your connection."; liveDialog = true }
+                        .onFailure { liveError = tr("Couldn't start the sync. Check your connection."); liveDialog = true }
                 }
             }
         },
@@ -306,8 +308,8 @@ private fun LiveContent(nav: Navigator) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 androidx.compose.material3.CircularProgressIndicator(color = RT.Accent)
                 Spacer(Modifier.height(14.dp))
-                Text("Saving the race…", style = MaterialTheme.typography.titleMedium)
-                Text("Laps, results and the Check pictures", style = MaterialTheme.typography.bodySmall, color = RT.TextDim)
+                Text(tr("Saving the race…"), style = MaterialTheme.typography.titleMedium)
+                Text(tr("Laps, results and the Check pictures"), style = MaterialTheme.typography.bodySmall, color = RT.TextDim)
             }
         }
     }
@@ -316,7 +318,7 @@ private fun LiveContent(nav: Navigator) {
         AlertDialog(
             onDismissRequest = { liveDialog = false },
             containerColor = RT.Surface2,
-            title = { Text(if (liveCode != null) "Scan to join" else "Sync") },
+            title = { Text(if (liveCode != null) tr("Scan to join") else tr("Sync")) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val code = liveCode
@@ -327,13 +329,13 @@ private fun LiveContent(nav: Navigator) {
                         Spacer(Modifier.height(10.dp))
                         Text(code, style = MaterialTheme.typography.headlineMedium, color = RT.Accent)
                         Text(
-                            "Scan with AnyLap on another phone (Join a race), or with any camera for the web page.",
+                            tr("Scan with AnyLap on another phone (Join a race), or with any camera for the web page."),
                             style = MaterialTheme.typography.bodySmall, color = RT.TextDim,
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            (if (viewers == 1) "1 phone watching" else "$viewers phones watching") +
-                                (if (tier.isPro) "" else " · Free: one viewer at a time"),
+                            (if (viewers == 1) tr("1 phone watching") else tr("{0} phones watching", viewers)) +
+                                (if (tier.isPro) "" else tr(" · Free: one viewer at a time")),
                             style = MaterialTheme.typography.labelMedium,
                         )
                     }
@@ -343,7 +345,7 @@ private fun LiveContent(nav: Navigator) {
             confirmButton = {
                 val code = liveCode
                 if (code != null) {
-                    TextButton(onClick = { Platform.shareText(BackendConfig.liveUrl(code), "Follow the race") }) { Text("Share link", color = RT.Accent) }
+                    TextButton(onClick = { Platform.shareText(BackendConfig.liveUrl(code), tr("Follow the race")) }) { Text(tr("Share link"), color = RT.Accent) }
                 }
             },
             dismissButton = {
@@ -354,9 +356,9 @@ private fun LiveContent(nav: Navigator) {
                             liveCode = null
                             liveDialog = false
                             scope.launch { app.cloud.stopLive(code) }
-                        }) { Text("Stop", color = RT.TextDim) }
+                        }) { Text(tr("Stop"), color = RT.TextDim) }
                     }
-                    TextButton(onClick = { liveDialog = false }) { Text("Close", color = RT.Text) }
+                    TextButton(onClick = { liveDialog = false }) { Text(tr("Close"), color = RT.Text) }
                 }
             },
         )
@@ -366,12 +368,12 @@ private fun LiveContent(nav: Navigator) {
         AlertDialog(
             onDismissRequest = { confirmEnd = false },
             containerColor = RT.Surface2,
-            title = { Text("End session?") },
-            text = { Text("Results and video are saved.", color = RT.TextDim) },
+            title = { Text(tr("End session?")) },
+            text = { Text(tr("Results and video are saved."), color = RT.TextDim) },
             confirmButton = {
-                TextButton(onClick = { confirmEnd = false; engine.finish() }) { Text("End", color = RT.Accent) }
+                TextButton(onClick = { confirmEnd = false; engine.finish() }) { Text(tr("End"), color = RT.Accent) }
             },
-            dismissButton = { TextButton(onClick = { confirmEnd = false }) { Text("Keep going", color = RT.Text) } },
+            dismissButton = { TextButton(onClick = { confirmEnd = false }) { Text(tr("Keep going"), color = RT.Text) } },
         )
     }
 
@@ -379,7 +381,7 @@ private fun LiveContent(nav: Navigator) {
         AlertDialog(
             onDismissRequest = { assigning = null },
             containerColor = RT.Surface2,
-            title = { Text("Who crossed at ${Format.clock(u.atMs)}?") },
+            title = { Text(tr("Who crossed at {0}?", Format.clock(u.atMs))) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     u.suggestions.mapNotNull { id -> racers.firstOrNull { it.id == id } }.forEach { r ->
@@ -397,7 +399,7 @@ private fun LiveContent(nav: Navigator) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { engine.dismiss(u.id); assigning = null }) { Text("Not a racer", color = RT.TextDim) }
+                TextButton(onClick = { engine.dismiss(u.id); assigning = null }) { Text(tr("Not a racer"), color = RT.TextDim) }
             },
         )
     }
@@ -405,10 +407,10 @@ private fun LiveContent(nav: Navigator) {
 
 private fun announcement(f: LapFlash): String {
     val t = f.lap.timeMs / 1000.0
-    val time = "${(t).fixed(1)}"
+    val time = I18n.decimal(t.fixed(1))
     val tag = when {
-        f.fastest -> ", fastest lap"
-        f.personalBest -> ", personal best"
+        f.fastest -> tr(", fastest lap")
+        f.personalBest -> tr(", personal best")
         else -> ""
     }
     return "${f.racer.name}, $time$tag"
@@ -431,7 +433,7 @@ private fun kotlinx.coroutines.CoroutineScope.launchMain(block: () -> Unit) {
 }
 
 private fun liveTitle(c: SessionConfig): String = when (c.mode) {
-    RaceMode.PRACTICE -> "${c.sport.title} practice"
-    RaceMode.LAPS -> "${c.targetLaps}-lap race"
-    RaceMode.TIME -> "${c.timeLimitSec / 60}-min race"
+    RaceMode.PRACTICE -> tr("{0} practice", c.sport.title)
+    RaceMode.LAPS -> tr("{0}-lap race", c.targetLaps)
+    RaceMode.TIME -> tr("{0}-min race", c.timeLimitSec / 60)
 }

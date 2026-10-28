@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.i18n.tr
 import app.anylap.platform.Platform
 import app.anylap.util.fixed
 import app.anylap.ui.LocalApp
@@ -96,8 +97,8 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
     var confirmDelete by remember { mutableStateOf(false) }
 
     if (s == null) {
-        ScreenScaffold("Session", onBack = { nav.pop() }) {
-            item { Text("Session not found.", color = RT.TextDim) }
+        ScreenScaffold(tr("Session"), onBack = { nav.pop() }) {
+            item { Text(tr("Session not found."), color = RT.TextDim) }
         }
         return
     }
@@ -127,11 +128,11 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
         item { Podium(s, ordered) }
         item {
             val open = s.reviews.count { it.open }
-            val tabs = listOf("Overview", "Laps", "Charts", "Replays") + if (s.reviews.isNotEmpty()) listOf(if (open > 0) "Check ($open)" else "Checked") else emptyList()
+            val tabs = listOf(tr("Overview"), tr("Laps"), tr("Charts"), tr("Replays")) + if (s.reviews.isNotEmpty()) listOf(if (open > 0) tr("Check ({0})", open) else tr("Checked")) else emptyList()
             PillTabs(tabs, tab, { tab = it }, Modifier.fillMaxWidth())
         }
         if (tab == 4) {
-            item { SectionLabel("Crossings the camera wasn't sure about") }
+            item { SectionLabel(tr("Crossings the camera wasn't sure about")) }
             s.reviews.sortedWith(compareBy<ReviewItem> { !it.open }.thenBy { it.atMs }).forEach { item ->
                 item(key = "rv-${item.id}") {
                     ReviewCard(
@@ -147,30 +148,30 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                 ordered.forEachIndexed { i, r ->
                     item(key = "ov-${r.id}") { RacerSummary(s, r, i + 1, settings.speedUnitKmh) }
                 }
-                item { SectionLabel("Session") }
+                item { SectionLabel(tr("Session")) }
                 item {
                     RtCard(Modifier.fillMaxWidth()) {
-                        KeyValue("Format", s.config.mode.title)
-                        KeyValue("Duration", Format.duration(s.durationMs))
-                        KeyValue("Total laps", s.laps.size.toString())
-                        KeyValue("Camera distance", "${(s.config.cameraDistanceM).fixed(1)} m")
-                        s.config.lapLengthM?.let { KeyValue("Lap length", "${it.toInt()} m") }
-                        KeyValue("Manual fixes", s.laps.count { it.source == LapSource.MANUAL || it.source == LapSource.ASSIGNED }.toString())
-                        if (s.unassignedCrossings > 0) KeyValue("Unassigned crossings", s.unassignedCrossings.toString(), RT.Amber)
-                        KeyValue("Video", if (hasVideo) "Saved" else "None")
+                        KeyValue(tr("Format"), s.config.mode.title)
+                        KeyValue(tr("Duration"), Format.duration(s.durationMs))
+                        KeyValue(tr("Total laps"), s.laps.size.toString())
+                        KeyValue(tr("Camera distance"), "${(s.config.cameraDistanceM).fixed(1)} m")
+                        s.config.lapLengthM?.let { KeyValue(tr("Lap length"), "${it.toInt()} m") }
+                        KeyValue(tr("Manual fixes"), s.laps.count { it.source == LapSource.MANUAL || it.source == LapSource.ASSIGNED }.toString())
+                        if (s.unassignedCrossings > 0) KeyValue(tr("Unassigned crossings"), s.unassignedCrossings.toString(), RT.Amber)
+                        KeyValue(tr("Video"), if (hasVideo) tr("Saved") else tr("None"))
                     }
                 }
                 item {
                     TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Rounded.DeleteOutline, null, tint = RT.Accent)
                         Spacer(Modifier.width(6.dp))
-                        Text("Delete session", color = RT.Accent)
+                        Text(tr("Delete session"), color = RT.Accent)
                     }
                 }
             }
             1 -> item { LapTable(s, ordered) { r, lap -> if (hasVideo) nav.push(Screen.Replay(s.id, r.id, lap)) } }
             2 -> {
-                item { SectionLabel("Lap times", Icons.Rounded.Timer) }
+                item { SectionLabel(tr("Lap times"), Icons.Rounded.Timer) }
                 item {
                     RtCard(Modifier.fillMaxWidth()) {
                         LineChart(
@@ -183,7 +184,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                     }
                 }
                 if (s.config.mode != RaceMode.PRACTICE && ordered.size > 1) {
-                    item { SectionLabel("Positions", Icons.Rounded.EmojiEvents) }
+                    item { SectionLabel(tr("Positions"), Icons.Rounded.EmojiEvents) }
                     item {
                         val pos = remember(s.id) { Stats.positionsByLap(s) }
                         RtCard(Modifier.fillMaxWidth()) {
@@ -199,7 +200,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                     }
                 }
                 if (s.laps.any { it.speedKmh != null }) {
-                    item { SectionLabel("Speed at the line", Icons.Rounded.Speed) }
+                    item { SectionLabel(tr("Speed at the line"), Icons.Rounded.Speed) }
                     item {
                         RtCard(Modifier.fillMaxWidth()) {
                             LineChart(
@@ -213,7 +214,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                         }
                     }
                 }
-                item { SectionLabel("Best lap", Icons.Rounded.Insights) }
+                item { SectionLabel(tr("Best lap"), Icons.Rounded.Insights) }
                 item {
                     RtCard(Modifier.fillMaxWidth()) {
                         BarList(
@@ -229,7 +230,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                 if (!hasVideo) {
                     item {
                         RtCard(Modifier.fillMaxWidth()) {
-                            Text("No video for this session.", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim)
+                            Text(tr("No video for this session."), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim)
                         }
                     }
                 } else {
@@ -238,8 +239,8 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                     if (winner != null && winnerLast != null) {
                         item {
                             ReplayCard(
-                                title = if (s.config.mode == RaceMode.PRACTICE) "Last lap · ${winner.name}" else "Finish · ${winner.name}",
-                                subtitle = "Lap ${winnerLast.number} · ${Format.lap(winnerLast.timeMs)}",
+                                title = if (s.config.mode == RaceMode.PRACTICE) tr("Last lap · {0}", winner.name) else tr("Finish · {0}", winner.name),
+                                subtitle = tr("Lap {0} · {1}", winnerLast.number, Format.lap(winnerLast.timeMs)),
                                 racer = winner,
                                 highlight = true,
                             ) { nav.push(Screen.Replay(s.id, winner.id, winnerLast.number)) }
@@ -248,14 +249,14 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                     Stats.fastestLap(s)?.let { f ->
                         val r = s.racer(f.racerId)
                         if (r != null) item {
-                            ReplayCard("Fastest lap · ${r.name}", "Lap ${f.number} · ${Format.lap(f.timeMs)}", r, false) {
+                            ReplayCard(tr("Fastest lap · {0}", r.name), tr("Lap {0} · {1}", f.number, Format.lap(f.timeMs)), r, false) {
                                 nav.push(Screen.Replay(s.id, r.id, f.number))
                             }
                         }
                     }
-                    item { SectionLabel("Every lap", Icons.Rounded.SlowMotionVideo) }
+                    item { SectionLabel(tr("Every lap"), Icons.Rounded.SlowMotionVideo) }
                     item {
-                        Text("Tap any time in the Laps tab to replay that crossing in slow motion.", style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Tap any time in the Laps tab to replay that crossing in slow motion."), style = MaterialTheme.typography.bodySmall)
                     }
                     item { LapTable(s, ordered) { r, lap -> nav.push(Screen.Replay(s.id, r.id, lap)) } }
                 }
@@ -267,16 +268,16 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = RT.Surface2,
-            title = { Text("Delete this session?") },
-            text = { Text("Laps and video will be removed.", color = RT.TextDim) },
+            title = { Text(tr("Delete this session?")) },
+            text = { Text(tr("Laps and video will be removed."), color = RT.TextDim) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     nav.pop()
                     app.repo.deleteSession(s.id)
-                }) { Text("Delete", color = RT.Accent) }
+                }) { Text(tr("Delete"), color = RT.Accent) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = RT.Text) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Cancel"), color = RT.Text) } },
         )
     }
 }
@@ -286,7 +287,7 @@ private fun Podium(s: Session, ordered: List<Racer>) {
     if (ordered.isEmpty()) return
     val isRace = s.config.mode != RaceMode.PRACTICE
     RtCard(Modifier.fillMaxWidth(), highlight = RT.AccentDeep, padding = 18.dp) {
-        Text(if (isRace) "RESULT" else "FASTEST LAPS", style = MaterialTheme.typography.labelSmall, color = RT.Accent)
+        Text(if (isRace) tr("RESULT") else tr("FASTEST LAPS"), style = MaterialTheme.typography.labelSmall, color = RT.Accent)
         Spacer(Modifier.height(14.dp))
         val top = ordered.take(3)
         val display = when (top.size) {
@@ -303,7 +304,7 @@ private fun Podium(s: Session, ordered: List<Racer>) {
                     Spacer(Modifier.height(8.dp))
                     Text(r.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     Text(
-                        if (isRace) "${st.laps} laps" else Format.lap(st.bestMs),
+                        if (isRace) tr("{0} laps", st.laps) else Format.lap(st.bestMs),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(6.dp))
@@ -337,26 +338,26 @@ private fun RacerSummary(s: Session, r: Racer, pos: Int, kmh: Boolean) {
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(r.name, style = MaterialTheme.typography.titleMedium)
-                Text("${st.laps} laps" + (st.distanceM?.let { " · ${"${(it / 1000).fixed(2)}"} km" } ?: ""), style = MaterialTheme.typography.bodySmall)
+                Text(tr("{0} laps", st.laps) + (st.distanceM?.let { tr(" · {0} km", "${(it / 1000).fixed(2)}") } ?: ""), style = MaterialTheme.typography.bodySmall)
             }
-            if (fastest != null && fastest.racerId == r.id) Tag("Fastest", RT.Purple)
+            if (fastest != null && fastest.racerId == r.id) Tag(tr("Fastest"), RT.Purple)
         }
         Spacer(Modifier.height(12.dp))
         TileRow {
-            MiniStat("Best", Format.lap(st.bestMs), Modifier.weight(1f), if (fastest?.racerId == r.id) RT.Purple else RT.Text)
-            MiniStat("Average", Format.lap(st.avgMs), Modifier.weight(1f))
-            MiniStat("Consistency", Format.percent(st.consistencyPct), Modifier.weight(1f))
+            MiniStat(tr("Best"), Format.lap(st.bestMs), Modifier.weight(1f), if (fastest?.racerId == r.id) RT.Purple else RT.Text)
+            MiniStat(tr("Average"), Format.lap(st.avgMs), Modifier.weight(1f))
+            MiniStat(tr("Consistency"), Format.percent(st.consistencyPct), Modifier.weight(1f))
         }
         Spacer(Modifier.height(8.dp))
         TileRow {
             if (st.bestPaceSecPerKm != null) {
-                MiniStat("Best pace", Format.pace(st.bestPaceSecPerKm), Modifier.weight(1f))
-                MiniStat("Avg pace", Format.pace(st.avgPaceSecPerKm), Modifier.weight(1f))
+                MiniStat(tr("Best pace"), Format.pace(st.bestPaceSecPerKm), Modifier.weight(1f))
+                MiniStat(tr("Avg pace"), Format.pace(st.avgPaceSecPerKm), Modifier.weight(1f))
             } else {
-                MiniStat("Top speed", Format.speed(st.topSpeedKmh, kmh), Modifier.weight(1f))
-                MiniStat("Avg speed", Format.speed(st.avgSpeedKmh, kmh), Modifier.weight(1f))
+                MiniStat(tr("Top speed"), Format.speed(st.topSpeedKmh, kmh), Modifier.weight(1f))
+                MiniStat(tr("Avg speed"), Format.speed(st.avgSpeedKmh, kmh), Modifier.weight(1f))
             }
-            MiniStat("Gain to best", st.potentialGainMs?.let { "−" + Format.lap(it) } ?: "—", Modifier.weight(1f))
+            MiniStat(tr("Gain to best"), st.potentialGainMs?.let { "−" + Format.lap(it) } ?: "—", Modifier.weight(1f))
         }
     }
 }
@@ -377,7 +378,7 @@ private fun LapTable(s: Session, racers: List<Racer>, onLap: (Racer, Int) -> Uni
     val colW = 92.dp
     RtCard(Modifier.fillMaxWidth(), padding = 10.dp) {
         if (maxLaps == 0) {
-            Text("No laps recorded.", color = RT.TextDim)
+            Text(tr("No laps recorded."), color = RT.TextDim)
             return@RtCard
         }
         Row {
@@ -435,9 +436,9 @@ private fun LapTable(s: Session, racers: List<Racer>, onLap: (Racer, Int) -> Uni
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            LegendDot(RT.Purple, "Fastest")
-            LegendDot(RT.Green, "Personal best")
-            LegendDot(RT.Amber, "Manual")
+            LegendDot(RT.Purple, tr("Fastest"))
+            LegendDot(RT.Green, tr("Personal best"))
+            LegendDot(RT.Amber, tr("Manual"))
         }
     }
 }
@@ -475,9 +476,9 @@ private fun shareResults(s: Session, branded: Boolean) {
     val ordered = s.order.mapNotNull { s.racer(it) }
     ordered.forEachIndexed { i, r ->
         val st = Stats.forRacer(s, r.id)
-        sb.appendLine("P${i + 1} ${r.name}: ${st.laps} laps, best ${Format.lap(st.bestMs)}, avg ${Format.lap(st.avgMs)}")
+        sb.appendLine(tr("P{0} {1}: {2} laps, best {3}, avg {4}", i + 1, r.name, st.laps, Format.lap(st.bestMs), Format.lap(st.avgMs)))
     }
-    Stats.fastestLap(s)?.let { f -> sb.appendLine("Fastest lap: ${s.racer(f.racerId)?.name} ${Format.lap(f.timeMs)}") }
-    if (branded) sb.appendLine().append("Timed with AnyLap – camera lap timer · viccom.se")
-    Platform.shareText(sb.toString(), "Share results")
+    Stats.fastestLap(s)?.let { f -> sb.appendLine(tr("Fastest lap: {0} {1}", s.racer(f.racerId)?.name, Format.lap(f.timeMs))) }
+    if (branded) sb.appendLine().append(tr("Timed with AnyLap – camera lap timer · viccom.se"))
+    Platform.shareText(sb.toString(), tr("Share results"))
 }

@@ -1,5 +1,7 @@
 package app.anylap.ui.session
 
+import app.anylap.i18n.tr
+import app.anylap.i18n.trn
 import app.anylap.util.fixed
 import app.anylap.ui.LocalApp
 import app.anylap.ui.Navigator
@@ -92,11 +94,11 @@ fun SetupScreen(nav: Navigator) {
     }
 
     val showSports = app.repo.settings.collectAsState().value.otherSports
-    ScreenScaffold(title = if (cfg.sport == Sport.RC) "New race" else "New session", subtitle = "Pick cars, format and camera distance") {
-        if (showSports) item { PillTabs(listOf("RC cars", "Running"), if (cfg.sport == Sport.RC) 0 else 1, { setSport(if (it == 0) Sport.RC else Sport.RUNNING) }, Modifier.fillMaxWidth()) }
+    ScreenScaffold(title = if (cfg.sport == Sport.RC) tr("New race") else tr("New session"), subtitle = tr("Pick cars, format and camera distance")) {
+        if (showSports) item { PillTabs(listOf(tr("RC cars"), tr("Running")), if (cfg.sport == Sport.RC) 0 else 1, { setSport(if (it == 0) Sport.RC else Sport.RUNNING) }, Modifier.fillMaxWidth()) }
 
         // ---------------- format
-        item { SectionLabel("Format", Icons.Rounded.Timer) }
+        item { SectionLabel(tr("Format"), Icons.Rounded.Timer) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 PillTabs(
@@ -108,15 +110,15 @@ fun SetupScreen(nav: Navigator) {
                 Spacer(Modifier.height(14.dp))
                 when (cfg.mode) {
                     RaceMode.PRACTICE -> Text(
-                        "Open practice. Each racer's clock starts at their first crossing; every pass after that is a lap. Ranked by best lap.",
+                        tr("Open practice. Each racer's clock starts at their first crossing; every pass after that is a lap. Ranked by best lap."),
                         style = MaterialTheme.typography.bodyMedium, color = RT.TextDim,
                     )
                     RaceMode.LAPS -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("First to", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
+                        Text(tr("First to"), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
                         Stepper(cfg.targetLaps, { cfg = cfg.copy(targetLaps = it) }, 1..200, "laps")
                     }
                     RaceMode.TIME -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Most laps in", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
+                        Text(tr("Most laps in"), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
                         Stepper(cfg.timeLimitSec / 60, { cfg = cfg.copy(timeLimitSec = it * 60) }, 1..180, "min")
                     }
                 }
@@ -126,7 +128,7 @@ fun SetupScreen(nav: Navigator) {
         // ---------------- racers
         item {
             SectionLabel(
-                "Racers",
+                tr("Racers"),
                 Icons.Rounded.Groups,
                 trailing = { Tag("${selected.size}/$maxRacers", if (selected.isEmpty()) RT.Amber else RT.Green) },
             )
@@ -134,7 +136,7 @@ fun SetupScreen(nav: Navigator) {
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 if (sportRacers.isEmpty()) {
-                    Text("No ${cfg.sport.unitName}s yet.", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim)
+                    Text(if (cfg.sport == Sport.RC) tr("No cars yet.") else tr("No runners yet."), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim)
                     Spacer(Modifier.height(10.dp))
                 } else {
                     FlowRow(
@@ -156,7 +158,7 @@ fun SetupScreen(nav: Navigator) {
                     Spacer(Modifier.height(12.dp))
                     if (!tier.isPro && sportRacers.size > maxRacers) {
                         Text(
-                            "Free races up to $maxRacers at once. Pro races the full grid of ${cfg.sport.maxRacers}.",
+                            tr("Free races up to {0} at once. Pro races the full grid of {1}.", maxRacers, cfg.sport.maxRacers),
                             style = MaterialTheme.typography.bodySmall, color = RT.Gold,
                         )
                         Spacer(Modifier.height(10.dp))
@@ -164,15 +166,15 @@ fun SetupScreen(nav: Navigator) {
                     val uncalibrated = sportRacers.filter { it.id in selected && !it.isCalibrated && it.markerId == null }
                     if (selected.size > 1 && uncalibrated.isNotEmpty()) {
                         Text(
-                            "${uncalibrated.joinToString { it.name }} ${if (uncalibrated.size == 1) "isn't" else "aren't"} calibrated – " +
-                                "their crossings will ask you who it was.",
+                            trn(uncalibrated.size, "{1} isn't calibrated – ", "{1} aren't calibrated – ", uncalibrated.joinToString { it.name }) +
+                                tr("their crossings will ask you who it was."),
                             style = MaterialTheme.typography.bodySmall, color = RT.Amber,
                         )
                         Spacer(Modifier.height(10.dp))
                     }
                 }
                 SecondaryButton(
-                    "Add ${cfg.sport.unitName}",
+                    tr("Add {0}", cfg.sport.unitName),
                     {
                         val r = app.repo.newRacer(cfg.sport)
                         app.repo.upsertRacer(r)
@@ -185,13 +187,13 @@ fun SetupScreen(nav: Navigator) {
         }
 
         // ---------------- camera
-        item { SectionLabel("Camera", Icons.Rounded.CameraAlt) }
+        item { SectionLabel(tr("Camera"), Icons.Rounded.CameraAlt) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Distance to finish line", style = MaterialTheme.typography.titleSmall)
-                        Text("From the phone to where racers cross. Used for speed.", style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Distance to finish line"), style = MaterialTheme.typography.titleSmall)
+                        Text(tr("From the phone to where racers cross. Used for speed."), style = MaterialTheme.typography.bodySmall)
                     }
                     Text("${(cfg.cameraDistanceM).fixed(1)} m", style = MaterialTheme.typography.titleLarge)
                 }
@@ -201,8 +203,8 @@ fun SetupScreen(nav: Navigator) {
                     valueRange = 0.5f..15f,
                 )
                 Text(
-                    if (cfg.sport == Sport.RC) "Tip: 1.5–4 m works well for 1/28–1/10 cars. Point the camera across the track, square to it."
-                    else "Tip: 3–6 m keeps bib markers readable. Point the camera across the track at chest height.",
+                    if (cfg.sport == Sport.RC) tr("Tip: 1.5–4 m works well for 1/28–1/10 cars. Point the camera across the track, square to it.")
+                    else tr("Tip: 3–6 m keeps bib markers readable. Point the camera across the track at chest height."),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -215,8 +217,8 @@ fun SetupScreen(nav: Navigator) {
                         Icon(Icons.Rounded.Straighten, null, tint = RT.Accent, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Lap length", style = MaterialTheme.typography.titleSmall)
-                            Text("For pace and distance. 0 = off.", style = MaterialTheme.typography.bodySmall)
+                            Text(tr("Lap length"), style = MaterialTheme.typography.titleSmall)
+                            Text(tr("For pace and distance. 0 = off."), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -227,13 +229,13 @@ fun SetupScreen(nav: Navigator) {
             }
         }
 
-        item { SectionLabel("Timing", Icons.Rounded.Tune) }
+        item { SectionLabel(tr("Timing"), Icons.Rounded.Tune) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Shortest possible lap", style = MaterialTheme.typography.titleSmall)
-                        Text("Crossings closer together are ignored (stops double counts).", style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Shortest possible lap"), style = MaterialTheme.typography.titleSmall)
+                        Text(tr("Crossings closer together are ignored (stops double counts)."), style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -246,7 +248,7 @@ fun SetupScreen(nav: Navigator) {
         item {
             Spacer(Modifier.height(4.dp))
             PrimaryButton(
-                "Line up camera",
+                tr("Line up camera"),
                 {
                     val final = cfg.copy(racerIds = selected)
                     app.repo.updateSettings { it.copy(lastConfig = final) }
@@ -259,7 +261,7 @@ fun SetupScreen(nav: Navigator) {
             )
             if (selected.isEmpty()) {
                 Text(
-                    "Pick at least one ${cfg.sport.unitName}.",
+                    tr("Pick at least one {0}.", cfg.sport.unitName),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                 )

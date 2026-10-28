@@ -1,5 +1,6 @@
 package app.anylap.ui.pro
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,7 +51,7 @@ fun ProBadge(modifier: Modifier = Modifier) {
     ) {
         Icon(Icons.Rounded.WorkspacePremium, null, tint = RT.Gold, modifier = Modifier.size(12.dp))
         Spacer(Modifier.width(3.dp))
-        Text("PRO", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.ExtraBold), color = RT.Gold)
+        Text(tr("PRO"), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.ExtraBold), color = RT.Gold)
     }
 }
 
@@ -81,6 +82,6 @@ fun ProLockCard(
             }
         }
         Spacer(Modifier.height(12.dp))
-        SecondaryButton("See AnyLap Pro", { nav.push(Screen.Paywall(feature)) }, Modifier.fillMaxWidth(), icon = Icons.Rounded.WorkspacePremium)
+        SecondaryButton(tr("See AnyLap Pro"), { nav.push(Screen.Paywall(feature)) }, Modifier.fillMaxWidth(), icon = Icons.Rounded.WorkspacePremium)
     }
 }

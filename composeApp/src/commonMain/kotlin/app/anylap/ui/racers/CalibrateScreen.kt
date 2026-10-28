@@ -1,5 +1,6 @@
 package app.anylap.ui.racers
 
+import app.anylap.i18n.tr
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
@@ -173,7 +174,7 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
 
     if (session == null) {
         Box(Modifier.fillMaxSize().background(RT.Bg), contentAlignment = Alignment.Center) {
-            Text("Camera unavailable on this device.", color = RT.TextDim)
+            Text(tr("Camera unavailable on this device."), color = RT.TextDim)
         }
         return
     }
@@ -212,12 +213,13 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
         session.rejected.collect { e ->
             if (currentStep !is CalStep.Pass || currentEditing) return@collect
             rejectedInARow++
-            val pct = "${(e.match * 100).fixed(0)}% match"
-            notice = if (rejectedInARow < 3) "Ignored: something crossed that didn't look like ${racer.name} ($pct)."
-            else "Still not recognising ${racer.name} ($pct). If that was the ${racer.sport.unitName}, retake the photos with it filling the box, in this light."
+            val pct = tr("{0}% match", (e.match * 100).fixed(0))
+            notice = if (rejectedInARow < 3) tr("Ignored: something crossed that didn't look like {0} ({1}).", racer.name, pct)
+            else tr("Still not recognising {0} ({1}). If that was {0}, retake the photos with it filling the box, in this light.", racer.name, pct)
+            val shown = notice
             scope.launch {
                 delay(5_000)
-                if (notice?.startsWith("Ignored") == true || notice?.startsWith("Still") == true) notice = null
+                if (notice == shown) notice = null
             }
         }
     }
@@ -229,7 +231,7 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
             val current = app.repo.racer(racerId) ?: return@collect
             val before = current.samplesOf(st.kind).size
             if (before >= CalibrationPlan.MAX_PASSES_PER_SPEED) {
-                notice = "That's plenty – delete one in Review to record more."
+                notice = tr("That's plenty – delete one in Review to record more.")
                 return@collect
             }
             val now = Platform.nowMillis()
@@ -284,7 +286,7 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
             scope.launch {
                 val fp = withTimeoutOrNull(2_000) { fpReady.await() }
                 if (fp == null) {
-                    notice = "Couldn't take the photo – try again."
+                    notice = tr("Couldn't take the photo – try again.")
                 } else {
                     val now = Platform.nowMillis()
                     val path = jpeg?.let {
@@ -414,7 +416,7 @@ fun CalibrateLayout(
                     CalStep.Review -> {}
                 }
 
-                CameraHint("${fps.fixed(0)} fps", Modifier.align(Alignment.TopEnd).padding(10.dp))
+                CameraHint(tr("{0} fps", fps.fixed(0)), Modifier.align(Alignment.TopEnd).padding(10.dp))
 
                 if (step is CalStep.Pass && editingLine) {
                     LineTools(
@@ -425,7 +427,7 @@ fun CalibrateLayout(
                         onDone = { actions.onEditLine(false) },
                         modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
                     )
-                    CameraHint("Drag the ends onto the tape on the ground", Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
+                    CameraHint(tr("Drag the ends onto the tape on the ground"), Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
                 } else if (step != CalStep.Review) {
                     StepCard(racer, step, views, slow, fast, markerSeen, notice, actions, Modifier.align(Alignment.BottomStart).padding(10.dp))
                 }
@@ -445,7 +447,7 @@ fun CalibrateLayout(
                             Column(horizontalAlignment = Alignment.End) {
                                 SampleTile(s, s.caption(racer, kmh), { actions.onOpenSample(s) }, { actions.onDeleteSample(s) }, size = 76.dp)
                                 Spacer(Modifier.height(4.dp))
-                                CameraHint("Saved – tap × if it was a bad pass")
+                                CameraHint(tr("Saved – tap × if it was a bad pass"))
                             }
                         }
                     }
@@ -467,10 +469,10 @@ fun CalibrateLayout(
         }
 
         CameraRail {
-            RailButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", actions.onBack)
+            RailButton(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back"), actions.onBack)
             Box(Modifier.padding(vertical = 2.dp)) { RacerAvatar(racer, 40.dp) }
             RailButton(
-                Icons.Rounded.CameraAlt, "Photos",
+                Icons.Rounded.CameraAlt, tr("Photos"),
                 {
                     val missing = views.indexOfFirst { v -> photos.none { it.view == v.key } }
                     actions.onStep(CalStep.Photo(if (missing >= 0) missing else 0))
@@ -480,17 +482,17 @@ fun CalibrateLayout(
                 done = requiredPhotosDone,
             )
             RailButton(
-                Icons.Rounded.SlowMotionVideo, "Slow", { actions.onStep(CalStep.Pass(SampleKind.PASS_SLOW)) },
+                Icons.Rounded.SlowMotionVideo, tr("Slow"), { actions.onStep(CalStep.Pass(SampleKind.PASS_SLOW)) },
                 selected = step == CalStep.Pass(SampleKind.PASS_SLOW) && !editingLine,
                 badge = "$slow/$target", done = slow >= target,
             )
             RailButton(
-                Icons.Rounded.Speed, "Fast", { actions.onStep(CalStep.Pass(SampleKind.PASS_FAST)) },
+                Icons.Rounded.Speed, tr("Fast"), { actions.onStep(CalStep.Pass(SampleKind.PASS_FAST)) },
                 selected = step == CalStep.Pass(SampleKind.PASS_FAST) && !editingLine,
                 badge = "$fast/$target", done = fast >= target,
             )
             RailButton(
-                Icons.Rounded.Flag, "Line",
+                Icons.Rounded.Flag, tr("Line"),
                 {
                     if (step !is CalStep.Pass) actions.onStep(CalStep.Pass(if (slow < target) SampleKind.PASS_SLOW else SampleKind.PASS_FAST))
                     actions.onEditLine(!(editingLine && step is CalStep.Pass))
@@ -498,7 +500,7 @@ fun CalibrateLayout(
                 selected = editingLine && step is CalStep.Pass,
             )
             RailButton(
-                Icons.Rounded.GridView, "Review", { actions.onStep(CalStep.Review) },
+                Icons.Rounded.GridView, tr("Review"), { actions.onStep(CalStep.Review) },
                 selected = step == CalStep.Review,
                 badge = "${racer.calibration.size}",
             )
@@ -533,17 +535,17 @@ private fun StepCard(
             is CalStep.Photo -> {
                 val v = views[step.index]
                 Text(
-                    "PHOTO ${step.index + 1}/${views.size}${if (v.required) "" else " · OPTIONAL"}",
+                    tr("PHOTO {0}/{1}", step.index + 1, views.size) + (if (v.required) "" else tr(" · OPTIONAL")),
                     style = MaterialTheme.typography.labelSmall, color = RT.Accent,
                 )
                 Text(v.title, style = MaterialTheme.typography.titleSmall.copy(color = Color.White))
                 Text(
-                    "${v.hint} Fill the white box${if (rc) " with the car" else ""}.",
+                    if (rc) tr("{0} Fill the white box with the car.", v.hint) else tr("{0} Fill the white box.", v.hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (step.index + 1 < views.size) "Skip this side" else "Skip to passes",
+                        if (step.index + 1 < views.size) tr("Skip this side") else tr("Skip to passes"),
                         style = MaterialTheme.typography.labelMedium, color = RT.TextDim,
                         modifier = Modifier
                             .heightIn(min = 36.dp)
@@ -558,21 +560,21 @@ private fun StepCard(
                 val isSlow = step.kind == SampleKind.PASS_SLOW
                 val count = if (isSlow) slow else fast
                 Text(
-                    if (isSlow) "SLOW PASSES" else "FAST PASSES",
+                    if (isSlow) tr("SLOW PASSES") else tr("FAST PASSES"),
                     style = MaterialTheme.typography.labelSmall, color = RT.Accent,
                 )
                 Text(
                     when {
-                        rc && isSlow -> "Drive past the line slowly"
-                        rc -> "Now at race speed"
-                        isSlow -> "Walk or jog past the line"
-                        else -> "Now at race pace"
+                        rc && isSlow -> tr("Drive past the line slowly")
+                        rc -> tr("Now at race speed")
+                        isSlow -> tr("Walk or jog past the line")
+                        else -> tr("Now at race pace")
                     },
                     style = MaterialTheme.typography.titleSmall.copy(color = Color.White),
                 )
                 Text(
-                    "${CalibrationPlan.PASSES_PER_SPEED} times, the way you'll race, with nothing else moving. " +
-                        "Line not on your tape? Tap Line.",
+                    tr("{0} times, the way you'll race, with nothing else moving. ", CalibrationPlan.PASSES_PER_SPEED) +
+                        tr("Line not on your tape? Tap Line."),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(2.dp))
@@ -583,9 +585,9 @@ private fun StepCard(
                         Spacer(Modifier.width(4.dp))
                         Text(
                             when (markerSeen) {
-                                null -> "Bib not seen yet"
-                                racer.markerId -> "Bib read ✓"
-                                else -> "Saw bib $markerSeen – wrong bib?"
+                                null -> tr("Bib not seen yet")
+                                racer.markerId -> tr("Bib read ✓")
+                                else -> tr("Saw bib {0} – wrong bib?", markerSeen)
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = if (markerSeen == racer.markerId) RT.Green else RT.TextDim,
@@ -594,7 +596,7 @@ private fun StepCard(
                 }
                 if (count >= CalibrationPlan.PASSES_PER_SPEED) {
                     Text(
-                        if (isSlow) "Done – moving on to fast passes…" else "Done – check them in Review.",
+                        if (isSlow) tr("Done – moving on to fast passes…") else tr("Done – check them in Review."),
                         style = MaterialTheme.typography.labelMedium, color = RT.Green,
                     )
                 }
@@ -603,7 +605,7 @@ private fun StepCard(
         }
         notice?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = RT.Amber) }
         if (step is CalStep.Pass) {
-            Text("Each $unit pass is saved with a picture you can delete.", style = MaterialTheme.typography.labelSmall, color = RT.TextFaint)
+            Text(tr("Each {0} pass is saved with a picture you can delete.", unit), style = MaterialTheme.typography.labelSmall, color = RT.TextFaint)
         }
     }
 }
@@ -639,7 +641,7 @@ private fun Shutter(busy: Boolean, onClick: () -> Unit, modifier: Modifier) {
             .background(Color.Black.copy(alpha = 0.35f))
             .border(4.dp, Color.White, CircleShape)
             .clickable(enabled = !busy, onClick = onClick)
-            .semantics { role = Role.Button; contentDescription = "Take photo" },
+            .semantics { role = Role.Button; contentDescription = tr("Take photo") },
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(52.dp).clip(CircleShape).background(if (busy) RT.Surface3 else RT.Accent), contentAlignment = Alignment.Center) {
@@ -660,15 +662,15 @@ private fun BoxScope.ReviewPanel(racer: Racer, kmh: Boolean, actions: CalibrateA
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Review ${racer.name}", style = MaterialTheme.typography.titleMedium)
+                Text(tr("Review {0}", racer.name), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Tap a picture to look closer. Delete anything that isn't the ${racer.sport.unitName} on its own.",
+                    tr("Tap a picture to look closer. Delete anything that isn't the {0} on its own.", racer.sport.unitName),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
             Spacer(Modifier.width(12.dp))
             PrimaryButton(
-                if (ready) "Done" else "Finish later",
+                if (ready) tr("Done") else tr("Finish later"),
                 actions.onDone,
                 icon = if (ready) Icons.Rounded.Check else Icons.Rounded.Close,
                 color = if (ready) RT.Accent else RT.Surface3,

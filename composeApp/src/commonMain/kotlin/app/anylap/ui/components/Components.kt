@@ -1,5 +1,6 @@
 package app.anylap.ui.components
 
+import app.anylap.i18n.tr
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -110,7 +111,7 @@ fun ScreenScaffold(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (onBack != null) {
-                        CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, onBack, contentDescription = "Back")
+                        CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, onBack, contentDescription = tr("Back"))
                         Spacer(Modifier.width(12.dp))
                     }
                     Column(Modifier.weight(1f)) {
@@ -454,7 +455,7 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
 @Composable
 fun Stepper(value: Int, onChange: (Int) -> Unit, range: IntRange, suffix: String, step: Int = 1) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        StepButton("−", "Decrease") { onChange((value - step).coerceIn(range)) }
+        StepButton("−", tr("Decrease")) { onChange((value - step).coerceIn(range)) }
         Row(Modifier.width(118.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
             Text("$value", style = Num.style(28.sp, FontWeight.ExtraBold))
             if (suffix.isNotEmpty()) {
@@ -462,7 +463,7 @@ fun Stepper(value: Int, onChange: (Int) -> Unit, range: IntRange, suffix: String
                 Text(suffix, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 5.dp))
             }
         }
-        StepButton("+", "Increase") { onChange((value + step).coerceIn(range)) }
+        StepButton("+", tr("Increase")) { onChange((value + step).coerceIn(range)) }
     }
 }
 

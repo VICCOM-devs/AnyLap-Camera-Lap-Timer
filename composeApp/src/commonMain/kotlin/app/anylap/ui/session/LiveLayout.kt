@@ -1,5 +1,7 @@
 package app.anylap.ui.session
 
+import app.anylap.data.count
+import app.anylap.i18n.tr
 import app.anylap.engine.RaceEngine
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -131,8 +133,8 @@ fun LiveLayout(
                 if (setup) {
                     // Compact: a one-line summary and fps, nothing covering the track.
                     Row(Modifier.align(Alignment.TopStart).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        HudChip("${modeLabel(config)} · ${race.standings.size} ${config.sport.unitName}${if (race.standings.size == 1) "" else "s"}")
-                        HudChip("${fps.fixed(0)} FPS")
+                        HudChip("${modeLabel(config)} · ${config.sport.count(race.standings.size)}")
+                        HudChip(tr("{0} FPS", fps.fixed(0)))
                     }
                     if (editingLine) {
                         LineTools(
@@ -143,14 +145,14 @@ fun LiveLayout(
                             onDone = { editingLine = false },
                             modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
                         )
-                        CameraHint("Drag the ends onto the tape on the ground", Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
+                        CameraHint(tr("Drag the ends onto the tape on the ground"), Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
                     }
                 } else {
                     Column(Modifier.align(Alignment.TopStart).padding(14.dp)) {
                         ClockHud(race, config)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            HudChip("${fps.fixed(0)} FPS")
+                            HudChip(tr("{0} FPS", fps.fixed(0)))
                             if (recording) RecChip()
                         }
                     }
@@ -180,7 +182,7 @@ fun LiveLayout(
                                     .padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Icon(Icons.AutoMirrored.Rounded.HelpOutline, "Unknown crossing – tap to assign", tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Icon(Icons.AutoMirrored.Rounded.HelpOutline, tr("Unknown crossing – tap to assign"), tint = Color.Black, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text(Format.clock(u.atMs), color = Color.Black, style = Num.style(14.sp, FontWeight.Bold))
                             }
@@ -234,14 +236,14 @@ fun LiveLayout(
 private fun ClockHud(race: RaceState, config: SessionConfig) {
     val timeUp = race.timeUp
     val main = when {
-        race.phase == Phase.SETUP -> "READY"
+        race.phase == Phase.SETUP -> tr("READY")
         config.mode == RaceMode.TIME && !timeUp -> Format.clock(config.timeLimitSec * 1000L - race.elapsedMs)
         else -> Format.clock(race.elapsedMs)
     }
     val label = when (config.mode) {
-        RaceMode.PRACTICE -> "PRACTICE"
-        RaceMode.LAPS -> "LAP ${(race.leaderLaps + 1).coerceAtMost(config.targetLaps)}/${config.targetLaps}"
-        RaceMode.TIME -> if (timeUp) "FINAL LAP" else "TIME LEFT"
+        RaceMode.PRACTICE -> tr("PRACTICE")
+        RaceMode.LAPS -> tr("LAP {0}/{1}", (race.leaderLaps + 1).coerceAtMost(config.targetLaps), config.targetLaps)
+        RaceMode.TIME -> if (timeUp) tr("FINAL LAP") else tr("TIME LEFT")
     }
     Row(
         Modifier
@@ -281,7 +283,7 @@ private fun RecChip() {
     ) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(RT.AccentHot))
         Spacer(Modifier.width(5.dp))
-        Text("REC", style = MaterialTheme.typography.labelSmall.copy(color = Color.White))
+        Text(tr("REC"), style = MaterialTheme.typography.labelSmall.copy(color = Color.White))
     }
 }
 
@@ -308,7 +310,7 @@ private fun StartLights(lit: Int) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            if (lit < RaceEngine.START_LIGHTS) "GET READY" else "LIGHTS OUT AND AWAY WE GO…",
+            if (lit < RaceEngine.START_LIGHTS) tr("GET READY") else tr("LIGHTS OUT AND AWAY WE GO…"),
             style = MaterialTheme.typography.labelSmall.copy(color = Color.White, letterSpacing = 1.5.sp),
         )
     }
@@ -330,14 +332,14 @@ private fun SetupRail(
 ) {
     val racers = race.standings.map { it.racer }
     CameraRail {
-        RailButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack)
-        RailButton(Icons.Rounded.Flag, "Line", onEditLine, selected = editingLine)
+        RailButton(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back"), onBack)
+        RailButton(Icons.Rounded.Flag, tr("Line"), onEditLine, selected = editingLine)
         RailButton(
             if (voice) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
-            if (voice) "Voice on" else "Voice off",
+            if (voice) tr("Voice on") else tr("Voice off"),
             onToggleVoice,
         )
-        RailButton(Icons.Rounded.Sensors, if (live) "Synced" else "Sync", onLive, selected = live)
+        RailButton(Icons.Rounded.Sensors, if (live) tr("Synced") else tr("Sync"), onLive, selected = live)
         Spacer(Modifier.weight(1f))
         // Who's in the session: small avatars, "+n" if they don't fit.
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy((-8).dp)) {
@@ -347,7 +349,7 @@ private fun SetupRail(
         Spacer(Modifier.height(4.dp))
         RailButton(
             Icons.Rounded.PlayArrow,
-            if (config.mode == RaceMode.PRACTICE) "Start" else "Start race",
+            if (config.mode == RaceMode.PRACTICE) tr("Start") else tr("Start race"),
             onStart,
             size = 56.dp,
             filled = true,
@@ -356,9 +358,9 @@ private fun SetupRail(
 }
 
 private fun modeLabel(c: SessionConfig): String = when (c.mode) {
-    RaceMode.PRACTICE -> "PRACTICE"
-    RaceMode.LAPS -> "${c.targetLaps} LAPS"
-    RaceMode.TIME -> "${c.timeLimitSec / 60} MIN"
+    RaceMode.PRACTICE -> tr("PRACTICE")
+    RaceMode.LAPS -> tr("{0} LAPS", c.targetLaps)
+    RaceMode.TIME -> tr("{0} MIN", c.timeLimitSec / 60)
 }
 
 /** Broadcast lower-third for each completed lap. */
@@ -388,7 +390,7 @@ private fun LapFlashBanner(flash: LapFlash?, kmh: Boolean, modifier: Modifier) {
             Modifier
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color.Black.copy(alpha = 0.82f))
-                .semantics { liveRegion = LiveRegionMode.Polite; contentDescription = "${f.racer.name} lap ${f.lap.number} ${Format.lap(f.lap.timeMs)}" },
+                .semantics { liveRegion = LiveRegionMode.Polite; contentDescription = tr("{0} lap {1} {2}", f.racer.name, f.lap.number, Format.lap(f.lap.timeMs)) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -400,10 +402,10 @@ private fun LapFlashBanner(flash: LapFlash?, kmh: Boolean, modifier: Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(f.racer.code, style = Num.style(15.sp, FontWeight.Black))
                     Spacer(Modifier.width(8.dp))
-                    Text("LAP ${f.lap.number}", style = MaterialTheme.typography.labelSmall)
+                    Text(tr("LAP {0}", f.lap.number), style = MaterialTheme.typography.labelSmall)
                     if (f.fastest || f.personalBest) {
                         Spacer(Modifier.width(8.dp))
-                        Tag(if (f.fastest) "Fastest lap" else "Personal best", accent, filled = true)
+                        Tag(if (f.fastest) tr("Fastest lap") else tr("Personal best"), accent, filled = true)
                     }
                 }
                 Row(verticalAlignment = Alignment.Bottom) {
@@ -447,33 +449,33 @@ private fun TimingTower(
             Column(Modifier.weight(1f)) {
                 Text(
                     when (config.mode) {
-                        RaceMode.PRACTICE -> "PRACTICE"
-                        RaceMode.LAPS -> "${config.targetLaps}-LAP RACE"
-                        RaceMode.TIME -> "${config.timeLimitSec / 60}-MIN RACE"
+                        RaceMode.PRACTICE -> tr("PRACTICE")
+                        RaceMode.LAPS -> tr("{0}-LAP RACE", config.targetLaps)
+                        RaceMode.TIME -> tr("{0}-MIN RACE", config.timeLimitSec / 60)
                     },
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
                 )
                 Text(
-                    "${race.standings.size} ${config.sport.unitName}${if (race.standings.size == 1) "" else "s"} · camera ${config.cameraDistanceM.fixed(1)} m",
+                    config.sport.count(race.standings.size) + " · " + tr("camera {0} m", config.cameraDistanceM.fixed(1)),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
             CircleIconButton(
                 Icons.Rounded.Sensors, onLive, tint = if (live) RT.Accent else RT.Text, size = 44.dp,
-                contentDescription = if (live) "Other phones can join" else "Sync: let other phones join",
+                contentDescription = if (live) tr("Other phones can join") else tr("Sync: let other phones join"),
             )
             Spacer(Modifier.width(8.dp))
             CircleIconButton(
                 if (voice) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
                 onToggleVoice, size = 44.dp,
-                contentDescription = if (voice) "Mute lap announcements" else "Announce lap times",
+                contentDescription = if (voice) tr("Mute lap announcements") else tr("Announce lap times"),
             )
         }
         // column headings
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("POS", style = MaterialTheme.typography.labelSmall, color = RT.TextFaint, modifier = Modifier.width(34.dp))
-            Text(if (isRace) "RACER · LAST LAP" else "RACER · LAST LAP", style = MaterialTheme.typography.labelSmall, color = RT.TextFaint, modifier = Modifier.weight(1f))
-            Text(if (isRace) "GAP" else "BEST", style = MaterialTheme.typography.labelSmall, color = RT.TextFaint)
+            Text(tr("POS"), style = MaterialTheme.typography.labelSmall, color = RT.TextFaint, modifier = Modifier.width(34.dp))
+            Text(if (isRace) tr("RACER · LAST LAP") else tr("RACER · LAST LAP"), style = MaterialTheme.typography.labelSmall, color = RT.TextFaint, modifier = Modifier.weight(1f))
+            Text(if (isRace) tr("GAP") else tr("BEST"), style = MaterialTheme.typography.labelSmall, color = RT.TextFaint)
         }
         LazyColumn(
             Modifier.weight(1f).padding(horizontal = 10.dp),
@@ -485,10 +487,10 @@ private fun TimingTower(
         }
         Box(Modifier.padding(12.dp)) {
             when (race.phase) {
-                Phase.SETUP -> PrimaryButton(if (isRace) "Start race" else "Start practice", onStart, Modifier.fillMaxWidth(), icon = Icons.Rounded.PlayArrow)
-                Phase.COUNTDOWN -> PrimaryButton("Get ready…", {}, Modifier.fillMaxWidth(), enabled = false)
-                Phase.RUNNING -> PrimaryButton("End session", onEnd, Modifier.fillMaxWidth(), icon = Icons.Rounded.Stop, color = RT.Surface3)
-                Phase.FINISHED -> PrimaryButton("Saving…", {}, Modifier.fillMaxWidth(), icon = Icons.Rounded.Flag, enabled = false)
+                Phase.SETUP -> PrimaryButton(if (isRace) tr("Start race") else tr("Start practice"), onStart, Modifier.fillMaxWidth(), icon = Icons.Rounded.PlayArrow)
+                Phase.COUNTDOWN -> PrimaryButton(tr("Get ready…"), {}, Modifier.fillMaxWidth(), enabled = false)
+                Phase.RUNNING -> PrimaryButton(tr("End session"), onEnd, Modifier.fillMaxWidth(), icon = Icons.Rounded.Stop, color = RT.Surface3)
+                Phase.FINISHED -> PrimaryButton(tr("Saving…"), {}, Modifier.fillMaxWidth(), icon = Icons.Rounded.Flag, enabled = false)
             }
         }
     }
@@ -506,7 +508,7 @@ private fun TowerRow(s: Standing, isRace: Boolean, running: Boolean, onAddLap: (
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (leader) RT.Surface2 else RT.Surface)
                 .border(1.dp, if (s.finished) RT.Gold.copy(alpha = 0.55f) else Color.Transparent, RoundedCornerShape(12.dp))
-                .clickable(enabled = running, onClickLabel = "Add or remove a lap") { menu = true }
+                .clickable(enabled = running, onClickLabel = tr("Add or remove a lap")) { menu = true }
                 .drawBehind {
                     if (leader) drawRect(Brush.horizontalGradient(listOf(RT.Accent.copy(alpha = 0.18f), Color.Transparent), endX = size.width * 0.5f))
                 },
@@ -529,12 +531,12 @@ private fun TowerRow(s: Standing, isRace: Boolean, running: Boolean, onAddLap: (
                     Text(s.racer.name, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (s.finished) {
                         Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Rounded.Flag, "Finished", tint = RT.Gold, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Rounded.Flag, tr("Finished"), tint = RT.Gold, modifier = Modifier.size(14.dp))
                     }
                 }
                 Text(
                     when {
-                        !isRace && !s.timing -> "Waiting for first pass"
+                        !isRace && !s.timing -> tr("Waiting for first pass")
                         s.lastLapMs == null -> "L${s.laps}"
                         else -> "L${s.laps} · ${Format.lap(s.lastLapMs)}"
                     },
@@ -546,15 +548,15 @@ private fun TowerRow(s: Standing, isRace: Boolean, running: Boolean, onAddLap: (
             Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 12.dp)) {
                 val primary = when {
                     s.laps == 0 && isRace -> "—"
-                    isRace -> if (s.position == 1) "LEADER" else s.gap
+                    isRace -> if (s.position == 1) tr("LEADER") else s.gap
                     else -> Format.lap(s.bestLapMs)
                 }
                 Text(
                     primary,
-                    style = if (primary == "LEADER") MaterialTheme.typography.labelSmall else Num.style(15.sp, FontWeight.Bold),
+                    style = if (primary == tr("LEADER")) MaterialTheme.typography.labelSmall else Num.style(15.sp, FontWeight.Bold),
                     color = when {
                         !isRace && s.hasFastestLap -> RT.Purple
-                        primary == "LEADER" -> RT.AccentHot
+                        primary == tr("LEADER") -> RT.AccentHot
                         else -> RT.Text
                     },
                 )
@@ -564,8 +566,8 @@ private fun TowerRow(s: Standing, isRace: Boolean, running: Boolean, onAddLap: (
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("Add lap now") }, onClick = { menu = false; onAddLap() })
-            DropdownMenuItem(text = { Text("Remove last lap") }, onClick = { menu = false; onRemoveLap() })
+            DropdownMenuItem(text = { Text(tr("Add lap now")) }, onClick = { menu = false; onAddLap() })
+            DropdownMenuItem(text = { Text(tr("Remove last lap")) }, onClick = { menu = false; onRemoveLap() })
         }
     }
 }

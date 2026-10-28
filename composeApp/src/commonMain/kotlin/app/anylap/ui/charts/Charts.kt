@@ -1,5 +1,6 @@
 package app.anylap.ui.charts
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,7 +60,7 @@ fun LineChart(
     Column(modifier) {
         if (all.isEmpty()) {
             Box(Modifier.fillMaxWidth().height(height), contentAlignment = Alignment.Center) {
-                Text("Not enough data yet", style = MaterialTheme.typography.bodySmall)
+                Text(tr("Not enough data yet"), style = MaterialTheme.typography.bodySmall)
             }
             return@Column
         }

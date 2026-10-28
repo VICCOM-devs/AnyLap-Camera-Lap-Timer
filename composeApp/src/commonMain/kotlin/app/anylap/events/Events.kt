@@ -1,12 +1,13 @@
 package app.anylap.events
 
+import app.anylap.i18n.tr
 import app.anylap.data.RaceMode
 import app.anylap.data.Session
 import app.anylap.data.Sport
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class RoundKind(val title: String) { HEAT("Heat"), FINAL("Final") }
+enum class RoundKind(val title: String) { HEAT(tr("Heat")), FINAL(tr("Final")) }
 
 /** One race inside an event. [sessionId] is set once it has been run. */
 @Serializable
