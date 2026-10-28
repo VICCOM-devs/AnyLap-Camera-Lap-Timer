@@ -95,13 +95,17 @@ def page(shot, lang):
         below = y + ph + 44
         if lay == "landscape-hero":
             # Feature chips just under the subtitle, then two enlarged call-outs of the live screen.
-            chips = "".join(f'<span class="chip">{html.escape(c)}</span>' for c in shot["chips"][lang])
-            body.append(f'<div class="chips" style="top:448px">{chips}</div>')
+            if "chips" in shot:
+                chips = "".join(f'<span class="chip">{html.escape(c)}</span>' for c in shot["chips"][lang])
+                body.append(f'<div class="chips" style="top:448px">{chips}</div>')
             z = shot["zoom"]
             gap = 30
-            h1 = 250
-            h2 = H - below - h1 - gap - 60
-            boxes = [(44, below, W - 88, h1), (44, below + h1 + gap, W - 88, h2)]
+            if len(z) == 1:
+                boxes = [(44, below, W - 88, H - below - 60)]
+            else:
+                h1 = shot.get("zoom_h1", 250)
+                h2 = H - below - h1 - gap - 60
+                boxes = [(44, below, W - 88, h1), (44, below + h1 + gap, W - 88, h2)]
             for (zx, zy, zw, zh), zc in zip(boxes, z):
                 cx, cy, cw, ch = zc["crop"]
                 zs = RAW / zc["src"]

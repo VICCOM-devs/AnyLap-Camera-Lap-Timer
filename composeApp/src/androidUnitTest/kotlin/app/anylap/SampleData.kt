@@ -68,6 +68,39 @@ object SampleData {
         history.forEachIndexed { i, (daysAgo, slower) ->
             repo.saveSession(session("older-$i", now - daysAgo * day, slower, 8))
         }
-        repo.saveSession(session(SESSION_ID, now, 0L, 10))
+        repo.saveSession(featureRace(racers, now))
+    }
+
+    /** Lap times (ms) for the featured race, scripted so the charts tell a story. */
+    private val featureLaps = listOf(
+        // Red Rocket: sets the fastest lap (11.602) on lap 7, bobbles on lap 8, wins by 0.008 s.
+        listOf(12104L, 11962, 11874, 11702, 11795, 11688, 11602, 12105, 11690, 11716),
+        // Blue Comet: leads laps 1–5 and 8, loses at the line.
+        listOf(11986L, 11851, 11940, 11808, 11795, 11912, 11690, 11830, 11750, 11684),
+        // Yellow Jacket: drops behind Ghost on laps 2–4, takes P3 back on lap 5.
+        listOf(12388L, 12512, 12298, 12455, 12410, 12366, 12482, 12301, 12436, 12392),
+        // Ghost
+        listOf(12450L, 12290, 12310, 12388, 12802, 12577, 12498, 12640, 12455, 12530),
+    )
+
+    /** Ten-lap race with five lead changes, won by 0.008 s. */
+    private fun featureRace(racers: List<Racer>, start: Long): Session {
+        val rnd = Random(11)
+        val all = ArrayList<Lap>()
+        racers.forEachIndexed { ri, r ->
+            var at = 0L
+            featureLaps[ri].forEachIndexed { i, t ->
+                at += t
+                // Speed at the line: quicker laps carry more speed, with a little noise.
+                val kmh = 29.6f - (t - 11_600) / 260f + (rnd.nextFloat() - 0.5f) * 0.6f
+                all += Lap(r.id, i + 1, t, at, kmh, LapSource.AUTO)
+            }
+        }
+        val order = racers.sortedBy { r -> all.filter { it.racerId == r.id }.maxOf { it.atMs } }.map { it.id }
+        return Session(
+            id = SESSION_ID, startedAt = start,
+            config = SessionConfig(sport = Sport.RC, mode = RaceMode.LAPS, targetLaps = 10, racerIds = racers.map { it.id }, cameraDistanceM = 2.5f),
+            racers = racers, laps = all, durationMs = all.maxOf { it.atMs } + 2000, order = order,
+        )
     }
 }

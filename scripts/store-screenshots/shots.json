@@ -56,7 +56,37 @@
       }
     },
     {
-      "id": "02_results",
+      "id": "02_finish",
+      "layout": "landscape-hero",
+      "src": "store/live_finish.png",
+      "zoom": [
+        {
+          "src": "store/live_finish.png",
+          "crop": [
+            0.608,
+            0.225,
+            0.388,
+            0.6
+          ]
+        }
+      ],
+      "caption": {
+        "en": [
+          "Decided by",
+          "*0.008* seconds"
+        ],
+        "sv": [
+          "Avgjort på",
+          "*0,008* sekunder"
+        ]
+      },
+      "sub": {
+        "en": "Two cars, one line, eight thousandths apart. AnyLap saw it.",
+        "sv": "Två bilar, en linje, åtta tusendelar isär. AnyLap såg det."
+      }
+    },
+    {
+      "id": "03_results",
       "layout": "portrait",
       "src": "store/results_tall.png",
       "top": 0,
@@ -76,7 +106,47 @@
       }
     },
     {
-      "id": "03_stats",
+      "id": "04_positions",
+      "layout": "portrait",
+      "src": "store/results_charts_tall.png",
+      "top": 0,
+      "caption": {
+        "en": [
+          "Watch every",
+          "*lead change*"
+        ],
+        "sv": [
+          "Se varje",
+          "*ledarbyte*"
+        ]
+      },
+      "sub": {
+        "en": "Positions lap by lap, so you see exactly where the race was won.",
+        "sv": "Placering varv för varv – se exakt var racet avgjordes."
+      }
+    },
+    {
+      "id": "05_laps",
+      "layout": "portrait",
+      "src": "store/results_charts_tall.png",
+      "top": 0,
+      "caption": {
+        "en": [
+          "See where the",
+          "*time went*"
+        ],
+        "sv": [
+          "Se var",
+          "*tiden försvann*"
+        ]
+      },
+      "sub": {
+        "en": "Lap times, speed at the line and best-lap rankings for every car.",
+        "sv": "Varvtider, fart vid linjen och bästa varv för varje bil."
+      }
+    },
+    {
+      "id": "06_stats",
       "layout": "portrait",
       "src": "store/stats_tall.png",
       "top": 0,
@@ -96,7 +166,7 @@
       }
     },
     {
-      "id": "04_setup",
+      "id": "07_setup",
       "layout": "landscape",
       "src": "store/live_setup.png",
       "caption": {
@@ -115,7 +185,7 @@
       }
     },
     {
-      "id": "05_racers",
+      "id": "08_racers",
       "layout": "portrait",
       "src": "03_racers.png",
       "top": 0,
@@ -132,26 +202,6 @@
       "sub": {
         "en": "Calibrate each car's colours once. Runners get printable bibs.",
         "sv": "Kalibrera bilens färger en gång. Löpare får nummerlappar att skriva ut."
-      }
-    },
-    {
-      "id": "06_home",
-      "layout": "portrait",
-      "src": "01_home.png",
-      "top": 0,
-      "caption": {
-        "en": [
-          "Your track,",
-          "your *records*"
-        ],
-        "sv": [
-          "Din bana,",
-          "dina *rekord*"
-        ]
-      },
-      "sub": {
-        "en": "Everything stays on your phone. No account, no ads.",
-        "sv": "Allt stannar i mobilen. Inget konto, inga annonser."
       }
     }
   ]

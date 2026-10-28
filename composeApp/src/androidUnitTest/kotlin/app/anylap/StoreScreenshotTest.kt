@@ -8,7 +8,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import app.anylap.data.Direction
 import app.anylap.data.Lap
 import app.anylap.data.LineSpec
@@ -50,7 +52,7 @@ class StoreScreenshotTest {
         BitmapFactory.decodeFile(File(SampleData.storeDir, "track.jpg").path).asImageBitmap()
     }
 
-    private fun live(name: String, phase: Phase, flash: Boolean) {
+    private fun live(name: String, phase: Phase, flash: Boolean, finish: Boolean = false) {
         val repo = AppGraph.state.repo
         SampleData.seed(repo)
         val racers = repo.racersFor(Sport.RC).sortedBy { it.number }.let { l ->
@@ -61,6 +63,18 @@ class StoreScreenshotTest {
         val gaps = listOf("LEADER", "+0.412", "+1.907", "+1 lap")
         val standings = if (phase == Phase.SETUP) racers.mapIndexed { i, r ->
             Standing(r, i + 1, 0, null, null, null, "—", false, false, false)
+        } else if (finish) {
+            // The photo finish of the featured race: Red Rocket takes it by 0.008 s.
+            val last = listOf(11_716L, 11_684, 12_392, 12_530)
+            val best = listOf(11_602L, 11_684, 12_298, 12_290)
+            val fgaps = listOf("LEADER", "+0.008", "+6.174", "+7.104")
+            racers.mapIndexed { i, r ->
+                Standing(
+                    racer = r, position = i + 1, laps = 10, lastLapMs = last[i], bestLapMs = best[i],
+                    lastSpeedKmh = listOf(29.1f, 29.3f, 27.0f, 26.6f)[i], gap = fgaps[i], finished = i < 2,
+                    hasFastestLap = i == 0, timing = true,
+                )
+            }
         } else racers.mapIndexed { i, r ->
             Standing(
                 racer = r, position = i + 1, laps = if (i == 3) 6 else 7,
@@ -68,10 +82,14 @@ class StoreScreenshotTest {
                 gap = gaps[i], finished = false, hasFastestLap = i == 0, timing = true,
             )
         }
-        val f = if (flash) LapFlash(racers[0], Lap(racers[0].id, 7, 11_602, 84_000, 29.1f), 1, personalBest = true, fastest = true) else null
+        val f = when {
+            finish -> LapFlash(racers[1], Lap(racers[1].id, 10, 11_684, 117_874, 29.3f), 2, personalBest = true, fastest = false)
+            flash -> LapFlash(racers[0], Lap(racers[0].id, 7, 11_602, 84_000, 29.1f), 1, personalBest = true, fastest = true)
+            else -> null
+        }
         val race = RaceState(
-            phase = phase, countdown = 0, elapsedMs = 84_312, standings = standings,
-            flash = f, leaderLaps = if (phase == Phase.SETUP) 0 else 7,
+            phase = phase, countdown = 0, elapsedMs = if (finish) 117_874 else 84_312, standings = standings,
+            flash = f, leaderLaps = if (phase == Phase.SETUP) 0 else if (finish) 10 else 7,
         )
         compose.mainClock.autoAdvance = false
         compose.setContent {
@@ -98,7 +116,10 @@ class StoreScreenshotTest {
     @Test @Config(sdk = [35], qualifiers = "w891dp-h411dp-land-xxhdpi")
     fun liveSetup() = live("live_setup", Phase.SETUP, flash = false)
 
-    private fun tall(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {
+    @Test @Config(sdk = [35], qualifiers = "w891dp-h411dp-land-xxhdpi")
+    fun liveFinish() = live("live_finish", Phase.RUNNING, flash = true, finish = true)
+
+    private fun tall(name: String, tab: String? = null, content: @androidx.compose.runtime.Composable () -> Unit) {
         SampleData.seed(AppGraph.state.repo)
         compose.setContent {
             RaceTheme {
@@ -106,6 +127,10 @@ class StoreScreenshotTest {
             }
         }
         compose.waitForIdle()
+        if (tab != null) {
+            compose.onNodeWithText(tab).performClick()
+            compose.waitForIdle()
+        }
         compose.onRoot().captureRoboImage("screenshots/store/$name.png")
     }
 
@@ -115,4 +140,10 @@ class StoreScreenshotTest {
 
     @Test @Config(sdk = [35], qualifiers = "w411dp-h2000dp-xxhdpi")
     fun resultsTall() = tall("results_tall") { ResultsScreen(LocalNav.current, SampleData.SESSION_ID) }
+
+    @Test @Config(sdk = [35], qualifiers = "w411dp-h2000dp-xxhdpi")
+    fun resultsChartsTall() = tall("results_charts_tall", tab = "Charts") { ResultsScreen(LocalNav.current, SampleData.SESSION_ID) }
+
+    @Test @Config(sdk = [35], qualifiers = "w411dp-h2000dp-xxhdpi")
+    fun resultsLapsTall() = tall("results_laps_tall", tab = "Laps") { ResultsScreen(LocalNav.current, SampleData.SESSION_ID) }
 }
