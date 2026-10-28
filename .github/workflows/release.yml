@@ -1,0 +1,111 @@
+name: Release
+
+# Signed Play bundle (.aab) + matching APK.
+# Runs on a push to a release/* branch or a v*.*.* tag (and by hand once this file is on main).
+# The bundle is attached to a GitHub pre-release "play-<versionName>-<versionCode>" for upload in Play Console.
+
+on:
+  push:
+    branches: ["release/**"]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      # Secrets can't be tested in `if:` directly, so expose presence through env.
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload key present?
+        shell: bash
+        run: |
+          if [[ "$HAS_KEYSTORE" != "true" ]]; then
+            echo "::error::Upload keystore secrets missing (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD) – see RELEASING.md. No unsigned/debug bundle is produced."
+            exit 1
+          fi
+          echo "::notice::Upload keystore secrets found"
+
+      - name: Version
+        shell: bash
+        run: |
+          # Store versionCode: 1000 + this workflow's run number – monotonic, never reused, and above every
+          # test build (build.yml uses its own run number), so the update gate can tell them apart.
+          code=$((1000 + GITHUB_RUN_NUMBER))
+          name="$(grep '^appVersionName=' gradle.properties | cut -d= -f2)"
+          [[ "$GITHUB_REF" == refs/tags/v* ]] && name="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION_CODE=$code" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$name" >> "$GITHUB_ENV"
+          sed -i "s/const val BUILD = 0/const val BUILD = $code/" composeApp/src/commonMain/kotlin/app/anylap/BuildInfo.kt
+          echo "::notice::AnyLap $name (versionCode $code)"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode upload keystore
+        shell: bash
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+
+      - name: Bundle + APK (R8)
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          status=0
+          ./gradlew :composeApp:bundleRelease :composeApp:assembleRelease --continue > gradle-release.log 2>&1 || status=$?
+          tail -60 gradle-release.log
+          { grep -E '^e: ' gradle-release.log; grep -E -A3 'What went wrong|ERROR:|Missing class' gradle-release.log; } \
+            | grep -v '^--$' | head -30 \
+            | awk '{ lvl = (NR<=10) ? "error" : (NR<=20 ? "warning" : "notice"); print "::" lvl "::" $0 }' || true
+          exit $status
+
+      - name: Check signature (must be the upload key, not the test key)
+        shell: bash
+        run: |
+          aab=$(ls composeApp/build/outputs/bundle/release/*.aab)
+          cert=$(keytool -printcert -jarfile "$aab")
+          echo "$cert" | head -12
+          if echo "$cert" | grep -qi "CN=Android Debug"; then
+            echo "::error::Bundle is signed with the debug/test key"; exit 1
+          fi
+          sha=$(echo "$cert" | grep -m1 'SHA256:' | sed 's/.*SHA256: *//')
+          echo "::notice::Upload certificate SHA-256 $sha"
+
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="anylap-${VERSION_NAME}-${VERSION_CODE}"
+          mkdir -p out
+          cp composeApp/build/outputs/bundle/release/*.aab "out/$base.aab"
+          cp composeApp/build/outputs/apk/release/*.apk "out/$base.apk"
+          cp composeApp/build/outputs/mapping/release/mapping.txt "out/$base-mapping.txt" || true
+          tag="play-${VERSION_NAME}-${VERSION_CODE}"
+          gh release create "$tag" out/* --prerelease --target "$GITHUB_SHA" \
+            --title "AnyLap ${VERSION_NAME} (${VERSION_CODE}) – Play bundle" \
+            --notes "Signed with the upload key. Upload the .aab in Play Console → Testing → Closed testing. ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}"
+          echo "::notice::Release $tag"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: anylap-release
+          path: out/*
+          if-no-files-found: ignore
