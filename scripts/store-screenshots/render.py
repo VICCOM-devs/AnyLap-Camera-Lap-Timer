@@ -42,8 +42,8 @@ body{{width:{W}px;height:{H}px;overflow:hidden;background:#09090B;color:#F6F6F8;
 .sub{{position:absolute;left:76px;right:90px;top:366px;font-size:38px;line-height:1.28;color:#C9C9D0}}
 .phone{{position:absolute;background:#000;border:12px solid #1E1E23;box-shadow:0 0 0 2px #34343C, 0 40px 90px rgba(0,0,0,.65), 0 0 120px rgba(225,6,0,.18);overflow:hidden}}
 .phone img{{display:block;width:100%}}
-.chips{{position:absolute;left:72px;right:72px;display:flex;flex-wrap:wrap;gap:16px}}
-.chip{{font-family:BarlowBold;font-size:32px;padding:16px 28px;border-radius:40px;background:#18181C;border:2px solid #34343C;color:#F6F6F8}}
+.chips{{position:absolute;left:72px;right:72px;display:flex;flex-wrap:nowrap;gap:12px}}
+.chip{{font-family:BarlowBold;font-size:27px;padding:11px 20px;border-radius:40px;background:#18181C;border:2px solid #34343C;color:#F6F6F8}}
 .chip:before{{content:'';display:inline-block;width:14px;height:14px;border-radius:7px;background:#E10600;margin-right:14px;vertical-align:middle;position:relative;top:-3px}}
 .zoom{{position:absolute;border-radius:28px;overflow:hidden;border:3px solid #34343C;box-shadow:0 30px 70px rgba(0,0,0,.6)}}
 .zoom img{{position:absolute;display:block}}
@@ -87,28 +87,32 @@ def page(shot, lang):
         pw = W - 2 * 44
         inner = pw - 24
         ph = int(inner * sh / sw) + 24
-        y = 560 if lay == "landscape" else 520
+        y = 560 if lay == "landscape" else 548
         body.append(
             f'<div class="phone" style="left:44px;top:{y}px;width:{pw}px;height:{ph}px;border-radius:52px">'
             f'<img src="{data_uri(src)}"></div>'
         )
         below = y + ph + 44
         if lay == "landscape-hero":
-            # Two enlarged call-outs of the live screen: the lap flash and the leaderboard.
+            # Feature chips just under the subtitle, then two enlarged call-outs of the live screen.
+            chips = "".join(f'<span class="chip">{html.escape(c)}</span>' for c in shot["chips"][lang])
+            body.append(f'<div class="chips" style="top:448px">{chips}</div>')
             z = shot["zoom"]
-            boxes = [(44, below, 470, 330), (530, below, 506, 330)]
+            gap = 30
+            h1 = 250
+            h2 = H - below - h1 - gap - 60
+            boxes = [(44, below, W - 88, h1), (44, below + h1 + gap, W - 88, h2)]
             for (zx, zy, zw, zh), zc in zip(boxes, z):
                 cx, cy, cw, ch = zc["crop"]
                 zs = RAW / zc["src"]
                 zsw, zsh = img_size(zs)
-                s = max(zw / (cw * zsw), zh / (ch * zsh))
+                s = zw / (cw * zsw)  # fit the crop's width; the box height shows as many rows as fit
+                ox = cx * zsw * s
+                oy = cy * zsh * s
                 body.append(
                     f'<div class="zoom" style="left:{zx}px;top:{zy}px;width:{zw}px;height:{zh}px">'
-                    f'<img src="{data_uri(zs)}" style="width:{zsw * s}px;left:{-cx * zsw * s}px;top:{-cy * zsh * s}px"></div>'
+                    f'<img src="{data_uri(zs)}" style="width:{zsw * s}px;left:{-ox}px;top:{-oy}px"></div>'
                 )
-            below += 330 + 48
-            chips = "".join(f'<span class="chip">{html.escape(c)}</span>' for c in shot["chips"][lang])
-            body.append(f'<div class="chips" style="top:{below}px">{chips}</div>')
         else:
             # Under a landscape shot: a big tip card with the three setup steps.
             steps = {

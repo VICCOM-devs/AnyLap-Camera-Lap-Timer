@@ -1,25 +1,58 @@
 {
-  "size": [1080, 1920],
+  "size": [
+    1080,
+    1920
+  ],
   "shots": [
     {
       "id": "01_hero",
       "layout": "landscape-hero",
       "src": "store/live_running.png",
       "zoom": [
-        { "src": "store/live_running.png", "crop": [0.0, 0.62, 0.37, 0.36] },
-        { "src": "store/live_running.png", "crop": [0.61, 0.17, 0.39, 0.45] }
+        {
+          "src": "store/live_running.png",
+          "crop": [
+            0.012,
+            0.668,
+            0.29,
+            0.165
+          ]
+        },
+        {
+          "src": "store/live_running.png",
+          "crop": [
+            0.608,
+            0.225,
+            0.388,
+            0.6
+          ]
+        }
       ],
       "caption": {
-        "en": ["Lap timing with", "just your *camera*"],
-        "sv": ["Varvtider med", "bara *kameran*"]
+        "en": [
+          "Lap timing with",
+          "just your *camera*"
+        ],
+        "sv": [
+          "Varvtider med",
+          "bara *kameran*"
+        ]
       },
       "sub": {
         "en": "No transponders. No stickers. Just race.",
         "sv": "Inga transpondrar. Inga klistermärken. Bara kör."
       },
       "chips": {
-        "en": ["Accurate to milliseconds", "Up to 5 cars", "Spoken lap times"],
-        "sv": ["Millisekundsnoggrant", "Upp till 5 bilar", "Upplästa varvtider"]
+        "en": [
+          "Accurate to milliseconds",
+          "Up to 5 cars",
+          "Spoken lap times"
+        ],
+        "sv": [
+          "Millisekundsnoggrant",
+          "Upp till 5 bilar",
+          "Upplästa varvtider"
+        ]
       }
     },
     {
@@ -27,39 +60,99 @@
       "layout": "portrait",
       "src": "store/results_tall.png",
       "top": 0,
-      "caption": { "en": ["Every lap,", "every *racer*"], "sv": ["Varje varv,", "varje *förare*"] },
-      "sub": { "en": "Podium, best laps, gaps and consistency after every race.", "sv": "Prispall, bästa varv, avstånd och jämnhet efter varje race." }
+      "caption": {
+        "en": [
+          "Every lap,",
+          "every *racer*"
+        ],
+        "sv": [
+          "Varje varv,",
+          "varje *förare*"
+        ]
+      },
+      "sub": {
+        "en": "Podium, best laps, gaps and consistency after every race.",
+        "sv": "Prispall, bästa varv, avstånd och jämnhet efter varje race."
+      }
     },
     {
       "id": "03_stats",
       "layout": "portrait",
       "src": "store/stats_tall.png",
       "top": 0,
-      "caption": { "en": ["Watch yourself", "get *faster*"], "sv": ["Se dig själv", "bli *snabbare*"] },
-      "sub": { "en": "Personal bests, trends and head-to-head rankings.", "sv": "Personbästa, trender och inbördes ranking." }
+      "caption": {
+        "en": [
+          "Watch yourself",
+          "get *faster*"
+        ],
+        "sv": [
+          "Se dig själv",
+          "bli *snabbare*"
+        ]
+      },
+      "sub": {
+        "en": "Personal bests, trends and head-to-head rankings.",
+        "sv": "Personbästa, trender och inbördes ranking."
+      }
     },
     {
       "id": "04_setup",
       "layout": "landscape",
       "src": "store/live_setup.png",
-      "caption": { "en": ["Draw the line.", "*Start* racing."], "sv": ["Rita linjen.", "*Kör.*"] },
-      "sub": { "en": "Put the phone by the track and drag the finish line onto the tape.", "sv": "Ställ mobilen vid banan och dra mållinjen till tejpen." }
+      "caption": {
+        "en": [
+          "Draw the line.",
+          "*Start* racing."
+        ],
+        "sv": [
+          "Rita linjen.",
+          "*Kör.*"
+        ]
+      },
+      "sub": {
+        "en": "Put the phone by the track and drag the finish line onto the tape.",
+        "sv": "Ställ mobilen vid banan och dra mållinjen till tejpen."
+      }
     },
     {
       "id": "05_racers",
       "layout": "portrait",
       "src": "03_racers.png",
       "top": 0,
-      "caption": { "en": ["It knows", "*who* crossed"], "sv": ["Den vet", "*vem* som passerade"] },
-      "sub": { "en": "Calibrate each car's colours once. Runners get printable bibs.", "sv": "Kalibrera bilens färger en gång. Löpare får nummerlappar att skriva ut." }
+      "caption": {
+        "en": [
+          "It knows",
+          "*who* crossed"
+        ],
+        "sv": [
+          "Den vet",
+          "*vem* som passerade"
+        ]
+      },
+      "sub": {
+        "en": "Calibrate each car's colours once. Runners get printable bibs.",
+        "sv": "Kalibrera bilens färger en gång. Löpare får nummerlappar att skriva ut."
+      }
     },
     {
       "id": "06_home",
       "layout": "portrait",
       "src": "01_home.png",
       "top": 0,
-      "caption": { "en": ["Your track,", "your *records*"], "sv": ["Din bana,", "dina *rekord*"] },
-      "sub": { "en": "Everything stays on your phone. No account, no ads.", "sv": "Allt stannar i mobilen. Inget konto, inga annonser." }
+      "caption": {
+        "en": [
+          "Your track,",
+          "your *records*"
+        ],
+        "sv": [
+          "Din bana,",
+          "dina *rekord*"
+        ]
+      },
+      "sub": {
+        "en": "Everything stays on your phone. No account, no ads.",
+        "sv": "Allt stannar i mobilen. Inget konto, inga annonser."
+      }
     }
   ]
 }

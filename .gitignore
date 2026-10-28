@@ -16,3 +16,4 @@ iosApp/*.xcodeproj
 iosApp/build/
 xcuserdata/
 DerivedData/
+store/screenshots/
