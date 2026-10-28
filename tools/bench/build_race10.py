@@ -258,7 +258,9 @@ for g in groups:
     m = dict(head_); m['kind'] = ' · '.join(kinds_); m['note'] = ' / '.join(dict.fromkeys(x['note'] for x in g if x['note']))
     m['focus'] = {x['i'] for x in g if x['i'] is not None}
     m['outs'] = [o for x in g for o in x['outs']]
-    trs = [x['truth'] for x in g if x['truth']]
+    # every car that really crossed during this moment (not just the one nearest each item: two cars
+    # 1 ms apart would leave one out and the card would look wrong when the app got both right)
+    trs = [x['truth'] for x in g if x['truth']] + [x for x in truth if any(abs(x['t'] - y['t']) < 0.06 for y in g)]
     m['truths'] = list({(t['car'], t['lap']): t for t in trs}.values())
     merged.append(m)
 items = merged
