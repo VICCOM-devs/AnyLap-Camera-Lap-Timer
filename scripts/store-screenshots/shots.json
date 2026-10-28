@@ -125,8 +125,8 @@
           "*who* crossed"
         ],
         "sv": [
-          "Den vet",
-          "*vem* som passerade"
+          "Den vet *vem*",
+          "som passerade"
         ]
       },
       "sub": {
