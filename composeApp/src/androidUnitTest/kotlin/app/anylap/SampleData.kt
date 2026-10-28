@@ -27,7 +27,7 @@ object SampleData {
         Car("Red Rocket", 14, 0xFFE10600, "car_red.jpg", 11_950),
         Car("Blue Comet", 27, 0xFF2D7FF9, "car_blue.jpg", 12_300),
         Car("Yellow Jacket", 39, 0xFFF5B700, "car_yellow.jpg", 12_700),
-        Car("Ghost", 8, 0xFFB45CFF, null, 13_400),
+        Car("Ghost", 44, 0xFFB45CFF, null, 13_400),
     )
 
     fun seed(repo: Repository) {

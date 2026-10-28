@@ -55,7 +55,7 @@ class StoreScreenshotTest {
         SampleData.seed(repo)
         val racers = repo.racersFor(Sport.RC).sortedBy { it.number }.let { l ->
             // Grid order matches the photo: red leads, then blue, yellow, ghost.
-            listOf(14, 27, 39, 8).mapNotNull { n -> l.firstOrNull { it.number == n } }
+            listOf(14, 27, 39, 44).mapNotNull { n -> l.firstOrNull { it.number == n } }
         }
         val config = SessionConfig(sport = Sport.RC, mode = RaceMode.LAPS, targetLaps = 10, racerIds = racers.map { it.id }, cameraDistanceM = 2.5f)
         val gaps = listOf("LEADER", "+0.412", "+1.907", "+1 lap")
