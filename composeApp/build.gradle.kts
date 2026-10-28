@@ -81,9 +81,11 @@ android {
         applicationId = appId
         minSdk = 29
         targetSdk = 36
-        // CI run number: every test build installs over the previous one (Android refuses a lower or equal code)
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.3.0"
+        // Store builds (release.yml) set VERSION_CODE; test builds (build.yml) use the CI run number,
+        // so every test build installs over the previous one (Android refuses a lower or equal code).
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
+            ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionName = System.getenv("VERSION_NAME") ?: providers.gradleProperty("appVersionName").get()
     }
     signingConfigs {
         // One fixed key for test builds (public test key, never used for the store), so a new CI build
@@ -94,9 +96,20 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Play upload key, only in the release workflow (secrets → env, see RELEASING.md). Never in the repo.
+        val uploadKeystore = System.getenv("ANDROID_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+        if (uploadKeystore != null) {
+            create("upload") {
+                storeFile = uploadKeystore
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
         release {
+            signingConfigs.findByName("upload")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
