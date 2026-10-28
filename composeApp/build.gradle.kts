@@ -45,6 +45,8 @@ kotlin {
             implementation("androidx.core:core-ktx:1.16.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
             implementation("io.ktor:ktor-client-okhttp:3.3.1")
+            // Join a race by QR: Google's code scanner (no camera permission, UI from Play services)
+            implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

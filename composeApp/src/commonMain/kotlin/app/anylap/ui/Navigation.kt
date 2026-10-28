@@ -27,6 +27,9 @@ sealed interface Screen {
     data class Replay(val sessionId: String, val racerId: String, val lap: Int) : Screen
     data class Paywall(val feature: ProFeature? = null) : Screen
     data object Account : Screen
+    /** Follow a race on another phone: scan / type its code. */
+    data object Join : Screen
+    data class Watch(val code: String) : Screen
     data object Events : Screen
     data class EventDetail(val id: String) : Screen
 
@@ -78,6 +81,9 @@ class AppState {
 
     /** Set when the live session being started is a round of an event: (eventId, roundId). */
     var pendingRound: Pair<String, String>? = null
+
+    /** A join link opened from outside the app (https://viccom.se/anylap/live/?c=CODE). */
+    val pendingJoin = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 }
 
 val LocalApp = staticCompositionLocalOf<AppState> { error("No AppState") }

@@ -157,7 +157,7 @@ private fun LiveContent(nav: Navigator) {
         val code = liveCode ?: return@LaunchedEffect
         val title = liveTitle(config)
         engine.state.distinctUntilChangedBy { LiveSnapshot.key(it) }.conflate().collect { st ->
-            app.cloud.pushLive(code, LiveSnapshot.build(title, config, st, settings.speedUnitKmh))
+            app.cloud.pushLive(code, LiveSnapshot.build(title, config, st, settings.speedUnitKmh, pro = tier.isPro))
             delay(1_000) // at most one update a second
         }
     }
@@ -261,14 +261,13 @@ private fun LiveContent(nav: Navigator) {
         voice = voice,
         live = liveCode != null,
         onLive = {
+            // Sync: any plan; other phones join by QR (a Free camera has room for one viewer)
             when {
-                !tier.isPro -> nav.push(Screen.Paywall(ProFeature.LIVE))
-                account.userId == null -> nav.push(Screen.Account)
                 liveCode != null -> liveDialog = true
                 else -> scope.launch {
-                    app.cloud.startLive()
+                    app.cloud.startLive(tier.isPro)
                         .onSuccess { liveCode = it; liveError = null; liveDialog = true }
-                        .onFailure { liveError = "Couldn't start live timing. Check your connection."; liveDialog = true }
+                        .onFailure { liveError = "Couldn't start the sync. Check your connection."; liveDialog = true }
                 }
             }
         },
@@ -316,17 +315,26 @@ private fun LiveContent(nav: Navigator) {
         AlertDialog(
             onDismissRequest = { liveDialog = false },
             containerColor = RT.Surface2,
-            title = { Text(if (liveCode != null) "Live timing is on" else "Live timing") },
+            title = { Text(if (liveCode != null) "Scan to join" else "Sync") },
             text = {
-                Column {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val code = liveCode
                     if (code != null) {
-                        Text("Spectators open this on their phone:", color = RT.TextDim)
-                        Spacer(Modifier.height(6.dp))
-                        Text(BackendConfig.liveUrl(code), style = MaterialTheme.typography.bodyMedium)
+                        var viewers by remember { mutableStateOf(0) }
+                        LaunchedEffect(code) { while (true) { viewers = app.cloud.liveViewers(code); delay(3_000) } }
+                        QrCodeView(joinLink(code), Modifier.width(200.dp))
                         Spacer(Modifier.height(10.dp))
-                        Text(code, style = MaterialTheme.typography.displaySmall, color = RT.Accent)
-                        Text("Code works for 12 hours.", style = MaterialTheme.typography.bodySmall)
+                        Text(code, style = MaterialTheme.typography.headlineMedium, color = RT.Accent)
+                        Text(
+                            "Scan with AnyLap on another phone (Join a race), or with any camera for the web page.",
+                            style = MaterialTheme.typography.bodySmall, color = RT.TextDim,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            (if (viewers == 1) "1 phone watching" else "$viewers phones watching") +
+                                (if (tier.isPro) "" else " · Free: one viewer at a time"),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
                     }
                     liveError?.let { Text(it, color = RT.Amber) }
                 }
@@ -334,7 +342,7 @@ private fun LiveContent(nav: Navigator) {
             confirmButton = {
                 val code = liveCode
                 if (code != null) {
-                    TextButton(onClick = { Platform.shareText(BackendConfig.liveUrl(code), "Live timing") }) { Text("Share link", color = RT.Accent) }
+                    TextButton(onClick = { Platform.shareText(BackendConfig.liveUrl(code), "Follow the race") }) { Text("Share link", color = RT.Accent) }
                 }
             },
             dismissButton = {

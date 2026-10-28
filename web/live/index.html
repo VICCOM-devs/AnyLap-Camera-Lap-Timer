@@ -80,14 +80,14 @@
   const T = sv ? {
     live: "LIVE", waiting: "VÄNTAR", finished: "MÅL", offline: "OFFLINE",
     enter: "Ange kod", enterBody: "Koden visas på telefonen som tar tiden.", follow: "Följ loppet",
-    notFound: "Ingen livetiming med den koden", notFoundBody: "Kontrollera koden – den gäller i 12 timmar.",
+    notFound: "Ingen livetiming med den koden", notFoundBody: "Kontrollera koden – den gäller i 12 timmar.", full: "Loppet har redan en tittare", fullBody: "Kameran kör AnyLap Free: en tittare åt gången. Med Pro kan alla följa loppet.",
     pos: "POS", racer: "FÖRARE · SENASTE VARV", gap: "LUCKA", best: "BÄSTA",
     lap: "varv", laps: "varv", lapsTo: (n) => `Först till ${n} varv`, timed: (m) => `${m} minuter`, practice: "Träning",
     ready: "Startar snart…", foot: "Tidtagning med AnyLap – kamera-varvräknare", leader: "Ledare",
   } : {
     live: "LIVE", waiting: "WAITING", finished: "FINISHED", offline: "OFFLINE",
     enter: "Enter code", enterBody: "The code is shown on the phone doing the timing.", follow: "Follow the race",
-    notFound: "No live timing with that code", notFoundBody: "Check the code – it works for 12 hours.",
+    notFound: "No live timing with that code", notFoundBody: "Check the code – it works for 12 hours.", full: "This race already has a viewer", fullBody: "The camera runs AnyLap Free: one viewer at a time. With Pro everyone can follow the race.",
     pos: "POS", racer: "RACER · LAST LAP", gap: "GAP", best: "BEST",
     lap: "lap", laps: "laps", lapsTo: (n) => `First to ${n} laps`, timed: (m) => `${m} minutes`, practice: "Practice",
     ready: "Starting soon…", foot: "Timed with AnyLap – camera lap timer", leader: "Leader",
@@ -127,19 +127,27 @@
   }
 
   let snap = null, fetchedAt = 0, serverLag = 0, lastLaps = {}, failures = 0;
+  // a viewer id kept in this browser, so a reload doesn't take a second seat (a Free camera has one)
+  let DEVICE = "";
+  try { DEVICE = localStorage.getItem("anylap.device") || ""; } catch (e) {}
+  if (DEVICE.length < 8) {
+    DEVICE = "web-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { localStorage.setItem("anylap.device", DEVICE); } catch (e) {}
+  }
 
   async function poll() {
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/anylap_live_get`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/anylap_live_join`, {
         method: "POST",
         headers: { apikey: KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ p_code: code }),
+        body: JSON.stringify({ p_code: code, p_device: DEVICE }),
         cache: "no-store",
       });
       if (!res.ok) throw new Error(res.status);
       const data = await res.json();
       failures = 0;
-      if (!data) { snap = null; renderNotFound(); return; }
+      if (!data || data.error === "gone") { snap = null; renderNotFound(); return; }
+      if (data.error === "full") { snap = null; renderFull(); return; }
       if (data.updated_at) serverLag = Date.now() - Date.parse(data.updated_at);
       snap = data; fetchedAt = Date.now();
       render();
@@ -149,6 +157,11 @@
     } finally {
       setTimeout(poll, document.hidden ? POLL_MS * 3 : POLL_MS);
     }
+  }
+
+  function renderFull() {
+    setStatus("—", false);
+    $app.innerHTML = `<div class="card"><h2>${T.full}</h2><p>${T.fullBody}</p></div>`;
   }
 
   function renderNotFound() {

@@ -137,6 +137,14 @@ fun HomeScreen() {
             )
         }
         item {
+            StripeCard(RT.Accent, Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Join) }) {
+                Column(Modifier.weight(1f)) {
+                    Text("Join a race", style = MaterialTheme.typography.titleMedium)
+                    Text("Follow the timing of another phone: scan its QR", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        item {
             val events by app.repo.events.collectAsState()
             val open = events.count { !it.finished }
             StripeCard(RT.Gold, Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Events) }) {

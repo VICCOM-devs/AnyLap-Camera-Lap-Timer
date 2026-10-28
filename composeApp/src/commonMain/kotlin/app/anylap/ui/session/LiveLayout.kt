@@ -337,7 +337,7 @@ private fun SetupRail(
             if (voice) "Voice on" else "Voice off",
             onToggleVoice,
         )
-        RailButton(Icons.Rounded.Sensors, if (live) "Live on" else "Live", onLive, selected = live)
+        RailButton(Icons.Rounded.Sensors, if (live) "Synced" else "Sync", onLive, selected = live)
         Spacer(Modifier.weight(1f))
         // Who's in the session: small avatars, "+n" if they don't fit.
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy((-8).dp)) {
@@ -460,7 +460,7 @@ private fun TimingTower(
             }
             CircleIconButton(
                 Icons.Rounded.Sensors, onLive, tint = if (live) RT.Accent else RT.Text, size = 44.dp,
-                contentDescription = if (live) "Live timing is on" else "Share live timing",
+                contentDescription = if (live) "Other phones can join" else "Sync: let other phones join",
             )
             Spacer(Modifier.width(8.dp))
             CircleIconButton(

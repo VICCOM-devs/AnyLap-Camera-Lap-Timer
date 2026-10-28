@@ -32,6 +32,11 @@ expect object Platform {
     /** Days since epoch in the local time zone (for "today"/"yesterday"). */
     fun localDay(epochMs: Long): Long
 
+    /** A QR scanner can be shown (Android: Google's code scanner; iOS: not yet – type the code). */
+    val canScanQr: Boolean
+    /** Opens the system QR scanner; [onResult] gets the text, or null (cancelled / not available). */
+    fun scanQr(onResult: (String?) -> Unit)
+
     fun shareText(text: String, title: String)
     fun shareFile(path: String, mimeType: String, title: String)
 
