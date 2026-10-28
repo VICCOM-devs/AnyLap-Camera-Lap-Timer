@@ -18,3 +18,4 @@ xcuserdata/
 DerivedData/
 store/screenshots/
 store/art/
+__pycache__/
