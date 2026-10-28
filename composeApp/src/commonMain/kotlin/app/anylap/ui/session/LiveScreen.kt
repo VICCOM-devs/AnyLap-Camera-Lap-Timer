@@ -107,6 +107,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LiveScreen(nav: Navigator) {
     CameraScreenMode()
+    androidx.compose.runtime.DisposableEffect(Unit) { app.anylap.update.Updates.hold(true); onDispose { app.anylap.update.Updates.hold(false) } }
     CameraPermissionGate(onBack = { nav.pop() }) { LiveContent(nav) }
 }
 

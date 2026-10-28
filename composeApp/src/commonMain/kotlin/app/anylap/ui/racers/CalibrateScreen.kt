@@ -138,6 +138,7 @@ fun nextStep(sport: Sport, s: CalStep): CalStep {
 @Composable
 fun CalibrateScreen(nav: Navigator, racerId: String) {
     CameraScreenMode()
+    androidx.compose.runtime.DisposableEffect(Unit) { app.anylap.update.Updates.hold(true); onDispose { app.anylap.update.Updates.hold(false) } }
     CameraPermissionGate(onBack = { nav.pop() }) {
         CalibrateContent(nav, racerId)
     }

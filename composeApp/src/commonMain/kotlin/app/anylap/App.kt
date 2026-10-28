@@ -71,6 +71,7 @@ object AppGraph {
 fun App() {
     val nav = remember { Navigator() }
     LaunchedEffect(Unit) { AppGraph.state.cloud.start() }
+    LaunchedEffect(Unit) { app.anylap.update.Updates.onResume() } // launch (Android also checks on every resume)
     LaunchedEffect(Unit) {
         AppGraph.state.pendingJoin.collect { c -> if (c != null) { AppGraph.state.pendingJoin.value = null; nav.push(Screen.Watch(c)) } }
     }
@@ -110,6 +111,7 @@ fun App() {
                     )
                     BottomBar(nav, Modifier.align(Alignment.BottomCenter))
                 }
+                app.anylap.ui.UpdateGate()
             }
         }
     }

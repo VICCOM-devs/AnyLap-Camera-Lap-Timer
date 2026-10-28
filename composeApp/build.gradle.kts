@@ -47,6 +47,8 @@ kotlin {
             implementation("io.ktor:ktor-client-okhttp:3.3.1")
             // Join a race by QR: Google's code scanner (no camera permission, UI from Play services)
             implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+            // Auto-update (VICCOM rule): Play In-App Updates for store builds
+            implementation("com.google.android.play:app-update-ktx:2.1.0")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

@@ -1,6 +1,5 @@
 package app.anylap.ui.home
 
-import app.anylap.update.TestUpdates
 import app.anylap.ui.LocalApp
 import app.anylap.ui.LocalNav
 import app.anylap.ui.Navigator
@@ -98,29 +97,13 @@ fun HomeScreen() {
     val (count, laps, best) = remember(sessions, sport) { Stats.totals(sessions, sport) }
     val sportRacers = racers.filter { it.sport == sport }
 
-    // test builds before the store: is there a newer one on GitHub?
-    val update by androidx.compose.runtime.produceState<TestUpdates.Update?>(null) { value = TestUpdates.check() }
-
     ScreenScaffold(
         title = "AnyLap",
         subtitle = Platform.formatDate(Platform.nowMillis(), "EEEE d MMMM"),
         titleSlot = { BrandWordmark() },
         actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = "Settings") },
     ) {
-        update?.let { u ->
-            item {
-                val uri = androidx.compose.ui.platform.LocalUriHandler.current
-                StripeCard(RT.Green, Modifier.fillMaxWidth(), onClick = { uri.openUri(u.apkUrl) }) {
-                    Column(Modifier.weight(1f)) {
-                        Text("New test build ${u.build}", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            (if (u.notes.isNotBlank()) u.notes + " · " else "") + "Tap to download, then open it to install over this one (your cars and races stay).",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-        }
+        item { app.anylap.ui.UpdateCard() }
         item {
             if (settings.otherSports) PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
         }

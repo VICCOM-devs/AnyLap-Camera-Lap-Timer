@@ -41,5 +41,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         Platform.attach(this)
+        app.anylap.update.UpdatePlatform.onResume(this)
     }
 }
