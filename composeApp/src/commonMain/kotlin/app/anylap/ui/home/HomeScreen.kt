@@ -1,5 +1,6 @@
 package app.anylap.ui.home
 
+import app.anylap.ui.UpdateCard
 import app.anylap.ui.LocalApp
 import app.anylap.ui.LocalNav
 import app.anylap.ui.Navigator
@@ -103,7 +104,7 @@ fun HomeScreen() {
         titleSlot = { BrandWordmark() },
         actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = "Settings") },
     ) {
-        item { app.anylap.ui.UpdateCard() }
+        item { UpdateCard() }
         item {
             if (settings.otherSports) PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
         }
