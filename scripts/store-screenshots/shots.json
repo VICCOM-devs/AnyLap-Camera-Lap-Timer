@@ -63,8 +63,17 @@
         {
           "src": "store/live_finish.png",
           "crop": [
+            0.012,
+            0.668,
+            0.29,
+            0.165
+          ]
+        },
+        {
+          "src": "store/live_finish.png",
+          "crop": [
             0.608,
-            0.225,
+            0.21,
             0.388,
             0.6
           ]
@@ -109,7 +118,7 @@
       "id": "04_positions",
       "layout": "portrait",
       "src": "store/results_charts_tall.png",
-      "top": 0,
+      "top": 1190,
       "caption": {
         "en": [
           "Watch every",
@@ -121,15 +130,15 @@
         ]
       },
       "sub": {
-        "en": "Positions lap by lap, so you see exactly where the race was won.",
-        "sv": "Placering varv för varv – se exakt var racet avgjordes."
+        "en": "Lap times and positions lap by lap. See exactly where it was won.",
+        "sv": "Varvtider och placering varv för varv. Se exakt var det avgjordes."
       }
     },
     {
       "id": "05_laps",
       "layout": "portrait",
       "src": "store/results_charts_tall.png",
-      "top": 0,
+      "top": 3190,
       "caption": {
         "en": [
           "See where the",
@@ -141,8 +150,8 @@
         ]
       },
       "sub": {
-        "en": "Lap times, speed at the line and best-lap rankings for every car.",
-        "sv": "Varvtider, fart vid linjen och bästa varv för varje bil."
+        "en": "Speed at the line and best-lap rankings for every car.",
+        "sv": "Fart vid linjen och ranking på bästa varv för varje bil."
       }
     },
     {
