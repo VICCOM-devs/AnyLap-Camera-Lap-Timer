@@ -1,5 +1,6 @@
 package app.anylap.ui.home
 
+import app.anylap.update.TestUpdates
 import app.anylap.ui.LocalApp
 import app.anylap.ui.LocalNav
 import app.anylap.ui.Navigator
@@ -98,7 +99,7 @@ fun HomeScreen() {
     val sportRacers = racers.filter { it.sport == sport }
 
     // test builds before the store: is there a newer one on GitHub?
-    val update by androidx.compose.runtime.produceState<app.anylap.update.TestUpdates.Update?>(null) { value = app.anylap.update.TestUpdates.check() }
+    val update by androidx.compose.runtime.produceState<TestUpdates.Update?>(null) { value = TestUpdates.check() }
 
     ScreenScaffold(
         title = "AnyLap",
