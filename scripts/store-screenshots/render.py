@@ -2,18 +2,22 @@
 """Frame the raw Roborazzi captures into Play Store screenshots.
 
   ./gradlew :composeApp:testDebugUnitTest --tests '*ScreenshotTest*'   # raw captures
-  python3 scripts/store-screenshots/render.py                         # -> store/screenshots/<lang>/*.png
+  python3 scripts/store-screenshots/render.py                         # -> store/screenshots/<lang>/*.png (all languages)
+  python3 scripts/store-screenshots/render.py de-DE ja-JP             # just these
+
+Texts: en/sv in shots.json, the other store locales in translations.json (see locales.py for fonts).
 
 Needs: pip install playwright && playwright install chromium
 """
 import base64, html, json, os, re, sys
+import locales as L
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "composeApp" / "screenshots"
 FONTS = ROOT / "composeApp" / "src" / "commonMain" / "composeResources" / "font"
 OUT = ROOT / "store" / "screenshots"
-CFG = json.loads((Path(__file__).parent / "shots.json").read_text())
+CFG = L.SHOTS
 W, H = CFG["size"]
 
 
@@ -22,7 +26,7 @@ def data_uri(p: Path, mime="image/png"):
 
 
 def font_face(name, file):
-    return f"@font-face{{font-family:'{name}';src:url({data_uri(FONTS / file, 'font/ttf')})}}"
+    return f"@font-face{{font-family:'{name}';src:url({data_uri(FONTS / file, 'font/ttf')});font-weight:100 1000}}"
 
 
 CSS = (
@@ -47,15 +51,60 @@ body{{width:{W}px;height:{H}px;overflow:hidden;background:#09090B;color:#F6F6F8;
 .chip:before{{content:'';display:inline-block;width:14px;height:14px;border-radius:7px;background:#E10600;margin-right:14px;vertical-align:middle;position:relative;top:-3px}}
 .zoom{{position:absolute;border-radius:28px;overflow:hidden;border:3px solid #34343C;box-shadow:0 30px 70px rgba(0,0,0,.6)}}
 .zoom img{{position:absolute;display:block}}
+.cap .l{{display:inline-block;white-space:nowrap}}
+.chip{{white-space:nowrap;flex:none}}
+:lang(ja),:lang(zh),:lang(ko){{line-break:strict}}
+:lang(ko) .sub{{word-break:keep-all}}
+[dir=rtl] .bar{{left:auto;right:76px}}
+[dir=rtl] .chip:before{{margin-right:0;margin-left:14px}}
 """
 )
+
+
+def lang_css(lang):
+    extra, head, body, bold, lh = L.fonts(lang)
+    if not head:
+        return ""
+    return extra + (
+        f".cap{{font-family:BarlowBlackItalic,{head};font-weight:900;line-height:{0.98 * lh:.2f};letter-spacing:0}}"
+        f"body,.sub{{font-family:BarlowSemi,{body};font-weight:600}}.sub{{line-height:{1.28 * lh:.2f}}}"
+        f".chip,.stepn{{font-family:BarlowBold,{bold};font-weight:700}}"
+        f".stepn{{font-family:BarlowBlackItalic,{head};font-weight:900}}"
+    )
+
+
+# Shrinks text that doesn't fit its box; returns a list of what still overflows (should be empty).
+FIT_JS = """(subMax) => {
+  const fs = e => parseFloat(getComputedStyle(e).fontSize);
+  const shrink = (els, bad, min) => { let s = fs(els[0]); while (bad() && s > min) { s -= 1; els.forEach(e => e.style.fontSize = s + 'px'); } return !bad(); };
+  const out = [];
+  const cap = document.querySelector('.cap');
+  const lines = [...cap.querySelectorAll('.l')];
+  if (!shrink([cap], () => lines.some(l => l.getBoundingClientRect().width > cap.clientWidth + 1) || cap.getBoundingClientRect().bottom > 318, 56)) out.push('caption');
+  const sub = document.querySelector('.sub');
+  if (!shrink([sub], () => sub.getBoundingClientRect().bottom > subMax, 26)) out.push('sub');
+  const chips = document.querySelector('.chips');
+  if (chips) {
+    chips.style.top = Math.max(448, sub.getBoundingClientRect().bottom + 16) + 'px';
+    const cs = [...chips.children];
+    if (!shrink(cs, () => chips.scrollWidth > chips.clientWidth + 1, 18)) out.push('chips');
+    if (chips.getBoundingClientRect().bottom > 538) out.push('chips-height');
+    window.__chip = fs(cs[0]);
+  }
+  const card = document.querySelector('.steps');
+  if (card) {
+    const ts = [...card.querySelectorAll('.stept')];
+    if (!shrink(ts, () => card.getBoundingClientRect().bottom > 1860, 26)) out.push('steps');
+  }
+  return out;
+}"""
 
 
 def caption_html(lines):
     out = []
     for ln in lines:
         ln = html.escape(ln)
-        out.append(re.sub(r"\*(.+?)\*", r"<em>\1</em>", ln))
+        out.append('<span class="l">' + re.sub(r"\*(.+?)\*", r"<em>\1</em>", ln) + "</span>")
     return "<br>".join(out)
 
 
@@ -66,8 +115,9 @@ def img_size(p: Path):
 
 
 def page(shot, lang):
-    cap = caption_html(shot["caption"][lang])
-    sub = html.escape(shot["sub"][lang])
+    cap_lines, sub_text, chip_list = L.shot_text(shot, lang)
+    cap = caption_html(cap_lines)
+    sub = html.escape(sub_text)
     src = RAW / shot["src"]
     sw, sh = img_size(src)
     body = [f'<div class="bg"></div><div class="cap">{cap}</div><div class="bar"></div><div class="sub">{sub}</div>']
@@ -95,8 +145,8 @@ def page(shot, lang):
         below = y + ph + 44
         if lay == "landscape-hero":
             # Feature chips just under the subtitle, then two enlarged call-outs of the live screen.
-            if "chips" in shot:
-                chips = "".join(f'<span class="chip">{html.escape(c)}</span>' for c in shot["chips"][lang])
+            if chip_list:
+                chips = "".join(f'<span class="chip">{html.escape(c)}</span>' for c in chip_list)
                 body.append(f'<div class="chips" style="top:448px">{chips}</div>')
             z = shot["zoom"]
             gap = 30
@@ -119,27 +169,27 @@ def page(shot, lang):
                 )
         else:
             # Under a landscape shot: a big tip card with the three setup steps.
-            steps = {
-                "en": ["Phone on a stand, 1.5–4 m from the line", "Drag the line onto your tape", "Hit Start – AnyLap does the rest"],
-                "sv": ["Mobilen på ett stativ, 1,5–4 m från linjen", "Dra linjen till tejpen", "Tryck Start – AnyLap sköter resten"],
-            }[lang]
+            steps = L.steps(lang)
             items = "".join(
                 f'<div style="display:flex;gap:28px;align-items:center;margin-bottom:34px">'
-                f'<span style="font-family:BarlowBlackItalic;font-size:72px;color:#FF3B2F;width:70px">{i + 1}</span>'
-                f'<span style="font-size:40px;line-height:1.2">{html.escape(t)}</span></div>'
+                f'<span class="stepn" style="font-family:BarlowBlackItalic;font-size:72px;color:#FF3B2F;width:70px;flex:none">{i + 1}</span>'
+                f'<span class="stept" style="font-size:40px;line-height:1.2">{html.escape(t)}</span></div>'
                 for i, t in enumerate(steps)
             )
             body.append(
-                f'<div style="position:absolute;left:44px;right:44px;top:{below + 10}px;padding:48px 52px 20px;border-radius:40px;'
+                f'<div class="steps" style="position:absolute;left:44px;right:44px;top:{below + 10}px;padding:48px 52px 20px;border-radius:40px;'
                 f'background:#131316;border:2px solid #26262C">{items}</div>'
             )
-    return f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}</style></head><body>{''.join(body)}</body></html>"
+    d = ' dir="rtl"' if L.rtl(lang) else ""
+    return (f"<!doctype html><html lang='{L.html_lang(lang)}'{d}><head><meta charset='utf-8'><style>{CSS}{lang_css(lang)}</style></head>"
+            f"<body>{''.join(body)}</body></html>")
 
 
 def main():
     from playwright.sync_api import sync_playwright
     from PIL import Image
-    langs = sys.argv[1:] or ["en", "sv"]
+    langs = sys.argv[1:] or L.LANGS
+    problems = []
     with sync_playwright() as p:
         b = p.chromium.launch()
         pg = b.new_page(viewport={"width": W, "height": H})
@@ -148,12 +198,22 @@ def main():
             d.mkdir(parents=True, exist_ok=True)
             for shot in CFG["shots"]:
                 pg.set_content(page(shot, lang))
-                pg.wait_for_timeout(300)
+                pg.evaluate("document.fonts.ready")
+                pg.wait_for_timeout(150)
+                sub_max = 466 if shot["layout"] == "landscape-hero" else 520
+                bad = pg.evaluate(FIT_JS, sub_max)
+                if shot["id"] == "01_hero":
+                    print(f"  chip font {lang}: {pg.evaluate('window.__chip')}px")
+                if bad:
+                    problems.append(f"{lang}/{shot['id']}: {', '.join(bad)}")
                 out = d / f"{shot['id']}.png"
                 pg.screenshot(path=str(out))
                 Image.open(out).convert("RGB").save(out)  # Play wants 24-bit, no alpha
                 print(out.relative_to(ROOT))
         b.close()
+    if problems:
+        print("STILL OVERFLOWING:\n  " + "\n  ".join(problems))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

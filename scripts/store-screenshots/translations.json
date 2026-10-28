@@ -1,0 +1,1593 @@
+{
+ "_note": "Store image texts beyond en/sv (those live in shots.json). Keys are Play Console locale codes. *word* = red emphasis. steps = setup card on 07_setup; feature = feature graphic (tag lines, lap label, fastest-lap pill).",
+ "en": {
+  "steps": [
+   "Phone on a stand, 1.5–4 m from the line",
+   "Drag the line onto your tape",
+   "Hit Start – AnyLap does the rest"
+  ],
+  "feature": {
+   "tag": [
+    "Lap timing with just",
+    "your phone camera"
+   ],
+   "lap": "LAP 7",
+   "fastest": "FASTEST LAP"
+  }
+ },
+ "sv": {
+  "steps": [
+   "Mobilen på ett stativ, 1,5–4 m från linjen",
+   "Dra linjen till tejpen",
+   "Tryck Start – AnyLap sköter resten"
+  ],
+  "feature": {
+   "tag": [
+    "Varvtider med bara",
+    "mobilens kamera"
+   ],
+   "lap": "VARV 7",
+   "fastest": "SNABBASTE VARV"
+  }
+ },
+ "de-DE": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Rundenzeiten",
+     "nur mit der *Kamera*"
+    ],
+    "sub": "Keine Transponder. Keine Aufkleber. Einfach fahren.",
+    "chips": [
+     "Millisekundengenau",
+     "Bis zu 5 Autos",
+     "Sprachansage"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Entschieden um",
+     "*0,008* Sekunden"
+    ],
+    "sub": "Zwei Autos, eine Linie, acht Tausendstel Abstand. AnyLap hat es gesehen."
+   },
+   "03_results": {
+    "caption": [
+     "Jede Runde,",
+     "jeder *Fahrer*"
+    ],
+    "sub": "Podium, beste Runden, Abstände und Konstanz nach jedem Rennen."
+   },
+   "04_positions": {
+    "caption": [
+     "Sieh jeden",
+     "*Führungswechsel*"
+    ],
+    "sub": "Rundenzeiten und Positionen Runde für Runde. Sieh genau, wo das Rennen entschieden wurde."
+   },
+   "05_laps": {
+    "caption": [
+     "Sieh, wo die",
+     "*Zeit geblieben* ist"
+    ],
+    "sub": "Tempo an der Linie und Bestrunden-Ranking für jedes Auto."
+   },
+   "06_stats": {
+    "caption": [
+     "Sieh dich",
+     "*schneller* werden"
+    ],
+    "sub": "Persönliche Bestzeiten, Trends und direkte Duelle."
+   },
+   "07_setup": {
+    "caption": [
+     "Linie ziehen.",
+     "*Losfahren.*"
+    ],
+    "sub": "Stell das Handy an die Strecke und zieh die Ziellinie auf das Klebeband."
+   },
+   "08_racers": {
+    "caption": [
+     "Sie weiß, *wer*",
+     "durchgefahren ist"
+    ],
+    "sub": "Die Farben jedes Autos einmal kalibrieren. Läufer bekommen Startnummern zum Ausdrucken."
+   }
+  },
+  "steps": [
+   "Handy aufs Stativ, 1,5–4 m von der Linie",
+   "Linie auf dein Klebeband ziehen",
+   "Start drücken – AnyLap erledigt den Rest"
+  ],
+  "feature": {
+   "tag": [
+    "Rundenzeiten mit",
+    "deiner Handykamera"
+   ],
+   "lap": "RUNDE 7",
+   "fastest": "SCHNELLSTE RUNDE"
+  }
+ },
+ "fr-FR": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Chronométrez",
+     "avec votre *caméra*"
+    ],
+    "sub": "Pas de transpondeur. Pas d'autocollant. Roulez, c'est tout.",
+    "chips": [
+     "Précis à la milliseconde",
+     "Jusqu'à 5 voitures",
+     "Annonce vocale"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Gagné pour",
+     "*0,008* seconde"
+    ],
+    "sub": "Deux voitures, une ligne, huit millièmes d'écart. AnyLap l'a vu."
+   },
+   "03_results": {
+    "caption": [
+     "Chaque tour,",
+     "chaque *pilote*"
+    ],
+    "sub": "Podium, meilleurs tours, écarts et régularité après chaque course."
+   },
+   "04_positions": {
+    "caption": [
+     "Suivez chaque",
+     "*changement de leader*"
+    ],
+    "sub": "Temps et positions tour par tour. Voyez exactement où la course s'est jouée."
+   },
+   "05_laps": {
+    "caption": [
+     "Voyez où vous",
+     "*perdez du temps*"
+    ],
+    "sub": "Vitesse sur la ligne et classement des meilleurs tours pour chaque voiture."
+   },
+   "06_stats": {
+    "caption": [
+     "Regardez-vous",
+     "aller plus *vite*"
+    ],
+    "sub": "Records personnels, tendances et duels face à face."
+   },
+   "07_setup": {
+    "caption": [
+     "Tracez la ligne.",
+     "*Roulez.*"
+    ],
+    "sub": "Posez le téléphone au bord de la piste et placez la ligne d'arrivée sur l'adhésif."
+   },
+   "08_racers": {
+    "caption": [
+     "Il sait *qui*",
+     "a franchi la ligne"
+    ],
+    "sub": "Calibrez une fois les couleurs de chaque voiture. Dossards à imprimer pour les coureurs."
+   }
+  },
+  "steps": [
+   "Téléphone sur un support, à 1,5–4 m de la ligne",
+   "Placez la ligne sur votre adhésif",
+   "Appuyez sur Start – AnyLap fait le reste"
+  ],
+  "feature": {
+   "tag": [
+    "Le chrono au tour avec",
+    "la caméra du téléphone"
+   ],
+   "lap": "TOUR 7",
+   "fastest": "MEILLEUR TOUR"
+  }
+ },
+ "es-ES": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Cronometra vueltas",
+     "solo con la *cámara*"
+    ],
+    "sub": "Sin transpondedores. Sin pegatinas. Solo corre.",
+    "chips": [
+     "Precisión al milisegundo",
+     "Hasta 5 coches",
+     "Tiempos por voz"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Decidido por",
+     "*0,008* segundos"
+    ],
+    "sub": "Dos coches, una línea, ocho milésimas de diferencia. AnyLap lo vio."
+   },
+   "03_results": {
+    "caption": [
+     "Cada vuelta,",
+     "cada *piloto*"
+    ],
+    "sub": "Podio, mejores vueltas, diferencias y regularidad tras cada carrera."
+   },
+   "04_positions": {
+    "caption": [
+     "Mira cada",
+     "*cambio de líder*"
+    ],
+    "sub": "Tiempos y posiciones vuelta a vuelta. Mira dónde se ganó exactamente."
+   },
+   "05_laps": {
+    "caption": [
+     "Mira dónde",
+     "*se fue el tiempo*"
+    ],
+    "sub": "Velocidad en la línea y ranking de mejores vueltas de cada coche."
+   },
+   "06_stats": {
+    "caption": [
+     "Mírate",
+     "ser más *rápido*"
+    ],
+    "sub": "Récords personales, tendencias y duelos directos."
+   },
+   "07_setup": {
+    "caption": [
+     "Traza la línea.",
+     "*A correr.*"
+    ],
+    "sub": "Pon el móvil junto a la pista y arrastra la línea de meta hasta la cinta."
+   },
+   "08_racers": {
+    "caption": [
+     "Sabe *quién*",
+     "ha cruzado"
+    ],
+    "sub": "Calibra los colores de cada coche una vez. Dorsales imprimibles para corredores."
+   }
+  },
+  "steps": [
+   "Móvil en un soporte, a 1,5–4 m de la línea",
+   "Arrastra la línea hasta tu cinta",
+   "Pulsa Start y AnyLap hace el resto"
+  ],
+  "feature": {
+   "tag": [
+    "Cronometra vueltas con",
+    "la cámara del móvil"
+   ],
+   "lap": "VUELTA 7",
+   "fastest": "VUELTA RÁPIDA"
+  }
+ },
+ "es-419": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Cronometra vueltas",
+     "solo con la *cámara*"
+    ],
+    "sub": "Sin transponders. Sin calcomanías. Solo corre.",
+    "chips": [
+     "Precisión al milisegundo",
+     "Hasta 5 autos",
+     "Tiempos por voz"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Decidido por",
+     "*0.008* segundos"
+    ],
+    "sub": "Dos autos, una línea, ocho milésimas de diferencia. AnyLap lo vio."
+   },
+   "03_results": {
+    "caption": [
+     "Cada vuelta,",
+     "cada *piloto*"
+    ],
+    "sub": "Podio, mejores vueltas, diferencias y regularidad después de cada carrera."
+   },
+   "04_positions": {
+    "caption": [
+     "Mira cada",
+     "*cambio de líder*"
+    ],
+    "sub": "Tiempos y posiciones vuelta a vuelta. Mira dónde se ganó exactamente."
+   },
+   "05_laps": {
+    "caption": [
+     "Mira dónde",
+     "*se fue el tiempo*"
+    ],
+    "sub": "Velocidad en la línea y ranking de mejores vueltas de cada auto."
+   },
+   "06_stats": {
+    "caption": [
+     "Mírate",
+     "ser más *rápido*"
+    ],
+    "sub": "Récords personales, tendencias y duelos directos."
+   },
+   "07_setup": {
+    "caption": [
+     "Traza la línea.",
+     "*A correr.*"
+    ],
+    "sub": "Pon el celular junto a la pista y arrastra la línea de meta hasta la cinta."
+   },
+   "08_racers": {
+    "caption": [
+     "Sabe *quién*",
+     "cruzó"
+    ],
+    "sub": "Calibra los colores de cada auto una vez. Números imprimibles para corredores."
+   }
+  },
+  "steps": [
+   "Celular en un soporte, a 1.5–4 m de la línea",
+   "Arrastra la línea hasta tu cinta",
+   "Toca Start y AnyLap hace el resto"
+  ],
+  "feature": {
+   "tag": [
+    "Cronometra vueltas con",
+    "la cámara del celular"
+   ],
+   "lap": "VUELTA 7",
+   "fastest": "VUELTA RÁPIDA"
+  }
+ },
+ "pt-BR": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Tempos de volta",
+     "só com a *câmera*"
+    ],
+    "sub": "Sem transponder. Sem adesivos. É só correr.",
+    "chips": [
+     "Precisão de milissegundos",
+     "Até 5 carros",
+     "Tempos falados"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Decidido por",
+     "*0,008* segundo"
+    ],
+    "sub": "Dois carros, uma linha, oito milésimos de diferença. O AnyLap viu."
+   },
+   "03_results": {
+    "caption": [
+     "Cada volta,",
+     "cada *piloto*"
+    ],
+    "sub": "Pódio, melhores voltas, diferenças e regularidade após cada corrida."
+   },
+   "04_positions": {
+    "caption": [
+     "Veja cada",
+     "*troca de liderança*"
+    ],
+    "sub": "Tempos e posições volta a volta. Veja exatamente onde a corrida foi decidida."
+   },
+   "05_laps": {
+    "caption": [
+     "Veja onde o",
+     "*tempo foi perdido*"
+    ],
+    "sub": "Velocidade na linha e ranking de melhores voltas de cada carro."
+   },
+   "06_stats": {
+    "caption": [
+     "Veja você",
+     "ficar mais *rápido*"
+    ],
+    "sub": "Recordes pessoais, tendências e confrontos diretos."
+   },
+   "07_setup": {
+    "caption": [
+     "Trace a linha.",
+     "*Acelere.*"
+    ],
+    "sub": "Coloque o celular ao lado da pista e arraste a linha de chegada até a fita."
+   },
+   "08_racers": {
+    "caption": [
+     "Ele sabe *quem*",
+     "cruzou a linha"
+    ],
+    "sub": "Calibre as cores de cada carro uma vez. Corredores ganham números para imprimir."
+   }
+  },
+  "steps": [
+   "Celular num suporte, a 1,5–4 m da linha",
+   "Arraste a linha até a sua fita",
+   "Toque em Start e o AnyLap faz o resto"
+  ],
+  "feature": {
+   "tag": [
+    "Tempos de volta só com",
+    "a câmera do celular"
+   ],
+   "lap": "VOLTA 7",
+   "fastest": "VOLTA MAIS RÁPIDA"
+  }
+ },
+ "pt-PT": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Tempos por volta",
+     "só com a *câmara*"
+    ],
+    "sub": "Sem transponders. Sem autocolantes. É só correr.",
+    "chips": [
+     "Precisão ao milissegundo",
+     "Até 5 carros",
+     "Tempos em voz alta"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Decidido por",
+     "*0,008* segundos"
+    ],
+    "sub": "Dois carros, uma linha, oito milésimos de diferença. O AnyLap viu."
+   },
+   "03_results": {
+    "caption": [
+     "Cada volta,",
+     "cada *piloto*"
+    ],
+    "sub": "Pódio, melhores voltas, diferenças e regularidade após cada corrida."
+   },
+   "04_positions": {
+    "caption": [
+     "Veja cada",
+     "*mudança de líder*"
+    ],
+    "sub": "Tempos e posições volta a volta. Veja exatamente onde a corrida se decidiu."
+   },
+   "05_laps": {
+    "caption": [
+     "Veja onde",
+     "*perdeu tempo*"
+    ],
+    "sub": "Velocidade na linha e classificação das melhores voltas de cada carro."
+   },
+   "06_stats": {
+    "caption": [
+     "Veja-se a ficar",
+     "mais *rápido*"
+    ],
+    "sub": "Recordes pessoais, tendências e duelos diretos."
+   },
+   "07_setup": {
+    "caption": [
+     "Trace a linha.",
+     "*Arranque.*"
+    ],
+    "sub": "Coloque o telemóvel junto à pista e arraste a meta para a fita."
+   },
+   "08_racers": {
+    "caption": [
+     "Sabe *quem*",
+     "passou a linha"
+    ],
+    "sub": "Calibre as cores de cada carro uma vez. Dorsais para imprimir para os corredores."
+   }
+  },
+  "steps": [
+   "Telemóvel num suporte, a 1,5–4 m da linha",
+   "Arraste a linha para a sua fita",
+   "Toque em Start e o AnyLap faz o resto"
+  ],
+  "feature": {
+   "tag": [
+    "Tempos por volta só com",
+    "a câmara do telemóvel"
+   ],
+   "lap": "VOLTA 7",
+   "fastest": "VOLTA MAIS RÁPIDA"
+  }
+ },
+ "it-IT": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Tempi sul giro",
+     "con la *fotocamera*"
+    ],
+    "sub": "Niente transponder. Niente adesivi. Solo gara.",
+    "chips": [
+     "Precisione al millesimo",
+     "Fino a 5 auto",
+     "Tempi a voce"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Deciso per",
+     "*0,008* secondi"
+    ],
+    "sub": "Due auto, una linea, otto millesimi di distacco. AnyLap l'ha visto."
+   },
+   "03_results": {
+    "caption": [
+     "Ogni giro,",
+     "ogni *pilota*"
+    ],
+    "sub": "Podio, giri migliori, distacchi e costanza dopo ogni gara."
+   },
+   "04_positions": {
+    "caption": [
+     "Guarda ogni",
+     "*cambio al comando*"
+    ],
+    "sub": "Tempi e posizioni giro per giro. Scopri esattamente dove si è decisa."
+   },
+   "05_laps": {
+    "caption": [
+     "Scopri dove",
+     "*hai perso tempo*"
+    ],
+    "sub": "Velocità sulla linea e classifica dei giri migliori di ogni auto."
+   },
+   "06_stats": {
+    "caption": [
+     "Guardati",
+     "diventare più *veloce*"
+    ],
+    "sub": "Record personali, andamento e sfide dirette."
+   },
+   "07_setup": {
+    "caption": [
+     "Traccia la linea.",
+     "*Si parte.*"
+    ],
+    "sub": "Metti il telefono a bordo pista e trascina il traguardo sul nastro."
+   },
+   "08_racers": {
+    "caption": [
+     "Sa *chi*",
+     "è passato"
+    ],
+    "sub": "Calibra una volta i colori di ogni auto. Pettorali da stampare per i podisti."
+   }
+  },
+  "steps": [
+   "Telefono su un supporto, a 1,5–4 m dalla linea",
+   "Trascina la linea sul tuo nastro",
+   "Premi Start: AnyLap fa il resto"
+  ],
+  "feature": {
+   "tag": [
+    "Tempi sul giro con la",
+    "fotocamera del telefono"
+   ],
+   "lap": "GIRO 7",
+   "fastest": "GIRO VELOCE"
+  }
+ },
+ "pl-PL": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Pomiar okrążeń",
+     "samym *aparatem*"
+    ],
+    "sub": "Bez transponderów. Bez naklejek. Po prostu się ścigaj.",
+    "chips": [
+     "Dokładność do milisekund",
+     "Do 5 aut",
+     "Czasy na głos"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Rozstrzygnięte o",
+     "*0,008* sekundy"
+    ],
+    "sub": "Dwa auta, jedna linia, osiem tysięcznych różnicy. AnyLap to widział."
+   },
+   "03_results": {
+    "caption": [
+     "Każde okrążenie,",
+     "każdy *kierowca*"
+    ],
+    "sub": "Podium, najlepsze okrążenia, straty i regularność po każdym wyścigu."
+   },
+   "04_positions": {
+    "caption": [
+     "Zobacz każdą",
+     "*zmianę lidera*"
+    ],
+    "sub": "Czasy i pozycje okrążenie po okrążeniu. Zobacz, gdzie dokładnie padło rozstrzygnięcie."
+   },
+   "05_laps": {
+    "caption": [
+     "Zobacz, gdzie",
+     "*uciekł czas*"
+    ],
+    "sub": "Prędkość na linii i ranking najlepszych okrążeń każdego auta."
+   },
+   "06_stats": {
+    "caption": [
+     "Zobacz, jak",
+     "jesteś *szybszy*"
+    ],
+    "sub": "Rekordy, trendy i pojedynki bezpośrednie."
+   },
+   "07_setup": {
+    "caption": [
+     "Wyznacz linię.",
+     "*Startuj.*"
+    ],
+    "sub": "Postaw telefon przy torze i przeciągnij linię mety na taśmę."
+   },
+   "08_racers": {
+    "caption": [
+     "Wie, *kto*",
+     "przejechał"
+    ],
+    "sub": "Raz skalibruj kolory każdego auta. Biegacze dostają numery startowe do druku."
+   }
+  },
+  "steps": [
+   "Telefon na statywie, 1,5–4 m od linii",
+   "Przeciągnij linię na taśmę",
+   "Naciśnij Start – AnyLap zrobi resztę"
+  ],
+  "feature": {
+   "tag": [
+    "Pomiar okrążeń samym",
+    "aparatem w telefonie"
+   ],
+   "lap": "OKRĄŻENIE 7",
+   "fastest": "NAJSZYBSZE"
+  }
+ },
+ "nl-NL": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Rondetijden met",
+     "alleen je *camera*"
+    ],
+    "sub": "Geen transponders. Geen stickers. Gewoon racen.",
+    "chips": [
+     "Tot op de milliseconde",
+     "Tot 5 auto's",
+     "Rondetijden hardop"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Beslist met",
+     "*0,008* seconde"
+    ],
+    "sub": "Twee auto's, één lijn, acht duizendsten verschil. AnyLap zag het."
+   },
+   "03_results": {
+    "caption": [
+     "Elke ronde,",
+     "elke *coureur*"
+    ],
+    "sub": "Podium, snelste rondes, gaten en constantheid na elke race."
+   },
+   "04_positions": {
+    "caption": [
+     "Zie elke",
+     "*leidingswissel*"
+    ],
+    "sub": "Rondetijden en posities per ronde. Zie precies waar het werd beslist."
+   },
+   "05_laps": {
+    "caption": [
+     "Zie waar je",
+     "*tijd verliest*"
+    ],
+    "sub": "Snelheid op de lijn en ranglijst van snelste rondes per auto."
+   },
+   "06_stats": {
+    "caption": [
+     "Zie jezelf",
+     "*sneller* worden"
+    ],
+    "sub": "Persoonlijke records, trends en onderlinge duels."
+   },
+   "07_setup": {
+    "caption": [
+     "Trek de lijn.",
+     "*Racen maar.*"
+    ],
+    "sub": "Zet de telefoon bij de baan en sleep de finishlijn naar de tape."
+   },
+   "08_racers": {
+    "caption": [
+     "Hij weet *wie*",
+     "er passeerde"
+    ],
+    "sub": "Kalibreer de kleuren van elke auto één keer. Hardlopers krijgen startnummers om te printen."
+   }
+  },
+  "steps": [
+   "Telefoon op een statief, 1,5–4 m van de lijn",
+   "Sleep de lijn naar je tape",
+   "Druk op Start – AnyLap doet de rest"
+  ],
+  "feature": {
+   "tag": [
+    "Rondetijden met alleen",
+    "je telefooncamera"
+   ],
+   "lap": "RONDE 7",
+   "fastest": "SNELSTE RONDE"
+  }
+ },
+ "ru-RU": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Время круга",
+     "одной *камерой*"
+    ],
+    "sub": "Без транспондеров. Без наклеек. Просто гоняйте.",
+    "chips": [
+     "Точность до миллисекунд",
+     "До 5 машин",
+     "Время круга вслух"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Победа с отрывом",
+     "*0,008* секунды"
+    ],
+    "sub": "Две машины, одна линия, восемь тысячных разницы. AnyLap это увидел."
+   },
+   "03_results": {
+    "caption": [
+     "Каждый круг,",
+     "каждый *пилот*"
+    ],
+    "sub": "Подиум, лучшие круги, отставания и стабильность после каждой гонки."
+   },
+   "04_positions": {
+    "caption": [
+     "Каждая",
+     "*смена лидера*"
+    ],
+    "sub": "Время и позиции круг за кругом. Видно, где именно решилась гонка."
+   },
+   "05_laps": {
+    "caption": [
+     "Узнайте, где",
+     "*ушло время*"
+    ],
+    "sub": "Скорость на линии и рейтинг лучших кругов для каждой машины."
+   },
+   "06_stats": {
+    "caption": [
+     "Следите, как вы",
+     "становитесь *быстрее*"
+    ],
+    "sub": "Личные рекорды, динамика и рейтинги один на один."
+   },
+   "07_setup": {
+    "caption": [
+     "Проведите линию.",
+     "*Старт!*"
+    ],
+    "sub": "Поставьте телефон у трассы и перетащите финишную линию на ленту."
+   },
+   "08_racers": {
+    "caption": [
+     "Он знает, *кто*",
+     "пересёк линию"
+    ],
+    "sub": "Откалибруйте цвета каждой машины один раз. Для бегунов — номера для печати."
+   }
+  },
+  "steps": [
+   "Телефон на штативе, 1,5–4 м от линии",
+   "Перетащите линию на ленту",
+   "Нажмите Start — остальное сделает AnyLap"
+  ],
+  "feature": {
+   "tag": [
+    "Время круга с камерой",
+    "вашего телефона"
+   ],
+   "lap": "КРУГ 7",
+   "fastest": "ЛУЧШИЙ КРУГ"
+  }
+ },
+ "tr-TR": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Sadece *kamerayla*",
+     "tur zamanı"
+    ],
+    "sub": "Transponder yok. Etiket yok. Sadece yarış.",
+    "chips": [
+     "Milisaniye hassasiyeti",
+     "5 araca kadar",
+     "Sesli tur zamanları"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Fark sadece",
+     "*0,008* saniye"
+    ],
+    "sub": "İki araç, tek çizgi, binde sekiz saniye fark. AnyLap gördü."
+   },
+   "03_results": {
+    "caption": [
+     "Her tur,",
+     "her *pilot*"
+    ],
+    "sub": "Her yarıştan sonra podyum, en iyi turlar, farklar ve istikrar."
+   },
+   "04_positions": {
+    "caption": [
+     "Her *liderlik*",
+     "*değişimini* gör"
+    ],
+    "sub": "Tur tur süreler ve sıralamalar. Yarışın tam olarak nerede kazanıldığını gör."
+   },
+   "05_laps": {
+    "caption": [
+     "Zamanın",
+     "*nereye gittiğini* gör"
+    ],
+    "sub": "Her aracın çizgideki hızı ve en iyi tur sıralaması."
+   },
+   "06_stats": {
+    "caption": [
+     "Kendini",
+     "*hızlanırken* izle"
+    ],
+    "sub": "Kişisel rekorlar, gidişat ve ikili karşılaştırmalar."
+   },
+   "07_setup": {
+    "caption": [
+     "Çizgiyi çiz.",
+     "*Yarış* başlasın."
+    ],
+    "sub": "Telefonu pistin yanına koy ve bitiş çizgisini bandın üstüne sürükle."
+   },
+   "08_racers": {
+    "caption": [
+     "*Kimin* geçtiğini",
+     "bilir"
+    ],
+    "sub": "Her aracın renklerini bir kez kalibre et. Koşucular için yazdırılabilir göğüs numaraları."
+   }
+  },
+  "steps": [
+   "Telefon bir standa, çizgiden 1,5–4 m uzağa",
+   "Çizgiyi bandın üstüne sürükle",
+   "Start'a bas – gerisini AnyLap halleder"
+  ],
+  "feature": {
+   "tag": [
+    "Sadece telefon kamerasıyla",
+    "tur zamanı ölçümü"
+   ],
+   "lap": "TUR 7",
+   "fastest": "EN HIZLI TUR"
+  }
+ },
+ "zh-CN": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "只需手机*摄像头*",
+     "即可圈速计时"
+    ],
+    "sub": "无需计时芯片，无需贴纸，尽情比赛。",
+    "chips": [
+     "毫秒级精度",
+     "最多 5 辆车",
+     "语音播报圈速"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "胜负只差",
+     "*0.008* 秒"
+    ],
+    "sub": "两辆车，一条线，相差千分之八秒。AnyLap 看得一清二楚。"
+   },
+   "03_results": {
+    "caption": [
+     "每一圈，",
+     "每位*车手*"
+    ],
+    "sub": "每场比赛后查看领奖台、最快圈、差距和稳定性。"
+   },
+   "04_positions": {
+    "caption": [
+     "看清每一次",
+     "*领先易主*"
+    ],
+    "sub": "逐圈查看圈速和名次，看清比赛在哪里分出胜负。"
+   },
+   "05_laps": {
+    "caption": [
+     "看清时间",
+     "*丢在哪里*"
+    ],
+    "sub": "每辆车的过线速度和最快圈排名。"
+   },
+   "06_stats": {
+    "caption": [
+     "见证自己",
+     "越来越*快*"
+    ],
+    "sub": "个人最佳、进步趋势和对手排名。"
+   },
+   "07_setup": {
+    "caption": [
+     "画好终点线，",
+     "*开赛*！"
+    ],
+    "sub": "把手机放在赛道旁，将终点线拖到胶带上。"
+   },
+   "08_racers": {
+    "caption": [
+     "它知道",
+     "*谁*冲过了线"
+    ],
+    "sub": "每辆车的颜色只需校准一次。跑步者还可打印号码布。"
+   }
+  },
+  "steps": [
+   "手机架在支架上，距线 1.5–4 米",
+   "把线拖到你贴的胶带上",
+   "点击 Start，剩下的交给 AnyLap"
+  ],
+  "feature": {
+   "tag": [
+    "只需手机摄像头",
+    "即可圈速计时"
+   ],
+   "lap": "第 7 圈",
+   "fastest": "最快圈"
+  }
+ },
+ "zh-TW": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "只需手機*相機*",
+     "就能計時圈速"
+    ],
+    "sub": "不需計時晶片，不用貼紙，盡情比賽。",
+    "chips": [
+     "毫秒級精準",
+     "最多 5 台車",
+     "語音播報圈速"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "勝負只差",
+     "*0.008* 秒"
+    ],
+    "sub": "兩台車、一條線，相差千分之八秒。AnyLap 看得一清二楚。"
+   },
+   "03_results": {
+    "caption": [
+     "每一圈，",
+     "每位*車手*"
+    ],
+    "sub": "每場比賽後查看頒獎台、最快圈、差距與穩定度。"
+   },
+   "04_positions": {
+    "caption": [
+     "看清每一次",
+     "*領先易主*"
+    ],
+    "sub": "逐圈查看圈速與名次，看清比賽在哪裡分出勝負。"
+   },
+   "05_laps": {
+    "caption": [
+     "看清時間",
+     "*輸在哪裡*"
+    ],
+    "sub": "每台車的過線速度與最快圈排名。"
+   },
+   "06_stats": {
+    "caption": [
+     "見證自己",
+     "越來越*快*"
+    ],
+    "sub": "個人最佳、進步趨勢與對手排名。"
+   },
+   "07_setup": {
+    "caption": [
+     "畫好終點線，",
+     "*開賽*！"
+    ],
+    "sub": "把手機放在賽道旁，將終點線拖到膠帶上。"
+   },
+   "08_racers": {
+    "caption": [
+     "它知道",
+     "*誰*衝過了線"
+    ],
+    "sub": "每台車的顏色只需校準一次。跑者還能列印號碼布。"
+   }
+  },
+  "steps": [
+   "手機架在腳架上，距線 1.5–4 公尺",
+   "把線拖到你貼的膠帶上",
+   "點 Start，其餘交給 AnyLap"
+  ],
+  "feature": {
+   "tag": [
+    "只需手機相機",
+    "就能計時圈速"
+   ],
+   "lap": "第 7 圈",
+   "fastest": "最快圈"
+  }
+ },
+ "ja-JP": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "スマホの*カメラ*だけで",
+     "ラップ計測"
+    ],
+    "sub": "トランスポンダー不要。ステッカー不要。走るだけ。",
+    "chips": [
+     "ミリ秒単位の精度",
+     "最大5台",
+     "ラップタイム読み上げ"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "勝敗の差は",
+     "*0.008*秒"
+    ],
+    "sub": "2台の差は、わずか1000分の8秒。AnyLapは見逃さない。"
+   },
+   "03_results": {
+    "caption": [
+     "全ラップ、",
+     "全*ドライバー*"
+    ],
+    "sub": "レースごとに表彰台、ベストラップ、タイム差、安定度をチェック。"
+   },
+   "04_positions": {
+    "caption": [
+     "すべての",
+     "*首位交代*が見える"
+    ],
+    "sub": "ラップごとのタイムと順位。勝負の分かれ目がひと目でわかる。"
+   },
+   "05_laps": {
+    "caption": [
+     "どこで",
+     "*タイムを失ったか*"
+    ],
+    "sub": "各車のライン通過速度とベストラップランキング。"
+   },
+   "06_stats": {
+    "caption": [
+     "自分が*速く*",
+     "なっていく"
+    ],
+    "sub": "自己ベスト、推移、ライバルとの比較ランキング。"
+   },
+   "07_setup": {
+    "caption": [
+     "ラインを引いて",
+     "*スタート*"
+    ],
+    "sub": "スマホをコース脇に置き、ゴールラインをテープに合わせるだけ。"
+   },
+   "08_racers": {
+    "caption": [
+     "*誰が*通過したか",
+     "ちゃんとわかる"
+    ],
+    "sub": "各車の色は一度キャリブレーションするだけ。ランナー用ゼッケンも印刷できます。"
+   }
+  },
+  "steps": [
+   "スマホをスタンドに、ラインから1.5〜4 m",
+   "ラインをテープに合わせる",
+   "Startを押せば、あとはAnyLapにおまかせ"
+  ],
+  "feature": {
+   "tag": [
+    "スマホのカメラだけで",
+    "ラップ計測"
+   ],
+   "lap": "ラップ 7",
+   "fastest": "ファステストラップ"
+  }
+ },
+ "ko-KR": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "휴대폰 *카메라*만으로",
+     "랩 타임 측정"
+    ],
+    "sub": "트랜스폰더도, 스티커도 필요 없어요. 달리기만 하세요.",
+    "chips": [
+     "밀리초 단위 정확도",
+     "최대 5대",
+     "랩 타임 음성 안내"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "승부를 가른",
+     "*0.008*초"
+    ],
+    "sub": "두 대의 차, 하나의 라인, 1000분의 8초 차이. AnyLap은 놓치지 않았습니다."
+   },
+   "03_results": {
+    "caption": [
+     "모든 랩,",
+     "모든 *레이서*"
+    ],
+    "sub": "레이스마다 포디움, 베스트 랩, 간격, 꾸준함까지."
+   },
+   "04_positions": {
+    "caption": [
+     "모든 *선두 교체*를",
+     "한눈에"
+    ],
+    "sub": "랩별 기록과 순위. 어디서 승부가 났는지 정확히 확인하세요."
+   },
+   "05_laps": {
+    "caption": [
+     "어디서",
+     "*시간을 잃었는지*"
+    ],
+    "sub": "차량별 라인 통과 속도와 베스트 랩 순위."
+   },
+   "06_stats": {
+    "caption": [
+     "점점 *빨라지는*",
+     "나를 확인"
+    ],
+    "sub": "개인 최고 기록, 추세, 맞대결 순위."
+   },
+   "07_setup": {
+    "caption": [
+     "라인을 긋고",
+     "*출발*"
+    ],
+    "sub": "휴대폰을 트랙 옆에 두고 결승선을 테이프 위로 끌어 놓으세요."
+   },
+   "08_racers": {
+    "caption": [
+     "*누가* 지나갔는지",
+     "알아봅니다"
+    ],
+    "sub": "차량 색상은 한 번만 보정하면 됩니다. 러너용 배번도 인쇄할 수 있어요."
+   }
+  },
+  "steps": [
+   "휴대폰을 거치대에, 라인에서 1.5–4 m",
+   "라인을 테이프 위로 끌어 놓기",
+   "Start를 누르면 나머지는 AnyLap이"
+  ],
+  "feature": {
+   "tag": [
+    "휴대폰 카메라만으로",
+    "랩 타임 측정"
+   ],
+   "lap": "랩 7",
+   "fastest": "최고 랩"
+  }
+ },
+ "hi-IN": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "सिर्फ़ फ़ोन के *कैमरे* से",
+     "लैप टाइमिंग"
+    ],
+    "sub": "न ट्रांसपोंडर, न स्टिकर। बस रेस करें।",
+    "chips": [
+     "मिलीसेकंड तक सटीक",
+     "5 कारों तक",
+     "लैप टाइम बोलकर"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "फ़ैसला सिर्फ़",
+     "*0.008* सेकंड से"
+    ],
+    "sub": "दो कारें, एक लाइन, सेकंड के आठ हज़ारवें हिस्से का फ़र्क़। AnyLap ने देख लिया।"
+   },
+   "03_results": {
+    "caption": [
+     "हर लैप,",
+     "हर *रेसर*"
+    ],
+    "sub": "हर रेस के बाद पोडियम, बेस्ट लैप, अंतर और निरंतरता।"
+   },
+   "04_positions": {
+    "caption": [
+     "देखें हर",
+     "*बढ़त का बदलाव*"
+    ],
+    "sub": "हर लैप के टाइम और पोज़िशन। देखें रेस ठीक कहाँ जीती गई।"
+   },
+   "05_laps": {
+    "caption": [
+     "देखें समय",
+     "*कहाँ गया*"
+    ],
+    "sub": "हर कार की लाइन पर स्पीड और बेस्ट लैप रैंकिंग।"
+   },
+   "06_stats": {
+    "caption": [
+     "ख़ुद को",
+     "*तेज़* होते देखें"
+    ],
+    "sub": "पर्सनल बेस्ट, ट्रेंड और आमने-सामने की रैंकिंग।"
+   },
+   "07_setup": {
+    "caption": [
+     "लाइन खींचें।",
+     "*रेस* शुरू।"
+    ],
+    "sub": "फ़ोन को ट्रैक के पास रखें और फ़िनिश लाइन को टेप पर खींचें।"
+   },
+   "08_racers": {
+    "caption": [
+     "इसे पता है",
+     "*किसने* पार किया"
+    ],
+    "sub": "हर कार के रंग एक बार कैलिब्रेट करें। धावकों के लिए प्रिंट करने लायक बिब।"
+   }
+  },
+  "steps": [
+   "फ़ोन स्टैंड पर, लाइन से 1.5–4 मी दूर",
+   "लाइन को अपने टेप पर खींचें",
+   "Start दबाएँ – बाक़ी AnyLap संभालेगा"
+  ],
+  "feature": {
+   "tag": [
+    "सिर्फ़ फ़ोन के कैमरे से",
+    "लैप टाइमिंग"
+   ],
+   "lap": "लैप 7",
+   "fastest": "सबसे तेज़ लैप"
+  }
+ },
+ "id": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Catat waktu lap",
+     "cukup pakai *kamera*"
+    ],
+    "sub": "Tanpa transponder. Tanpa stiker. Langsung balapan.",
+    "chips": [
+     "Akurat hingga milidetik",
+     "Hingga 5 mobil",
+     "Waktu lap diucapkan"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Ditentukan oleh",
+     "*0,008* detik"
+    ],
+    "sub": "Dua mobil, satu garis, selisih delapan perseribu detik. AnyLap melihatnya."
+   },
+   "03_results": {
+    "caption": [
+     "Setiap lap,",
+     "setiap *pembalap*"
+    ],
+    "sub": "Podium, lap terbaik, selisih, dan konsistensi setelah setiap balapan."
+   },
+   "04_positions": {
+    "caption": [
+     "Lihat setiap",
+     "*pergantian pemimpin*"
+    ],
+    "sub": "Waktu dan posisi lap demi lap. Lihat persis di mana balapan dimenangkan."
+   },
+   "05_laps": {
+    "caption": [
+     "Lihat di mana",
+     "*waktu terbuang*"
+    ],
+    "sub": "Kecepatan di garis dan peringkat lap terbaik setiap mobil."
+   },
+   "06_stats": {
+    "caption": [
+     "Lihat dirimu",
+     "makin *cepat*"
+    ],
+    "sub": "Rekor pribadi, tren, dan peringkat head-to-head."
+   },
+   "07_setup": {
+    "caption": [
+     "Tarik garisnya.",
+     "*Mulai* balapan."
+    ],
+    "sub": "Taruh ponsel di tepi lintasan dan geser garis finis ke selotip."
+   },
+   "08_racers": {
+    "caption": [
+     "Tahu *siapa*",
+     "yang lewat"
+    ],
+    "sub": "Kalibrasi warna setiap mobil sekali saja. Pelari dapat nomor dada untuk dicetak."
+   }
+  },
+  "steps": [
+   "Ponsel di dudukan, 1,5–4 m dari garis",
+   "Geser garis ke selotipmu",
+   "Tekan Start – sisanya urusan AnyLap"
+  ],
+  "feature": {
+   "tag": [
+    "Catat waktu lap cukup",
+    "pakai kamera ponsel"
+   ],
+   "lap": "LAP 7",
+   "fastest": "LAP TERCEPAT"
+  }
+ },
+ "th": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "จับเวลาต่อรอบ",
+     "ด้วย*กล้อง*มือถือ"
+    ],
+    "sub": "ไม่ต้องใช้ทรานสพอนเดอร์ ไม่ต้องติดสติกเกอร์ แค่ขับ",
+    "chips": [
+     "แม่นยำระดับมิลลิวินาที",
+     "สูงสุด 5 คัน",
+     "อ่านเวลาออกเสียง"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "ตัดสินกันที่",
+     "*0.008* วินาที"
+    ],
+    "sub": "รถสองคัน เส้นเดียว ห่างกันแปดในพันวินาที AnyLap เห็นหมด"
+   },
+   "03_results": {
+    "caption": [
+     "ทุกรอบ",
+     "ทุก*นักแข่ง*"
+    ],
+    "sub": "โพเดียม รอบที่ดีที่สุด ระยะห่าง และความสม่ำเสมอ หลังจบทุกการแข่งขัน"
+   },
+   "04_positions": {
+    "caption": [
+     "ดูทุกครั้งที่",
+     "*เปลี่ยนผู้นำ*"
+    ],
+    "sub": "เวลาและอันดับรอบต่อรอบ ดูให้ชัดว่าชนะกันตรงไหน"
+   },
+   "05_laps": {
+    "caption": [
+     "ดูว่าเสียเวลา",
+     "*ไปตรงไหน*"
+    ],
+    "sub": "ความเร็วที่เส้นและอันดับรอบที่ดีที่สุดของรถทุกคัน"
+   },
+   "06_stats": {
+    "caption": [
+     "เห็นตัวเอง",
+     "*เร็วขึ้น*"
+    ],
+    "sub": "สถิติส่วนตัว แนวโน้ม และอันดับแบบตัวต่อตัว"
+   },
+   "07_setup": {
+    "caption": [
+     "ลากเส้น",
+     "แล้ว*ออกตัว*"
+    ],
+    "sub": "วางมือถือข้างสนาม แล้วลากเส้นชัยไปไว้บนเทป"
+   },
+   "08_racers": {
+    "caption": [
+     "รู้ว่า*ใคร*",
+     "ผ่านเส้น"
+    ],
+    "sub": "ปรับเทียบสีรถแต่ละคันแค่ครั้งเดียว นักวิ่งพิมพ์เบอร์วิ่งได้ด้วย"
+   }
+  },
+  "steps": [
+   "ตั้งมือถือบนขาตั้ง ห่างจากเส้น 1.5–4 ม.",
+   "ลากเส้นไปไว้บนเทป",
+   "กด Start ที่เหลือ AnyLap จัดการเอง"
+  ],
+  "feature": {
+   "tag": [
+    "จับเวลาต่อรอบ",
+    "ด้วยกล้องมือถือ"
+   ],
+   "lap": "รอบที่ 7",
+   "fastest": "รอบเร็วที่สุด"
+  }
+ },
+ "vi": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "Bấm giờ từng vòng",
+     "chỉ bằng *camera*"
+    ],
+    "sub": "Không cần transponder. Không cần dán nhãn. Chỉ việc đua.",
+    "chips": [
+     "Chính xác đến mili giây",
+     "Tối đa 5 xe",
+     "Đọc giờ vòng"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "Phân định bằng",
+     "*0,008* giây"
+    ],
+    "sub": "Hai xe, một vạch, cách nhau tám phần nghìn giây. AnyLap đã thấy."
+   },
+   "03_results": {
+    "caption": [
+     "Mỗi vòng,",
+     "mỗi *tay đua*"
+    ],
+    "sub": "Bục trao giải, vòng nhanh nhất, khoảng cách và độ ổn định sau mỗi cuộc đua."
+   },
+   "04_positions": {
+    "caption": [
+     "Xem mọi lần",
+     "*đổi người dẫn*"
+    ],
+    "sub": "Thời gian và thứ hạng qua từng vòng. Xem chính xác chỗ quyết định thắng thua."
+   },
+   "05_laps": {
+    "caption": [
+     "Xem bạn",
+     "*mất giờ ở đâu*"
+    ],
+    "sub": "Tốc độ qua vạch và xếp hạng vòng nhanh nhất của từng xe."
+   },
+   "06_stats": {
+    "caption": [
+     "Thấy mình",
+     "ngày càng *nhanh*"
+    ],
+    "sub": "Kỷ lục cá nhân, xu hướng và xếp hạng đối đầu."
+   },
+   "07_setup": {
+    "caption": [
+     "Kẻ vạch.",
+     "*Xuất phát.*"
+    ],
+    "sub": "Đặt điện thoại cạnh đường đua và kéo vạch đích lên băng dính."
+   },
+   "08_racers": {
+    "caption": [
+     "Biết rõ *ai*",
+     "vừa qua vạch"
+    ],
+    "sub": "Hiệu chỉnh màu của mỗi xe một lần. Người chạy bộ có số đeo để in."
+   }
+  },
+  "steps": [
+   "Điện thoại trên giá, cách vạch 1,5–4 m",
+   "Kéo vạch lên băng dính",
+   "Nhấn Start – AnyLap lo phần còn lại"
+  ],
+  "feature": {
+   "tag": [
+    "Bấm giờ từng vòng chỉ",
+    "bằng camera điện thoại"
+   ],
+   "lap": "VÒNG 7",
+   "fastest": "VÒNG NHANH NHẤT"
+  }
+ },
+ "ar": {
+  "shots": {
+   "01_hero": {
+    "caption": [
+     "توقيت اللفات",
+     "*بالكاميرا* فقط"
+    ],
+    "sub": "لا أجهزة إرسال ولا ملصقات. انطلق وسابق فقط.",
+    "chips": [
+     "دقة حتى جزء من الألف",
+     "حتى 5 سيارات",
+     "أزمنة بالصوت"
+    ]
+   },
+   "02_finish": {
+    "caption": [
+     "حُسم الفوز بفارق",
+     "*0.008* ثانية"
+    ],
+    "sub": "سيارتان، خط واحد، وفارق ثمانية أجزاء من الألف. AnyLap رأى ذلك."
+   },
+   "03_results": {
+    "caption": [
+     "كل لفة،",
+     "كل *متسابق*"
+    ],
+    "sub": "منصة التتويج وأفضل اللفات والفوارق والثبات بعد كل سباق."
+   },
+   "04_positions": {
+    "caption": [
+     "شاهد كل",
+     "*تغيير في الصدارة*"
+    ],
+    "sub": "أزمنة اللفات والمراكز لفة بلفة. اعرف بالضبط أين حُسم السباق."
+   },
+   "05_laps": {
+    "caption": [
+     "اعرف أين",
+     "*ضاع الوقت*"
+    ],
+    "sub": "السرعة عند الخط وترتيب أفضل لفة لكل سيارة."
+   },
+   "06_stats": {
+    "caption": [
+     "شاهد نفسك",
+     "تصبح *أسرع*"
+    ],
+    "sub": "أرقامك القياسية وتطورك والترتيب وجهًا لوجه."
+   },
+   "07_setup": {
+    "caption": [
+     "ارسم الخط.",
+     "*وانطلق.*"
+    ],
+    "sub": "ضع الهاتف بجانب المضمار واسحب خط النهاية فوق الشريط اللاصق."
+   },
+   "08_racers": {
+    "caption": [
+     "يعرف *من*",
+     "عبر الخط"
+    ],
+    "sub": "عاير ألوان كل سيارة مرة واحدة. وأرقام صدر قابلة للطباعة للعدّائين."
+   }
+  },
+  "steps": [
+   "الهاتف على حامل، على بعد 1.5–4 م من الخط",
+   "اسحب الخط فوق الشريط اللاصق",
+   "اضغط Start ودع الباقي لـ AnyLap"
+  ],
+  "feature": {
+   "tag": [
+    "توقيت اللفات",
+    "بكاميرا هاتفك فقط"
+   ],
+   "lap": "اللفة 7",
+   "fastest": "أسرع لفة"
+  }
+ }
+}
