@@ -93,9 +93,12 @@ fun HomeScreen() {
     val racers by app.repo.racers.collectAsState()
     val settings by app.repo.settings.collectAsState()
     var sportIdx by remember { mutableIntStateOf(if (settings.lastConfig.sport == Sport.RUNNING) 1 else 0) }
-    val sport = if (sportIdx == 0) Sport.RC else Sport.RUNNING
+    val sport = if (sportIdx == 0 || !settings.otherSports) Sport.RC else Sport.RUNNING
     val (count, laps, best) = remember(sessions, sport) { Stats.totals(sessions, sport) }
     val sportRacers = racers.filter { it.sport == sport }
+
+    // test builds before the store: is there a newer one on GitHub?
+    val update by androidx.compose.runtime.produceState<app.anylap.update.TestUpdates.Update?>(null) { value = app.anylap.update.TestUpdates.check() }
 
     ScreenScaffold(
         title = "AnyLap",
@@ -103,8 +106,22 @@ fun HomeScreen() {
         titleSlot = { BrandWordmark() },
         actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = "Settings") },
     ) {
+        update?.let { u ->
+            item {
+                val uri = androidx.compose.ui.platform.LocalUriHandler.current
+                StripeCard(RT.Green, Modifier.fillMaxWidth(), onClick = { uri.openUri(u.apkUrl) }) {
+                    Column(Modifier.weight(1f)) {
+                        Text("New test build ${u.build}", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            (if (u.notes.isNotBlank()) u.notes + " · " else "") + "Tap to download, then open it to install over this one (your cars and races stay).",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
         item {
-            PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
+            if (settings.otherSports) PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
         }
         item {
             HeroCard(
@@ -222,7 +239,7 @@ private fun HeroCard(sport: Sport, racerCount: Int, maxRacers: Int, calibrated: 
             }
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryButton("New session", onStart, Modifier.weight(1f), icon = Icons.Rounded.Flag)
+                PrimaryButton(if (sport == Sport.RC) "New race" else "New session", onStart, Modifier.weight(1f), icon = Icons.Rounded.Flag)
                 SecondaryButton("Racers", onRacers, icon = Icons.Rounded.Groups)
             }
         }

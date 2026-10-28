@@ -5,11 +5,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write   # the test-build pre-release below
+
 jobs:
   android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Build number into the app
+        run: sed -i "s/const val BUILD = 0/const val BUILD = ${GITHUB_RUN_NUMBER}/" composeApp/src/commonMain/kotlin/app/anylap/BuildInfo.kt
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -36,6 +41,19 @@ jobs:
         with:
           name: anylap-android-debug
           path: composeApp/build/outputs/apk/debug/*.apk
+      # The test branch's newest APK as the pre-release "test-latest": the app offers it at start
+      # (fixed test key + run number as versionCode → installs over the old one, data kept).
+      - name: Publish test build
+        if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'feature/footprint')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=anylap-test-${GITHUB_RUN_NUMBER}.apk
+          cp composeApp/build/outputs/apk/debug/*.apk "$apk"
+          gh release delete test-latest --yes --cleanup-tag || true
+          gh release create test-latest "$apk" --prerelease --target "$GITHUB_SHA" \
+            --title "AnyLap test build ${GITHUB_RUN_NUMBER}" \
+            --notes "$(git log -1 --pretty=%s) (${GITHUB_REF_NAME}, ${GITHUB_SHA::7})"
 
   ios:
     runs-on: macos-15

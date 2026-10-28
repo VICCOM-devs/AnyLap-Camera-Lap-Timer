@@ -118,6 +118,23 @@ fun SettingsScreen(nav: Navigator) {
             }
         }
 
+        item { SectionLabel("Sports", Icons.Rounded.Flag) }
+        item {
+            RtCard(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Running and other sports", style = MaterialTheme.typography.titleSmall)
+                        Text("Off: AnyLap is an RC lap timer. On: pick the sport for each session, racers and stats.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(
+                        checked = settings.otherSports,
+                        onCheckedChange = { v -> app.repo.updateSettings { it.copy(otherSports = v) } },
+                        colors = SwitchDefaults.colors(checkedTrackColor = RT.Accent),
+                    )
+                }
+            }
+        }
+
         item { SectionLabel("Camera", Icons.Rounded.CameraAlt) }
         item {
             RtCard(Modifier.fillMaxWidth()) {

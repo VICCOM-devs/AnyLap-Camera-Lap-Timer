@@ -141,6 +141,8 @@ data class SessionConfig(
     val direction: Direction = Direction.BOTH,
     val line: LineSpec = LineSpec(),
     val finishEdge: FinishEdge = FinishEdge.FRONT,
+    /** Settings → Sports: show running (and later other sports) next to RC everywhere. Off = an RC app. */
+    val otherSports: Boolean = false,
 )
 
 @Serializable

@@ -279,6 +279,8 @@ class RaceEngine(
 
     /** Pictures of the Check cards, in memory only (colour planes + foreground for [CardFit]). */
     private val reviewSnaps = HashMap<String, Snapshot>()
+    /** Longest the card outlines may take at the end of a race (they run in the background). */
+    private val CARD_FIT_BUDGET_NS = 25_000_000_000L
     /** Shutter time, for how long the blur streak the outline must cover is. */
     var cardExposureS = 1f / 120f
 
@@ -293,7 +295,10 @@ class RaceEngine(
         if (pool.isEmpty()) return emptyMap()
         val counted = racers.flatMap { r -> crossesOf(r.id).mapNotNull { c -> c.event?.let { r.id to it } } }
         val out = HashMap<String, List<ReviewBox>>()
-        for (r in reviews) {
+        val t0 = Platform.monotonicNanos()
+        // open cards first (they are the ones that need a look); stop after a time budget – the rest keep the tracker's boxes
+        for (r in reviews.sortedByDescending { it.decided == null }) {
+            if (Platform.monotonicNanos() - t0 > CARD_FIT_BUDGET_NS) break
             val snap = reviewSnaps[r.id] ?: continue
             val near = counted.filter { kotlin.math.abs(it.second.timestampNs - snap.timestampNs) < 600_000_000L }
             val owners = { tid: Int ->

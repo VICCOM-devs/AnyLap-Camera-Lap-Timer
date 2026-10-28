@@ -70,7 +70,8 @@ fun EventsScreen(nav: Navigator) {
     var creating by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var sportIdx by remember { mutableIntStateOf(0) }
-    val sport = if (sportIdx == 0) Sport.RC else Sport.RUNNING
+    val otherSports = app.repo.settings.collectAsState().value.otherSports
+    val sport = if (sportIdx == 0 || !otherSports) Sport.RC else Sport.RUNNING
     var selected by remember(sport) { mutableStateOf(racers.filter { it.sport == sport }.map { it.id }) }
     var timed by remember { mutableStateOf(false) }
     var laps by remember { mutableIntStateOf(10) }
@@ -97,7 +98,7 @@ fun EventsScreen(nav: Navigator) {
                 RtCard(Modifier.fillMaxWidth()) {
                     RtTextField(name, { name = it.take(40) }, "Name")
                     Spacer(Modifier.height(12.dp))
-                    PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
+                    if (otherSports) PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
                     val sportRacers = racers.filter { it.sport == sport }.sortedBy { it.number }
                     if (sportRacers.isEmpty()) {

@@ -224,14 +224,18 @@ private fun LiveContent(nav: Navigator) {
         saving = true
         session.analyzer.flush(Platform.monotonicNanos())
         session.camera.stopRecording { path ->
-            val result = engine.buildSession(path, recordingStartNs)
-                .let { it.copy(config = it.config.copy(line = line, direction = direction)) }
-            app.repo.saveSession(result)
-            app.pendingRound?.let { (eventId, roundId) -> app.repo.linkRound(eventId, roundId, result.id) }
-            app.pendingRound = null
-            app.pendingConfig = null
-            scope.launchMain {
-                nav.replace(Screen.Results(result.id))
+            // The end-of-race work (laps, Check-card outlines from the calibration pictures, files) takes
+            // a few seconds on a phone: never on the camera or UI thread.
+            scope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                val result = engine.buildSession(path, recordingStartNs)
+                    .let { it.copy(config = it.config.copy(line = line, direction = direction)) }
+                app.repo.saveSession(result)
+                app.pendingRound?.let { (eventId, roundId) -> app.repo.linkRound(eventId, roundId, result.id) }
+                app.pendingRound = null
+                app.pendingConfig = null
+                scope.launchMain {
+                    nav.replace(Screen.Results(result.id))
+                }
             }
         }
     }
@@ -290,6 +294,22 @@ private fun LiveContent(nav: Navigator) {
     ) {
         CameraPreview(session.camera, Modifier.fillMaxSize())
         TrackBoxesOverlay(boxes)
+    }
+
+    if (saving) {
+        // the end-of-race work runs in the background; this keeps the screen honest meanwhile
+        Box(
+            Modifier.fillMaxSize().background(RT.Bg.copy(alpha = 0.82f))
+                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                androidx.compose.material3.CircularProgressIndicator(color = RT.Accent)
+                Spacer(Modifier.height(14.dp))
+                Text("Saving the race…", style = MaterialTheme.typography.titleMedium)
+                Text("Laps, results and the Check pictures", style = MaterialTheme.typography.bodySmall, color = RT.TextDim)
+            }
+        }
     }
 
     if (liveDialog) {

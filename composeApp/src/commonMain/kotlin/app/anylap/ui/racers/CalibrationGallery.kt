@@ -40,6 +40,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import app.anylap.vision.CarTemplate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
@@ -177,7 +181,24 @@ fun CalibrationGallery(
     tile: Dp = 84.dp,
 ) {
     val views = CalibrationPlan.photoViews(racer.sport)
+    val top = remember(racer.calibration) { racer.topTemplate() }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // the picture the app fits on the car at the line (outline, nose time, which car it is)
+        if (racer.samplesOf(SampleKind.PASS_SLOW).isNotEmpty() || racer.samplesOf(SampleKind.PASS_FAST).isNotEmpty()) {
+            Text("TOP-DOWN PICTURE", style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(tile * 1.4f, tile).clip(RoundedCornerShape(12.dp)).background(RT.Surface3), contentAlignment = Alignment.Center) {
+                    if (top != null) TopDownPicture(top, Modifier.fillMaxSize().padding(6.dp))
+                    else Text("Missing", style = MaterialTheme.typography.labelSmall, color = RT.Amber)
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (top != null) "From the passes, ${(top.lengthPx).fixed(0)} × ${(top.widthPx).fixed(0)} px at the line. Used to outline the car on Check cards and time its nose."
+                    else "None of the passes kept one. Record a slow pass with the camera straight above the line and the car alone.",
+                    style = MaterialTheme.typography.bodySmall, color = RT.TextDim, modifier = Modifier.weight(1f),
+                )
+            }
+        }
         for (kind in SampleKind.entries) {
             val items = racer.samplesOf(kind)
             val target = if (kind == SampleKind.PHOTO) views.size else CalibrationPlan.PASSES_PER_SPEED
@@ -237,6 +258,20 @@ fun SampleDialog(racer: Racer, sample: CalibrationSample, kmh: Boolean, onDelete
                     else "Delete it if this wasn't the ${racer.sport.unitName}, it crashed, or someone walked through.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (sample.kind != SampleKind.PHOTO) {
+                    Spacer(Modifier.height(10.dp))
+                    val t = remember(sample.topPicture) { sample.topPicture?.let { CarTemplate.decode(it.toFloatArray()) } }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(96.dp, 64.dp).clip(RoundedCornerShape(10.dp)).background(RT.Surface3), contentAlignment = Alignment.Center) {
+                            if (t != null) TopDownPicture(t, Modifier.fillMaxSize().padding(4.dp)) else Text("—", color = RT.TextFaint)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (t != null) "Top-down picture from this pass." else "No top-down picture from this pass (the car touched something, or too little of it was seen).",
+                            style = MaterialTheme.typography.bodySmall, color = RT.TextDim,
+                        )
+                    }
+                }
                 sample.match?.let { m ->
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -255,4 +290,22 @@ fun SampleDialog(racer: Racer, sample: CalibrationSample, kmh: Boolean, onDelete
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = RT.Text) } },
     )
+}
+
+/** A car's top-down calibration picture (nose to the right), pixels outside the car dimmed. */
+@Composable
+fun TopDownPicture(t: CarTemplate, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val k = minOf(size.width / t.w, size.height / t.h)
+        val ox = (size.width - t.w * k) / 2; val oy = (size.height - t.h * k) / 2
+        for (j in 0 until t.h) for (i in 0 until t.w) {
+            val q = j * t.w + i
+            val y = t.y[q]; val d = t.u[q] - 128f; val e = t.v[q] - 128f
+            val r = (y + 1.402f * e).coerceIn(0f, 255f) / 255f
+            val g = (y - 0.344f * d - 0.714f * e).coerceIn(0f, 255f) / 255f
+            val b = (y + 1.772f * d).coerceIn(0f, 255f) / 255f
+            val a = if (t.mask[q] > 0.5f) 1f else 0.25f
+            drawRect(Color(r, g, b, a), Offset(ox + i * k, oy + j * k), Size(k + 0.6f, k + 0.6f))
+        }
+    }
 }

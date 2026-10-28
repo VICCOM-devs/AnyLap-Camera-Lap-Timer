@@ -77,8 +77,19 @@ android {
         applicationId = appId
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
+        // CI run number: every test build installs over the previous one (Android refuses a lower or equal code)
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "0.3.0"
+    }
+    signingConfigs {
+        // One fixed key for test builds (public test key, never used for the store), so a new CI build
+        // installs on top of the old one and keeps racers, calibrations and sessions.
+        getByName("debug") {
+            storeFile = file("test-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
     buildTypes {
         release {

@@ -62,7 +62,8 @@ fun RacersScreen(nav: Navigator) {
     val app = LocalApp.current
     val racers by app.repo.racers.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val sport = if (tab == 0) Sport.RC else Sport.RUNNING
+    val otherSports = app.repo.settings.collectAsState().value.otherSports
+    val sport = if (tab == 0 || !otherSports) Sport.RC else Sport.RUNNING
     val list = racers.filter { it.sport == sport }.sortedBy { it.number }
     val tier = currentTier()
     val account by app.cloud.account.collectAsState()
@@ -101,7 +102,7 @@ fun RacersScreen(nav: Navigator) {
     }
 
     ScreenScaffold(title = "Racers", subtitle = "Profiles, calibration and bibs") {
-        item { PillTabs(listOf("RC cars", "Runners"), tab, { tab = it }, Modifier.fillMaxWidth()) }
+        if (otherSports) item { PillTabs(listOf("RC cars", "Runners"), tab, { tab = it }, Modifier.fillMaxWidth()) }
         item {
             SectionLabel(
                 if (sport == Sport.RC) "Your cars" else "Your runners",
