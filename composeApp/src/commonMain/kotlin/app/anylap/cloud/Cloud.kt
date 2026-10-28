@@ -97,7 +97,7 @@ private data class SessionRow(
  * The Supabase client is created lazily so nothing touches the network (or platform settings)
  * until the user has turned sync on.
  */
-@OptIn(FlowPreview::class, ExperimentalTime::class)
+@OptIn(FlowPreview::class, ExperimentalTime::class, kotlin.uuid.ExperimentalUuidApi::class)
 class Cloud(private val repo: Repository) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
@@ -260,10 +260,44 @@ class Cloud(private val repo: Repository) {
 
     // ------------------------------------------------------------------ live timing board
 
-    /** Opens a live board and returns its 6-character code. */
-    suspend fun startLive(): Result<String> = runCatching {
-        json.decodeFromString<String>(client.postgrest.rpc("anylap_live_start").data)
+    /**
+     * Opens a live session and returns its 6-character code. Any tier: a guest account is made when
+     * nobody is signed in (no email needed). [pro] = this phone's plan (counts while the beta is open).
+     */
+    suspend fun startLive(pro: Boolean): Result<String> = runCatching {
+        if (client.auth.currentUserOrNull() == null) startGuest().getOrThrow()
+        json.decodeFromString<String>(client.postgrest.rpc("anylap_live_start", buildJsonObject { put("p_pro", pro) }).data)
     }
+
+    /** A random id for this phone as a viewer (kept, so re-joining doesn't take a second seat). */
+    val deviceId: String by lazy {
+        val p = joinPath(Platform.dataDir, "device.id")
+        Platform.readText(p)?.trim()?.takeIf { it.length >= 8 } ?: run {
+            val id = kotlin.uuid.Uuid.random().toString()
+            Platform.writeText(p, id); id
+        }
+    }
+
+    /**
+     * Join / keep watching a live session (call about once a second). No sign-in needed. The server
+     * returns only what this phone may see: {"error":"gone"|"full"} or the timing snapshot.
+     */
+    suspend fun joinLive(code: String, pro: Boolean): Result<kotlinx.serialization.json.JsonObject> = runCatching {
+        val res = client.postgrest.rpc("anylap_live_join", buildJsonObject {
+            put("p_code", code.trim().uppercase()); put("p_device", deviceId); put("p_pro", pro)
+        })
+        json.parseToJsonElement(res.data).jsonObject
+    }
+
+    /** How many phones watch the camera's session right now (seen in the last 30 s). */
+    suspend fun liveViewers(code: String): Int = try {
+        val res = client.from("anylap_live_viewers").select { filter { eq("code", code) } }
+        val cutoff = Platform.nowMillis() - 30_000
+        json.parseToJsonElement(res.data).let { it as JsonArray }.count { v ->
+            val t = v.jsonObject["last_seen"]?.jsonPrimitive?.content ?: return@count false
+            (runCatching { Instant.parse(t).toEpochMilliseconds() }.getOrNull() ?: 0L) > cutoff
+        }
+    } catch (e: Exception) { 0 }
 
     /** Replaces the board's snapshot. Errors are swallowed: a missed update is fixed by the next one. */
     suspend fun pushLive(code: String, snapshot: JsonElement) {

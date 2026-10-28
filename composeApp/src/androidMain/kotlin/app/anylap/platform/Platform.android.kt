@@ -88,6 +88,20 @@ actual object Platform {
         return Math.floorDiv(epochMs + offset, 86_400_000L)
     }
 
+    actual val canScanQr: Boolean get() = true
+
+    actual fun scanQr(onResult: (String?) -> Unit) {
+        try {
+            val opts = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+                .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE).build()
+            val ctx: Context = activityRef.get() ?: appContext
+            com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(ctx, opts).startScan()
+                .addOnSuccessListener { onResult(it.rawValue) }
+                .addOnCanceledListener { onResult(null) }
+                .addOnFailureListener { onResult(null) }
+        } catch (t: Throwable) { onResult(null) }
+    }
+
     actual fun shareText(text: String, title: String) {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"

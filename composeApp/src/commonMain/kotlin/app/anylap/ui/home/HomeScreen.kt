@@ -1,5 +1,6 @@
 package app.anylap.ui.home
 
+import app.anylap.ui.UpdateCard
 import app.anylap.ui.LocalApp
 import app.anylap.ui.LocalNav
 import app.anylap.ui.Navigator
@@ -93,7 +94,7 @@ fun HomeScreen() {
     val racers by app.repo.racers.collectAsState()
     val settings by app.repo.settings.collectAsState()
     var sportIdx by remember { mutableIntStateOf(if (settings.lastConfig.sport == Sport.RUNNING) 1 else 0) }
-    val sport = if (sportIdx == 0) Sport.RC else Sport.RUNNING
+    val sport = if (sportIdx == 0 || !settings.otherSports) Sport.RC else Sport.RUNNING
     val (count, laps, best) = remember(sessions, sport) { Stats.totals(sessions, sport) }
     val sportRacers = racers.filter { it.sport == sport }
 
@@ -103,8 +104,9 @@ fun HomeScreen() {
         titleSlot = { BrandWordmark() },
         actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = "Settings") },
     ) {
+        item { UpdateCard() }
         item {
-            PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
+            if (settings.otherSports) PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
         }
         item {
             HeroCard(
@@ -118,6 +120,14 @@ fun HomeScreen() {
                 },
                 onRacers = { nav.tab(Screen.Racers) },
             )
+        }
+        item {
+            StripeCard(RT.Accent, Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Join) }) {
+                Column(Modifier.weight(1f)) {
+                    Text("Join a race", style = MaterialTheme.typography.titleMedium)
+                    Text("Follow the timing of another phone: scan its QR", style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
         item {
             val events by app.repo.events.collectAsState()
@@ -222,7 +232,7 @@ private fun HeroCard(sport: Sport, racerCount: Int, maxRacers: Int, calibrated: 
             }
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryButton("New session", onStart, Modifier.weight(1f), icon = Icons.Rounded.Flag)
+                PrimaryButton(if (sport == Sport.RC) "New race" else "New session", onStart, Modifier.weight(1f), icon = Icons.Rounded.Flag)
                 SecondaryButton("Racers", onRacers, icon = Icons.Rounded.Groups)
             }
         }

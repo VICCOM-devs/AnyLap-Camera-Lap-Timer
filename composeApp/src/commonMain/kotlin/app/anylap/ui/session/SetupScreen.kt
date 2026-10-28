@@ -72,7 +72,8 @@ fun SetupScreen(nav: Navigator) {
     val app = LocalApp.current
     val settings by app.repo.settings.collectAsState()
     val allRacers by app.repo.racers.collectAsState()
-    var cfg by remember { mutableStateOf(settings.lastConfig) }
+    // without "other sports" in Settings every new session is an RC race
+    var cfg by remember { mutableStateOf(settings.lastConfig.let { c -> if (!settings.otherSports && c.sport != Sport.RC) c.copy(sport = Sport.RC, racerIds = emptyList(), cameraDistanceM = Sport.RC.defaultDistanceM, minLapSec = Sport.RC.defaultMinLapSec, lapLengthM = null) else c }) }
 
     val sportRacers = allRacers.filter { it.sport == cfg.sport }.sortedBy { it.number }
     val tier = currentTier()
@@ -90,8 +91,9 @@ fun SetupScreen(nav: Navigator) {
         )
     }
 
-    ScreenScaffold(title = "New session", subtitle = "Pick racers, format and camera distance") {
-        item { PillTabs(listOf("RC cars", "Running"), if (cfg.sport == Sport.RC) 0 else 1, { setSport(if (it == 0) Sport.RC else Sport.RUNNING) }, Modifier.fillMaxWidth()) }
+    val showSports = app.repo.settings.collectAsState().value.otherSports
+    ScreenScaffold(title = if (cfg.sport == Sport.RC) "New race" else "New session", subtitle = "Pick cars, format and camera distance") {
+        if (showSports) item { PillTabs(listOf("RC cars", "Running"), if (cfg.sport == Sport.RC) 0 else 1, { setSport(if (it == 0) Sport.RC else Sport.RUNNING) }, Modifier.fillMaxWidth()) }
 
         // ---------------- format
         item { SectionLabel("Format", Icons.Rounded.Timer) }

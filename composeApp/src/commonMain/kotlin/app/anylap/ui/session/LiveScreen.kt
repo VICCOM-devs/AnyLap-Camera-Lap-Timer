@@ -107,6 +107,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LiveScreen(nav: Navigator) {
     CameraScreenMode()
+    androidx.compose.runtime.DisposableEffect(Unit) { app.anylap.update.Updates.hold(true); onDispose { app.anylap.update.Updates.hold(false) } }
     CameraPermissionGate(onBack = { nav.pop() }) { LiveContent(nav) }
 }
 
@@ -157,7 +158,7 @@ private fun LiveContent(nav: Navigator) {
         val code = liveCode ?: return@LaunchedEffect
         val title = liveTitle(config)
         engine.state.distinctUntilChangedBy { LiveSnapshot.key(it) }.conflate().collect { st ->
-            app.cloud.pushLive(code, LiveSnapshot.build(title, config, st, settings.speedUnitKmh))
+            app.cloud.pushLive(code, LiveSnapshot.build(title, config, st, settings.speedUnitKmh, pro = tier.isPro))
             delay(1_000) // at most one update a second
         }
     }
@@ -175,7 +176,10 @@ private fun LiveContent(nav: Navigator) {
     // Exposure time for motion-blur-aware colour sampling (rounded so small AE wobble doesn't churn).
     val exposureMs = (camStats.exposureNs / 100_000L) / 10f
     LaunchedEffect(exposureMs) {
-        if (exposureMs > 0f) session.analyzer.config = session.analyzer.config.copy(exposureS = exposureMs / 1000f)
+        if (exposureMs > 0f) {
+            session.analyzer.config = session.analyzer.config.copy(exposureS = exposureMs / 1000f)
+            engine.cardExposureS = exposureMs / 1000f
+        }
     }
     val boxes by session.overlay.collectAsState()
 
@@ -187,7 +191,7 @@ private fun LiveContent(nav: Navigator) {
             direction = direction,
             sport = config.sport,
             racers = racers.map { r ->
-                RacerRef(r.id, r.fingerprint.takeIf { it.isNotEmpty() }?.toFloatArray(), r.markerId, r.matchViews())
+                RacerRef(r.id, r.fingerprint.takeIf { it.isNotEmpty() }?.toFloatArray(), r.markerId, r.matchViews(), r.topTemplate())
             },
             metersPerProcPx = mpp,
             useMarkers = config.sport == Sport.RUNNING && racers.any { it.markerId != null },
@@ -221,14 +225,18 @@ private fun LiveContent(nav: Navigator) {
         saving = true
         session.analyzer.flush(Platform.monotonicNanos())
         session.camera.stopRecording { path ->
-            val result = engine.buildSession(path, recordingStartNs)
-                .let { it.copy(config = it.config.copy(line = line, direction = direction)) }
-            app.repo.saveSession(result)
-            app.pendingRound?.let { (eventId, roundId) -> app.repo.linkRound(eventId, roundId, result.id) }
-            app.pendingRound = null
-            app.pendingConfig = null
-            scope.launchMain {
-                nav.replace(Screen.Results(result.id))
+            // The end-of-race work (laps, Check-card outlines from the calibration pictures, files) takes
+            // a few seconds on a phone: never on the camera or UI thread.
+            scope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                val result = engine.buildSession(path, recordingStartNs)
+                    .let { it.copy(config = it.config.copy(line = line, direction = direction)) }
+                app.repo.saveSession(result)
+                app.pendingRound?.let { (eventId, roundId) -> app.repo.linkRound(eventId, roundId, result.id) }
+                app.pendingRound = null
+                app.pendingConfig = null
+                scope.launchMain {
+                    nav.replace(Screen.Results(result.id))
+                }
             }
         }
     }
@@ -254,14 +262,13 @@ private fun LiveContent(nav: Navigator) {
         voice = voice,
         live = liveCode != null,
         onLive = {
+            // Sync: any plan; other phones join by QR (a Free camera has room for one viewer)
             when {
-                !tier.isPro -> nav.push(Screen.Paywall(ProFeature.LIVE))
-                account.userId == null -> nav.push(Screen.Account)
                 liveCode != null -> liveDialog = true
                 else -> scope.launch {
-                    app.cloud.startLive()
+                    app.cloud.startLive(tier.isPro)
                         .onSuccess { liveCode = it; liveError = null; liveDialog = true }
-                        .onFailure { liveError = "Couldn't start live timing. Check your connection."; liveDialog = true }
+                        .onFailure { liveError = "Couldn't start the sync. Check your connection."; liveDialog = true }
                 }
             }
         },
@@ -289,21 +296,46 @@ private fun LiveContent(nav: Navigator) {
         TrackBoxesOverlay(boxes)
     }
 
+    if (saving) {
+        // the end-of-race work runs in the background; this keeps the screen honest meanwhile
+        Box(
+            Modifier.fillMaxSize().background(RT.Bg.copy(alpha = 0.82f))
+                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                androidx.compose.material3.CircularProgressIndicator(color = RT.Accent)
+                Spacer(Modifier.height(14.dp))
+                Text("Saving the race…", style = MaterialTheme.typography.titleMedium)
+                Text("Laps, results and the Check pictures", style = MaterialTheme.typography.bodySmall, color = RT.TextDim)
+            }
+        }
+    }
+
     if (liveDialog) {
         AlertDialog(
             onDismissRequest = { liveDialog = false },
             containerColor = RT.Surface2,
-            title = { Text(if (liveCode != null) "Live timing is on" else "Live timing") },
+            title = { Text(if (liveCode != null) "Scan to join" else "Sync") },
             text = {
-                Column {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val code = liveCode
                     if (code != null) {
-                        Text("Spectators open this on their phone:", color = RT.TextDim)
-                        Spacer(Modifier.height(6.dp))
-                        Text(BackendConfig.liveUrl(code), style = MaterialTheme.typography.bodyMedium)
+                        var viewers by remember { mutableStateOf(0) }
+                        LaunchedEffect(code) { while (true) { viewers = app.cloud.liveViewers(code); delay(3_000) } }
+                        QrCodeView(joinLink(code), Modifier.width(200.dp))
                         Spacer(Modifier.height(10.dp))
-                        Text(code, style = MaterialTheme.typography.displaySmall, color = RT.Accent)
-                        Text("Code works for 12 hours.", style = MaterialTheme.typography.bodySmall)
+                        Text(code, style = MaterialTheme.typography.headlineMedium, color = RT.Accent)
+                        Text(
+                            "Scan with AnyLap on another phone (Join a race), or with any camera for the web page.",
+                            style = MaterialTheme.typography.bodySmall, color = RT.TextDim,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            (if (viewers == 1) "1 phone watching" else "$viewers phones watching") +
+                                (if (tier.isPro) "" else " · Free: one viewer at a time"),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
                     }
                     liveError?.let { Text(it, color = RT.Amber) }
                 }
@@ -311,7 +343,7 @@ private fun LiveContent(nav: Navigator) {
             confirmButton = {
                 val code = liveCode
                 if (code != null) {
-                    TextButton(onClick = { Platform.shareText(BackendConfig.liveUrl(code), "Live timing") }) { Text("Share link", color = RT.Accent) }
+                    TextButton(onClick = { Platform.shareText(BackendConfig.liveUrl(code), "Follow the race") }) { Text("Share link", color = RT.Accent) }
                 }
             },
             dismissButton = {

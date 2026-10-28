@@ -112,6 +112,9 @@ actual object Platform {
         return Math.floorDiv(epochMs / 1000 + offset, 86_400L)
     }
 
+    actual val canScanQr: Boolean get() = false
+    actual fun scanQr(onResult: (String?) -> Unit) = onResult(null)
+
     actual fun shareText(text: String, title: String) = present(listOf(text))
 
     actual fun shareFile(path: String, mimeType: String, title: String) = present(listOf(NSURL.fileURLWithPath(path)))

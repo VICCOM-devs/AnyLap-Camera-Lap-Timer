@@ -45,6 +45,10 @@ kotlin {
             implementation("androidx.core:core-ktx:1.16.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
             implementation("io.ktor:ktor-client-okhttp:3.3.1")
+            // Join a race by QR: Google's code scanner (no camera permission, UI from Play services)
+            implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+            // Auto-update (VICCOM rule): Play In-App Updates for store builds
+            implementation("com.google.android.play:app-update-ktx:2.1.0")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -77,8 +81,19 @@ android {
         applicationId = appId
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
+        // CI run number: every test build installs over the previous one (Android refuses a lower or equal code)
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "0.3.0"
+    }
+    signingConfigs {
+        // One fixed key for test builds (public test key, never used for the store), so a new CI build
+        // installs on top of the old one and keeps racers, calibrations and sessions.
+        getByName("debug") {
+            storeFile = file("test-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
     buildTypes {
         release {

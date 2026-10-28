@@ -29,6 +29,8 @@ data class RacerRef(
     val markerId: Int?,
     /** Per-sample fingerprints (sides, passes); the best-matching one also counts. */
     val views: List<FloatArray> = emptyList(),
+    /** Top-down picture + true size from a calibration pass, for the fit of doubtful crossings. */
+    val template: CarTemplate? = null,
 )
 
 data class AnalyzerConfig(
@@ -64,6 +66,8 @@ data class AnalyzerConfig(
      * and the time is moved to the front (or rear) edge by half the racer's length over its speed.
      */
     val finishEdge: FinishEdge = FinishEdge.CENTRE,
+    /** Capture a top-down picture of the racer on each crossing (calibration passes). */
+    val captureTemplates: Boolean = false,
 )
 
 enum class IdSource { MARKER, APPEARANCE, ONLY_RACER, NONE }
@@ -99,6 +103,30 @@ class CrossingEvent(
     val rescue: Boolean = false,
     /** The track that crossed (matches [SnapBox.trackId] in other crossings' snapshots). */
     val trackId: Int = 0,
+    /** When the racer's centre crossed (the [timestampNs] is the chosen [FinishEdge]). */
+    val centreNs: Long = timestampNs,
+    /** Blob size at the crossing ÷ one racer's expected size there (0 = no size model yet); ≥ 1.4 = more than one racer in it. */
+    val sizeRatio: Float = 0f,
+    /** Box (0..1 of the frame) at the crossing moment and velocity (frame widths/heights per second). */
+    val box: OverlayBox? = null,
+    val vx: Float = 0f,
+    val vy: Float = 0f,
+    /** The racer's outline where the calibration picture fitted: 4 corners x,y (0..1 of the frame), nose edge first. */
+    val quad: FloatArray? = null,
+    /** How the identity was decided by the calibration-picture fit (null = not fitted). */
+    val fit: FitInfo? = null,
+    /** Top-down picture of the racer from this crossing (calibration passes only, [AnalyzerConfig.captureTemplates]). */
+    val template: CarTemplate? = null,
+)
+
+/** Result of fitting the racers' calibration pictures onto a crossing. */
+class FitInfo(
+    /** Racers by fit score (0..1, share of the picture explained), best first. */
+    val scores: List<Pair<String, Float>>,
+    /** How many racers the fit found in the blob. */
+    val cars: Int,
+    /** True when the fit changed the name the colour histogram gave. */
+    val renamed: Boolean,
 )
 
 /**
@@ -114,6 +142,17 @@ class Snapshot(
     val line: FloatArray? = null,
     val timestampNs: Long = 0,
     val frameNs: Long = 0,
+    /** Colour planes Y, U, V one after another (memory only, for [CardFit]); null when not kept. */
+    val yuv: ByteArray? = null,
+    /** Raw foreground (before clean-up), 1 = moving; memory only. */
+    val fg: ByteArray? = null,
+    /** Median luma of the frame (brightness of the light the pictures are compared under). */
+    val lumaRef: Float = 0f,
+    /** Where the picture was cut from: top-left corner and the whole frame's size (analysis px). */
+    val x0: Int = 0,
+    val y0: Int = 0,
+    val frameW: Int = 0,
+    val frameH: Int = 0,
 )
 
 /**

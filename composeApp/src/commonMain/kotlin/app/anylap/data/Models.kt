@@ -59,6 +59,17 @@ data class Racer(
     }
 
     fun samplesOf(kind: SampleKind): List<CalibrationSample> = calibration.filter { it.kind == kind }
+
+    /**
+     * The racer's top-down picture for the fit: the picture of a slow pass (least motion blur), with the
+     * true size averaged over every pass that has one. Null until a pass has been recorded.
+     */
+    fun topTemplate(): app.anylap.vision.CarTemplate? {
+        val all = calibration.filter { it.kind != SampleKind.PHOTO }.mapNotNull { s -> s.topPicture?.let { app.anylap.vision.CarTemplate.decode(it.toFloatArray()) }?.let { s.kind to it } }
+        if (all.isEmpty()) return null
+        val p = (all.firstOrNull { it.first == SampleKind.PASS_SLOW } ?: all.first()).second
+        return app.anylap.vision.CarTemplate(p.w, p.h, p.y, p.u, p.v, p.mask, all.map { it.second.lengthPx }.average().toFloat(), all.map { it.second.widthPx }.average().toFloat(), p.lumaRef)
+    }
 }
 
 @Serializable
@@ -82,6 +93,8 @@ data class CalibrationSample(
     /** Passes: blob area (analysis px) and position along the line (0..1) – how big one racer looks there. */
     val area: Int? = null,
     val along: Float? = null,
+    /** Passes: top-down picture of the racer + its true size ([app.anylap.vision.CarTemplate.encode]), for the fit of touching or doubtful crossings. Local only. */
+    val topPicture: List<Float>? = null,
 )
 
 @Serializable
@@ -181,6 +194,10 @@ data class ReviewBox(
     val atMs: Long? = null,
     /** The crossing the card is about. */
     val subject: Boolean = false,
+    /** The car's outline from its fitted calibration picture: 4 corners x,y (0..1), nose edge first. */
+    val quad: List<Float>? = null,
+    /** Who the race counted this car as (the tag on the card). */
+    val racerId: String? = null,
 )
 
 /**
@@ -210,6 +227,8 @@ data class ReviewItem(
     val frameMs: Float = 0f,
     /** The user looked at it and agreed (or re-named a car on it). */
     val checked: Boolean = false,
+    /** Plain-words reason the app adds after the race (e.g. "a second piece of Orange 4 – already counted"). */
+    val note: String? = null,
 ) {
     val open: Boolean get() = resolvedTo == null && !checked
 }
@@ -260,6 +279,8 @@ data class AppSettings(
     val testingProUnlocked: Boolean = false,
     /** Settings → Timing: which part of a car is timed at the line (copied into each session). */
     val finishEdge: FinishEdge = FinishEdge.FRONT,
+    /** Settings → Sports: show running (and later other sports) next to RC everywhere. Off = an RC app. */
+    val otherSports: Boolean = false,
 )
 
 val RacerPalette: List<Long> = listOf(

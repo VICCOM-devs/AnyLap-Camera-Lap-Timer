@@ -74,14 +74,15 @@ fun StatsScreen(nav: Navigator) {
     val racers by app.repo.racers.collectAsState()
     val settings by app.repo.settings.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val sport = if (tab == 0) Sport.RC else Sport.RUNNING
+    val otherSports = app.repo.settings.collectAsState().value.otherSports
+    val sport = if (tab == 0 || !otherSports) Sport.RC else Sport.RUNNING
     val sportRacers = racers.filter { it.sport == sport }.sortedBy { it.number }
     var selectedId by remember(sport) { mutableStateOf(sportRacers.firstOrNull()?.id) }
     val selected = sportRacers.firstOrNull { it.id == selectedId } ?: sportRacers.firstOrNull()
     val allTime = remember(sessions, sportRacers) { sportRacers.map { Stats.allTime(sessions, it) } }
 
     ScreenScaffold(title = "Stats", subtitle = "Personal bests, trends and rankings") {
-        item { PillTabs(listOf("RC cars", "Running"), tab, { tab = it }, Modifier.fillMaxWidth()) }
+        if (otherSports) item { PillTabs(listOf("RC cars", "Running"), tab, { tab = it }, Modifier.fillMaxWidth()) }
 
         if (sportRacers.isEmpty() || allTime.all { it.sessions == 0 }) {
             item {

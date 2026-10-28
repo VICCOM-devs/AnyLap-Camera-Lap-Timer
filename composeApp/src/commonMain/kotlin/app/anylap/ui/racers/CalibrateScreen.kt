@@ -138,6 +138,7 @@ fun nextStep(sport: Sport, s: CalStep): CalStep {
 @Composable
 fun CalibrateScreen(nav: Navigator, racerId: String) {
     CameraScreenMode()
+    androidx.compose.runtime.DisposableEffect(Unit) { app.anylap.update.Updates.hold(true); onDispose { app.anylap.update.Updates.hold(false) } }
     CameraPermissionGate(onBack = { nav.pop() }) {
         CalibrateContent(nav, racerId)
     }
@@ -197,6 +198,7 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
             useMarkers = racer.markerId != null,
             metersPerProcPx = mpp,
             captureSnapshots = true,
+            captureTemplates = true,
             minMatch = if (views.isEmpty()) 0f else FrameAnalyzer.MIN_MATCH,
         )
     }
@@ -247,6 +249,7 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
                 match = e.match.takeIf { it > 0f },
                 area = e.area.takeIf { it > 0 && !e.split },
                 along = e.along.takeIf { e.area > 0 && !e.split },
+                topPicture = e.template?.takeIf { !e.split }?.encode()?.toList(),
             )
             app.repo.addCalibrationSample(racerId, sample)
             lastPass = sample

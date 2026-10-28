@@ -71,6 +71,10 @@ object AppGraph {
 fun App() {
     val nav = remember { Navigator() }
     LaunchedEffect(Unit) { AppGraph.state.cloud.start() }
+    LaunchedEffect(Unit) { app.anylap.update.Updates.onResume() } // launch (Android also checks on every resume)
+    LaunchedEffect(Unit) {
+        AppGraph.state.pendingJoin.collect { c -> if (c != null) { AppGraph.state.pendingJoin.value = null; nav.push(Screen.Watch(c)) } }
+    }
     RaceTheme {
         CompositionLocalProvider(LocalApp provides AppGraph.state, LocalNav provides nav) {
             Box(Modifier.fillMaxSize().background(RT.Bg)) {
@@ -93,6 +97,8 @@ fun App() {
                         is Screen.Replay -> ReplayScreen(nav, screen.sessionId, screen.racerId, screen.lap)
                         is Screen.Paywall -> PaywallScreen(nav, screen.feature)
                         Screen.Account -> AccountScreen(nav)
+                        Screen.Join -> app.anylap.ui.session.JoinScreen(nav)
+                        is Screen.Watch -> app.anylap.ui.session.WatchScreen(nav, screen.code)
                         Screen.Events -> EventsScreen(nav)
                         is Screen.EventDetail -> EventScreen(nav, screen.id)
                     }
@@ -105,6 +111,7 @@ fun App() {
                     )
                     BottomBar(nav, Modifier.align(Alignment.BottomCenter))
                 }
+                app.anylap.ui.UpdateGate()
             }
         }
     }

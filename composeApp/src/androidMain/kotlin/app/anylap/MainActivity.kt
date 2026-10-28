@@ -24,10 +24,23 @@ class MainActivity : ComponentActivity() {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
         setContent { App() }
+        handleJoin(intent)
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleJoin(intent)
+    }
+
+    /** A scanned / tapped join link opens the race in the app. */
+    private fun handleJoin(intent: android.content.Intent?) {
+        val data = intent?.dataString ?: return
+        app.anylap.ui.session.liveCodeFrom(data)?.let { AppGraph.state.pendingJoin.value = it }
     }
 
     override fun onResume() {
         super.onResume()
         Platform.attach(this)
+        app.anylap.update.UpdatePlatform.onResume(this)
     }
 }
