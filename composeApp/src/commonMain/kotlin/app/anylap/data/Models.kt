@@ -141,8 +141,6 @@ data class SessionConfig(
     val direction: Direction = Direction.BOTH,
     val line: LineSpec = LineSpec(),
     val finishEdge: FinishEdge = FinishEdge.FRONT,
-    /** Settings → Sports: show running (and later other sports) next to RC everywhere. Off = an RC app. */
-    val otherSports: Boolean = false,
 )
 
 @Serializable
@@ -280,7 +278,8 @@ data class AppSettings(
     /** Pre-release only: Pro switched on for testing (no store yet). */
     val testingProUnlocked: Boolean = false,
     /** Settings → Timing: which part of a car is timed at the line (copied into each session). */
-    val finishEdge: FinishEdge = FinishEdge.FRONT,
+    val finishEdge: FinishEdge = FinishEdge.FRONT,    /** Settings → Sports: show running (and later other sports) next to RC everywhere. Off = an RC app. */
+    val otherSports: Boolean = false,
 )
 
 val RacerPalette: List<Long> = listOf(
