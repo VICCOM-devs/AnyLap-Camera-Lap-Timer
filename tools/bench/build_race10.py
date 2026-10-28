@@ -1,7 +1,7 @@
 """race10_<seed>.json + frames -> out/race10_<seed>.html: the race as the app would show it.
 Standings, lap table, graphs, Check tray (redesigned cards: every car boxed + labelled, race-direction arrow,
 tap a box to change it, tap the score for an explanation), start lights and photo-finish ghosts."""
-import json, sys, base64, io, statistics, os, math
+import json, sys, base64, io, statistics, os, math, re
 from PIL import Image, ImageDraw, ImageFont
 B = '/home/claude/blend'
 seed = sys.argv[1] if len(sys.argv) > 1 else '1'
@@ -228,6 +228,12 @@ for e in ev:
         kind = 'Cars touching'; note = 'separated from a blob of touching cars'
     if kind is None and not e['accepted'] and not e['rescue'] and not any(o['car'] for o in os_):
         kind = 'Not a racer?'; note = f"gate turned it down ({e['match']:.2f} best match)"
+    # not counted, but it is the car that *was* counted at that very moment: a second piece of it
+    if not any(o['car'] for o in os_) and e['cands']:
+        c0 = e['cands'][0][0]
+        same = [k for k in counted.get(c0, []) if abs(k['t'] - e['t']) < 0.06 and k['i'] != i]
+        if same: note = f"A second piece of {nice(c0)}, cut out of the touching cars – {nice(c0)} is already counted at {fmt(same[0]['t'])}. Nothing to fix."
+        if same and kind in ('Not counted', 'Not a racer?'): kind = 'Second piece'
     if kind is None and e['rescue'] and 'IGNORED' in whys:
         if not e['cands'] or e['cands'][0][1] < 0.5: continue   # a shadow at the check line, nobody due – not worth a card
         kind = 'Missed?'; note = 'check line saw something, nobody was due'
@@ -255,7 +261,7 @@ for g in groups:
     kinds_ = []
     for x in g:
         if x['kind'] not in kinds_: kinds_.append(x['kind'])
-    m = dict(head_); m['kind'] = ' · '.join(kinds_); m['note'] = ' / '.join(dict.fromkeys(x['note'] for x in g if x['note']))
+    m = dict(head_); m['kind'] = ' · '.join(kinds_); m['note'] = ' / '.join(dict.fromkeys(sorted((x['note'] for x in g if x['note']), key=lambda n: not n.startswith('A second piece'))))
     m['focus'] = {x['i'] for x in g if x['i'] is not None}
     m['outs'] = [o for x in g for o in x['outs']]
     # every car that really crossed during this moment (not just the one nearest each item: two cars
@@ -265,7 +271,8 @@ for g in groups:
     merged.append(m)
 items = merged
 cards = []
-EXPLAIN = ("<b>{sc}</b> = how closely this car matches {who}'s calibration (1 = identical). The next ones are the runners-up. "
+EXPLAIN = ("The coloured outline only shows <b>which car</b> it is – that car's calibration picture laid over it. <b>The car itself sets the time</b>: a lap is timed when the car's front (the white edge of its outline) touches the finish line. "
+           "<b>{sc}</b> = how closely this car matches {who}'s calibration (1 = identical). The next ones are the runners-up. "
            "<i>Won by</i> = gap to the runner-up. <i>Lap timing</i>: each car has its own lap rhythm – a car can't lap in half its time, "
            "and a car whose lap is due is the likely owner of a doubtful crossing. <i>Split</i> = cut out of a blob of touching cars.")
 for k, it in enumerate(items):
@@ -286,7 +293,7 @@ for k, it in enumerate(items):
     cls = 'warn' if it['kind'] in ('Not counted', 'Unknown car', 'Missed?', 'Not a racer?') else ('bad' if '(truth)' in it['kind'] else ('timing' if it['kind'] in [v[0] for v in WHY.values()] else ''))
     cards.append(f'''<div class="card {cls}" id="c{k}" data-opts='{opts}'>
 <div class="pic">{'<img src="' + url + '" alt="overhead frame at the line">' if url else '<div class="noimg">no picture</div>'}{taps}</div>
-<div class="cb"><div class="kl"><b>{it['kind']}</b> · {fmt(it['t'])} s</div>
+<div class="cb"><div class="kl"><b>{it['kind']}</b> · {fmt(it['t'])} s</div>{('<div class="pc">' + it['note'].split(' / ')[0] + '</div>') if it['note'].startswith('A second piece') else ''}
 <div class="sc" onclick="this.nextElementSibling.classList.toggle('on')">{cand or it['note']}</div><div class="ex">{EXPLAIN.format(sc=it['cands'][0][1] if it['cands'] else '–', who=who)}<br><br>{it['note']}</div>
 <div class="tru" onclick="this.classList.add('on')"><span>Show truth</span><em>{('Truth: ' + ', '.join(nice(x['car']) + ' lap ' + str(x['lap']) + (' (' + x['tag'] + ')' if x['tag'] else '') for x in trs)) if trs else 'Truth: no car crossed'} · app decision <b class="{'ok' if verdict == 'Right' else 'no'}">{verdict.lower()}</b></em></div></div></div>''')
 nCheck = len(items)
@@ -404,7 +411,8 @@ diagRows = ''.join(f'<tr><td class="mono">{fmt(x["t"])}</td><td>{sw(x["car"])}{n
 gate = open(f'{B}/out/gate.txt').read() if os.path.exists(f'{B}/out/gate.txt') else ''
 seedRows = ''
 import glob
-for f in sorted(glob.glob(f'{B}/out/fit_race10_*.json'), key=lambda x: int(x.split('_')[-1].split('.')[0])):
+TABLE = os.environ.get('TABLE', f'{B}/out/fit_race10_*.json')
+for f in sorted(glob.glob(TABLE), key=lambda x: int(re.sub(r'\D', '', os.path.basename(x).split('_')[-1]) or 0)):
     Q = json.load(open(f))['summary']; sd = f.split('_')[-1].split('.')[0]
     seedRows += f'<tr{" class=on" if sd == seed else ""}><td class="pos">{sd}</td><td class="mono">{Q["engineRight"]} / {Q["crossings"]}</td><td class="mono"><b>{Q["right"]} / {Q["crossings"]}</b></td><td class="mono">{Q["missed"]}</td><td class="mono">{Q["extra"]}</td><td class="mono">{Q["abreast"]}</td><td class="mono">{Q["diag"]}</td><td class="mono">{Q["timingMeanMs"]:.1f} ms</td></tr>'
 
@@ -434,7 +442,7 @@ td.bad{{background:rgba(242,176,30,.14);color:var(--warn)}}td.miss{{background:r
 .ln{{transition:opacity .2s}}.chart:hover .ln{{opacity:.25}}.chart .ln:hover{{opacity:1;stroke-width:4}}
 .legend{{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--dim);margin-top:8px}}
 .cards{{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}}.card{{background:var(--s1);border:1px solid var(--stroke);border-radius:16px;overflow:hidden;position:relative}}
-.card.timing{{border-color:rgba(255,138,0,.45)}}.card.warn{{border-color:rgba(242,176,30,.45)}}.card.bad{{border-color:rgba(255,77,77,.6)}}
+.pc{{font-size:13px;color:var(--text);margin:4px 0 2px;line-height:1.35}}.card.timing{{border-color:rgba(255,138,0,.45)}}.card.warn{{border-color:rgba(242,176,30,.45)}}.card.bad{{border-color:rgba(255,77,77,.6)}}
 .pic{{position:relative;background:#000}}.pic img{{width:100%;display:block;aspect-ratio:1;object-fit:cover}}.noimg{{aspect-ratio:1;display:grid;place-items:center;color:var(--faint)}}
 .hit{{position:absolute;background:transparent;border:0;cursor:pointer;border-radius:6px}}.hit:hover{{background:rgba(255,138,0,.15)}}
 .cb{{padding:10px 12px 12px}}.kl{{font-size:13px;color:var(--dim)}}.kl b{{color:var(--text);letter-spacing:.02em}}

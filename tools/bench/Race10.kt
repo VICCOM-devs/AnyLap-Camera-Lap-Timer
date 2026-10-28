@@ -31,6 +31,7 @@ const val CARD_TAG_H = 24f
 
 fun main(args: Array<String>) {
     val seed = args.getOrNull(0)?.toInt() ?: 1
+    val key = (System.getenv("RACE") ?: "") + seed            // file names: race10_<RACE><seed>.json
     val laps = args.getOrNull(1)?.toInt() ?: 10
     val useFit = System.getenv("NOFIT") == null
     if (System.getenv("FITALL") != null) FrameAnalyzer.FIT_ALL = true
@@ -42,7 +43,9 @@ fun main(args: Array<String>) {
     fun along(lane: Double) = alongMap.minByOrNull { abs(it.key - lane) }!!.value
     val empty = Clip.load("minis_empty")
     val all = File(DIR).list()!!.filter { it.startsWith("minis_") && it.endsWith(".yuv") }.map { it.removeSuffix(".yuv") }
-    val cars = all.filter { it.startsWith("minis_cal_") && it.contains("_3.5_") }.map { it.removePrefix("minis_cal_").substringBefore("_+0.00") }.sorted()
+    val gridOnly = System.getenv("GRID")?.split(",")?.map { it.trim() }   // e.g. the look-alike grid
+    val cars = all.filter { it.startsWith("minis_cal_") && it.contains("_3.5_") }.map { it.removePrefix("minis_cal_").substringBefore("_+0.00") }
+        .filter { gridOnly == null || it in gridOnly }.sorted()
     println("cars: $cars · line $LINE · ${"%.2f".format(MPP * 1000)} mm/px · picture fit ${if (useFit) "on" else "off"}")
     HINTS.clear()
     val calErr = ArrayList<Double>()
@@ -177,7 +180,7 @@ fun main(args: Array<String>) {
     println("decisions: " + outs.groupingBy { it.why }.eachCount())
 
     // ---------------------------------------------------------------- Check-card outlines (same code as the app's tray)
-    File("$OUT/r10_$seed").mkdirs()
+    File("$OUT/r10_$key").mkdirs()
     fun q(s: String?) = if (s == null) "null" else "\"" + s.replace("\"", "'").replace("\\", "/") + "\""
     val pool = racers.mapNotNull { r -> r.template?.let { r.id to it } }
     for ((id, t) in pool) File("$OUT/tpl_$id.pgm").outputStream().buffered().use { o -> o.write("P5\n${t.w} ${t.h * 2}\n255\n".toByteArray()); o.write(ByteArray(t.w * t.h * 2) { i -> if (i < t.w * t.h) t.y[i].toInt().coerceIn(0, 255).toByte() else (t.mask[i - t.w * t.h] * 255).toInt().toByte() }) }
@@ -223,8 +226,8 @@ fun main(args: Array<String>) {
                 "{\"id\":${q(f.racerId)},\"score\":%.3f,\"poly\":[".format(f.score) + polys[j].joinToString(",") { "%.1f".format(it) } + "],\"tag\":[%.1f,%.1f,%.1f,%.1f,%.1f,%.1f]}".format(t.x, t.y, t.w, t.h, t.ax, t.ay) } + "]}"
         val rgb = ByteArray(snap.width * snap.height * 3)
         for (p in 0 until snap.width * snap.height) { val c = snap.argb[p]; rgb[3 * p] = (c shr 16).toByte(); rgb[3 * p + 1] = (c shr 8).toByte(); rgb[3 * p + 2] = c.toByte() }
-        File("$OUT/r10_$seed/g$k.pgm").outputStream().buffered().use { o -> o.write("P5\n${snap.width} ${snap.height}\n255\n".toByteArray()); o.write(ByteArray(snap.width * snap.height) { if (snap.fg!![it].toInt() != 0) -1 else 0 }) }
-        File("$OUT/r10_$seed/s$k.ppm").outputStream().buffered().use { o -> o.write("P6\n${snap.width} ${snap.height}\n255\n".toByteArray()); o.write(rgb) }
+        File("$OUT/r10_$key/g$k.pgm").outputStream().buffered().use { o -> o.write("P5\n${snap.width} ${snap.height}\n255\n".toByteArray()); o.write(ByteArray(snap.width * snap.height) { if (snap.fg!![it].toInt() != 0) -1 else 0 }) }
+        File("$OUT/r10_$key/s$k.ppm").outputStream().buffered().use { o -> o.write("P6\n${snap.width} ${snap.height}\n255\n".toByteArray()); o.write(rgb) }
     }
     println("card outlines: ${cardJson.size} cards in ${System.currentTimeMillis() - tc} ms · uncovered moving patch ≥ 0.3 car: " + uncovered.filter { it.value >= 0.3f }.entries.sortedBy { it.key }.joinToString(" ") { "#${it.key}=%.2f".format(it.value) })
 
@@ -248,15 +251,15 @@ fun main(args: Array<String>) {
     } + "],")
     sb.append("\"outs\":[" + outs.joinToString(",") { "{\"i\":${it.index},\"t\":%.4f,\"car\":${q(it.racer)},\"why\":${q(it.why.name)},\"note\":${q(it.note.replace("%", "%%"))}}".format(it.ns / 1e9) } + "]")
     sb.append("}")
-    File("$OUT/race10_$seed.json").writeText(sb.toString())
+    File("$OUT/race10_$key.json").writeText(sb.toString())
     // frames for cards: around every event that isn't a plain, confident engine crossing, plus the forced scenarios
     for (e in events) { val fi = (e.timestampNs / 1e9 * FPS); frameWanted += fi.toInt(); frameWanted += fi.toInt() + 1; frameWanted += kotlin.math.ceil(e.centreNs / 1e9 * FPS).toInt() }
     for (p in truth) { frameWanted += (p.t * FPS).toInt(); frameWanted += (p.t * FPS).toInt() + 1 }
     for (fi in frameWanted.filter { it in 0 until frames }) {
         val f = tl.frame(fi); val rgb = rgbOf(f)
-        File("$OUT/r10_$seed/f$fi.ppm").outputStream().buffered().use { o -> o.write("P6\n${f.width} ${f.height}\n255\n".toByteArray()); o.write(rgb) }
+        File("$OUT/r10_$key/f$fi.ppm").outputStream().buffered().use { o -> o.write("P6\n${f.width} ${f.height}\n255\n".toByteArray()); o.write(rgb) }
     }
-    println("wrote $OUT/race10_$seed.json + ${frameWanted.size} frames")
+    println("wrote $OUT/race10_$key.json + ${frameWanted.size} frames")
 }
 
 /** Wizard calibration from the minis' slow (3.5 m/s) and fast (7 m/s) passes; also measures nose-timing error on them. */

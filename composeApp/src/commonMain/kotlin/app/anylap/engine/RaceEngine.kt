@@ -251,7 +251,7 @@ class RaceEngine(
     private fun reviewsWithTimes(): List<ReviewItem> {
         val outlined = outlineCards()
         return reviews.map { r ->
-            outlined[r.id]?.let { return@map r.copy(boxes = it) }
+            outlined[r.id]?.let { return@map r.copy(boxes = it, note = pieceNote(r, it)) }
             val ids = reviewTracks[r.id] ?: return@map r
             r.copy(boxes = r.boxes.mapIndexed { i, b ->
                 if (b.atMs != null) b else {
@@ -261,6 +261,20 @@ class RaceEngine(
                 }
             })
         }
+    }
+
+    /**
+     * A crossing that wasn't counted but sits inside the outline of a car that *was* counted at the same
+     * moment is a second piece of that car (cut out of a blob of touching cars): say so in plain words.
+     */
+    private fun pieceNote(r: ReviewItem, boxes: List<ReviewBox>): String? {
+        if (r.decided != null) return null
+        val subject = boxes.firstOrNull { it.subject } ?: return null
+        val id = subject.racerId ?: return null
+        val counted = crossesOf(id).map { (it.ns - startNs) / 1_000_000 }.minByOrNull { kotlin.math.abs(it - r.atMs) } ?: return null
+        if (kotlin.math.abs(counted - r.atMs) > 150) return null
+        val name = racers.firstOrNull { it.id == id }?.name ?: return null
+        return "A second piece of $name, cut out of the touching cars – $name is already counted at ${Format.lap(counted)}. Nothing to fix."
     }
 
     /** Pictures of the Check cards, in memory only (colour planes + foreground for [CardFit]). */

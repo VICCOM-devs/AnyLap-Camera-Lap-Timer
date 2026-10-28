@@ -227,6 +227,8 @@ data class ReviewItem(
     val frameMs: Float = 0f,
     /** The user looked at it and agreed (or re-named a car on it). */
     val checked: Boolean = false,
+    /** Plain-words reason the app adds after the race (e.g. "a second piece of Orange 4 – already counted"). */
+    val note: String? = null,
 ) {
     val open: Boolean get() = resolvedTo == null && !checked
 }

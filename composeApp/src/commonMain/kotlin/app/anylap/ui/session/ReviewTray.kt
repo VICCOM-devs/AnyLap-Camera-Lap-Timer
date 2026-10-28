@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.anylap.data.ReviewBox
 import app.anylap.data.ReviewItem
+import app.anylap.data.FinishEdge
 import app.anylap.data.Racer
 import app.anylap.data.ReviewKind
 import app.anylap.data.Session
@@ -91,6 +92,10 @@ fun ReviewCard(
             Spacer(Modifier.width(8.dp))
             Text(Format.lap(item.atMs), style = MaterialTheme.typography.bodySmall, color = RT.TextDim, modifier = Modifier.weight(1f))
             if (item.open) Pill("Looks right", RT.Green, onCheck) else Text("✓ checked", style = MaterialTheme.typography.labelSmall, color = RT.Green)
+        }
+        item.note?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall, color = RT.Text)
         }
         Spacer(Modifier.height(8.dp))
         if (bmp != null) {
@@ -300,8 +305,14 @@ private fun explanation(s: Session, item: ReviewItem): String {
         ReviewKind.RENAMED -> "Re-named: it was named after a car that had just crossed, so lap timing gave it to the runner-up that was due."
         ReviewKind.NOT_COUNTED -> "Not counted: it was named after a car that had just crossed, and no other car fitted – so nobody got the lap."
     }
-    val ghosts = if (item.frameMs > 0f) " The faint boxes show each car between the two frames, at its own speed; the solid one is when it reached the line." else ""
-    return "$first $why$ghosts"
+    val ghosts = if (item.frameMs > 0f) " The faint outlines show each car between the two frames, at its own speed; the solid one is when it reached the line." else ""
+    val timing = when (s.config.finishEdge) {
+        FinishEdge.FRONT -> "the car's front (the white edge of its outline) touches the finish line"
+        FinishEdge.REAR -> "the back of the car (the edge opposite the white one) clears the finish line"
+        FinishEdge.CENTRE -> "the middle of the car is on the finish line"
+    }
+    val outline = " The coloured outline only shows which car it is – that car's calibration picture laid over it. The car itself sets the time: a lap is timed when $timing."
+    return "$first $why$outline$ghosts"
 }
 
 private fun kindColor(k: ReviewKind): Color = when (k) {
