@@ -1,5 +1,8 @@
 package app.anylap.ui.events
 
+import app.anylap.data.count
+import app.anylap.i18n.tr
+import app.anylap.i18n.trn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -79,7 +82,7 @@ fun EventsScreen(nav: Navigator) {
     var heatsEach by remember { mutableIntStateOf(2) }
     val perHeat = Limits.maxRacers(sport, tier)
 
-    ScreenScaffold("Events", subtitle = "Heats, points and a final", onBack = { nav.pop() }) {
+    ScreenScaffold(tr("Events"), subtitle = tr("Heats, points and a final"), onBack = { nav.pop() }) {
         if (!tier.isPro) {
             item { ProLockCard(nav, ProFeature.EVENTS) }
             return@ScreenScaffold
@@ -87,24 +90,24 @@ fun EventsScreen(nav: Navigator) {
 
         if (!creating) {
             item {
-                PrimaryButton("New event", {
+                PrimaryButton(tr("New event"), {
                     creating = true
                     name = "Race day " + Platform.formatDate(Platform.nowMillis(), "d MMM")
                 }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add)
             }
         } else {
-            item { SectionLabel("New event", Icons.Rounded.Flag) }
+            item { SectionLabel(tr("New event"), Icons.Rounded.Flag) }
             item {
                 RtCard(Modifier.fillMaxWidth()) {
-                    RtTextField(name, { name = it.take(40) }, "Name")
+                    RtTextField(name, { name = it.take(40) }, tr("Name"))
                     Spacer(Modifier.height(12.dp))
-                    if (otherSports) PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
+                    if (otherSports) PillTabs(listOf(tr("RC cars"), tr("Running")), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
                     val sportRacers = racers.filter { it.sport == sport }.sortedBy { it.number }
                     if (sportRacers.isEmpty()) {
-                        Text("Add some ${sport.unitName}s under Racers first.", style = MaterialTheme.typography.bodyMedium, color = RT.Amber)
+                        Text(if (sport == Sport.RC) tr("Add some cars under Racers first.") else tr("Add some runners under Racers first."), style = MaterialTheme.typography.bodyMedium, color = RT.Amber)
                     } else {
-                        Text("Who's racing", style = MaterialTheme.typography.titleSmall)
+                        Text(tr("Who's racing"), style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.height(8.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             sportRacers.forEach { r ->
@@ -114,35 +117,35 @@ fun EventsScreen(nav: Navigator) {
                         }
                     }
                     Spacer(Modifier.height(14.dp))
-                    PillTabs(listOf("Race to laps", "Timed"), if (timed) 1 else 0, { timed = it == 1 }, Modifier.fillMaxWidth())
+                    PillTabs(listOf(tr("Race to laps"), tr("Timed")), if (timed) 1 else 0, { timed = it == 1 }, Modifier.fillMaxWidth())
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (timed) "Each race" else "Each race to", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
+                        Text(if (timed) tr("Each race") else tr("Each race to"), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
                         if (timed) Stepper(minutes, { minutes = it }, 1..60, "min") else Stepper(laps, { laps = it }, 1..100, "laps")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Heats per racer", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
+                        Text(tr("Heats per racer"), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
                         Stepper(heatsEach, { heatsEach = it }, 1..5, "")
                     }
                     val plan = EventLogic.heats(selected, perHeat, heatsEach)
                     Text(
-                        if (selected.size < 2) "Pick at least 2 racers."
-                        else "${plan.size} heat${if (plan.size == 1) "" else "s"} of up to $perHeat · then an optional final.",
+                        if (selected.size < 2) tr("Pick at least 2 racers.")
+                        else trn(plan.size, "{0} heat of up to {1} · then an optional final.", "{0} heats of up to {1} · then an optional final.", perHeat),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        SecondaryButton("Cancel", { creating = false })
+                        SecondaryButton(tr("Cancel"), { creating = false })
                         PrimaryButton(
-                            "Create",
+                            tr("Create"),
                             {
                                 val ordered = sportRacers.map { it.id }.filter { it in selected }
                                 val rounds = EventLogic.heats(ordered, perHeat, heatsEach).mapIndexed { i, ids ->
-                                    Round(Uuid.random().toString(), "Heat ${i + 1}", RoundKind.HEAT, ids)
+                                    Round(Uuid.random().toString(), tr("Heat {0}", i + 1), RoundKind.HEAT, ids)
                                 }
                                 val e = Event(
                                     id = Uuid.random().toString(),
-                                    name = name.ifBlank { "Race day" },
+                                    name = name.ifBlank { tr("Race day") },
                                     sport = sport,
                                     createdAt = Platform.nowMillis(),
                                     racerIds = ordered,
@@ -163,12 +166,12 @@ fun EventsScreen(nav: Navigator) {
             }
         }
 
-        item { SectionLabel("Your events", Icons.Rounded.EmojiEvents) }
+        item { SectionLabel(tr("Your events"), Icons.Rounded.EmojiEvents) }
         if (events.isEmpty()) {
             item {
                 EmptyState(
-                    Icons.Rounded.EmojiEvents, "No events yet",
-                    "Set up heats for the whole group, run them one by one and the points table builds itself. Finish with a final for the top racers.",
+                    Icons.Rounded.EmojiEvents, tr("No events yet"),
+                    tr("Set up heats for the whole group, run them one by one and the points table builds itself. Finish with a final for the top racers."),
                 )
             }
         }
@@ -181,13 +184,13 @@ fun EventsScreen(nav: Navigator) {
                 Column(Modifier.weight(1f)) {
                     Text(e.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                     Text(
-                        Platform.formatDate(e.createdAt, "d MMM yyyy") + " · ${e.racerIds.size} ${e.sport.unitName}s · $done/${e.rounds.size} rounds",
+                        Platform.formatDate(e.createdAt, "d MMM yyyy") + " · " + e.sport.count(e.racerIds.size) + " · " + tr("{0}/{1} rounds", done, e.rounds.size),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (e.finished) Tag("Finished", RT.Green) else Tag("In progress", RT.Amber)
-                        leader?.let { Tag("Leader: ${it.name}", RT.Gold) }
+                        if (e.finished) Tag(tr("Finished"), RT.Green) else Tag(tr("In progress"), RT.Amber)
+                        leader?.let { Tag(tr("Leader: {0}", it.name), RT.Gold) }
                     }
                 }
                 Spacer(Modifier.width(10.dp))

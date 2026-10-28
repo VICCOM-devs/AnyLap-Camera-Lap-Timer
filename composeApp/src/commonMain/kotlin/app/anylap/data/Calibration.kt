@@ -1,5 +1,6 @@
 package app.anylap.data
 
+import app.anylap.i18n.tr
 import app.anylap.vision.Fingerprint
 
 /** How much each kind of sample counts in the racer's combined fingerprint. */
@@ -18,15 +19,15 @@ object CalibrationPlan {
 
     fun photoViews(sport: Sport): List<PhotoView> = when (sport) {
         Sport.RC -> listOf(
-            PhotoView("left", "Left side", "Side-on, the way it passes the camera one way.", true),
-            PhotoView("right", "Right side", "Turn it around – many cars differ side to side.", true),
-            PhotoView("front", "Front", "Nose towards the camera.", false),
-            PhotoView("back", "Back", "Rear towards the camera.", false),
+            PhotoView("left", tr("Left side"), tr("Side-on, the way it passes the camera one way."), true),
+            PhotoView("right", tr("Right side"), tr("Turn it around – many cars differ side to side."), true),
+            PhotoView("front", tr("Front"), tr("Nose towards the camera."), false),
+            PhotoView("back", tr("Back"), tr("Rear towards the camera."), false),
         )
         Sport.RUNNING -> listOf(
-            PhotoView("front", "Front", "Facing the camera, whole body in the box.", true),
-            PhotoView("side", "Side", "Side-on, as they run past.", true),
-            PhotoView("back", "Back", "Back to the camera.", false),
+            PhotoView("front", tr("Front"), tr("Facing the camera, whole body in the box."), true),
+            PhotoView("side", tr("Side"), tr("Side-on, as they run past."), true),
+            PhotoView("back", tr("Back"), tr("Back to the camera."), false),
         )
     }
 }

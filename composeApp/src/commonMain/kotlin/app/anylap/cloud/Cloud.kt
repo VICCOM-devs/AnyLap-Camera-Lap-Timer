@@ -1,5 +1,6 @@
 package app.anylap.cloud
 
+import app.anylap.i18n.tr
 import app.anylap.data.Racer
 import app.anylap.data.Repository
 import app.anylap.data.Session
@@ -507,12 +508,12 @@ class Cloud(private val repo: Repository) {
     private fun friendly(e: Exception): String {
         val m = e.message.orEmpty()
         return when {
-            "row-level security" in m || "42501" in m -> "Sync needs AnyLap Pro on this account."
-            "timeout" in m.lowercase() || "Unable to resolve" in m || "failed to connect" in m.lowercase() -> "Offline – will sync when you're back online."
-            else -> "Sync failed. It will retry automatically."
+            "row-level security" in m || "42501" in m -> tr("Sync needs AnyLap Pro on this account.")
+            "timeout" in m.lowercase() || "Unable to resolve" in m || "failed to connect" in m.lowercase() -> tr("Offline – will sync when you're back online.")
+            else -> tr("Sync failed. It will retry automatically.")
         }
     }
 }
 
 /** Shown under results/sessions timed on someone else's phone. */
-fun Session.timedByLabel(): String? = timedByUserId?.let { "Timed by ${timedByName ?: "a friend"}" }
+fun Session.timedByLabel(): String? = timedByUserId?.let { tr("Timed by {0}", timedByName ?: tr("a friend")) }

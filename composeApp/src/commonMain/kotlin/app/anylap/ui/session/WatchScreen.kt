@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,23 +76,23 @@ fun JoinScreen(nav: Navigator) {
     var error by remember { mutableStateOf<String?>(null) }
     fun go(raw: String) {
         val c = liveCodeFrom(raw)
-        if (c == null) error = "That isn't an AnyLap race code." else nav.replace(Screen.Watch(c))
+        if (c == null) error = tr("That isn't an AnyLap race code.") else nav.replace(Screen.Watch(c))
     }
-    ScreenScaffold(title = "Join a race", subtitle = "Follow the timing from the camera phone", onBack = { nav.pop() }) {
+    ScreenScaffold(title = tr("Join a race"), subtitle = tr("Follow the timing from the camera phone"), onBack = { nav.pop() }) {
         if (Platform.canScanQr) item {
             RtCard(Modifier.fillMaxWidth()) {
-                Text("On the camera phone: tap Sync. Then scan the QR it shows.", style = MaterialTheme.typography.bodyMedium)
+                Text(tr("On the camera phone: tap Sync. Then scan the QR it shows."), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(12.dp))
-                PrimaryButton("Scan the QR", { Platform.scanQr { r -> if (r != null) go(r) } }, Modifier.fillMaxWidth(), icon = Icons.Rounded.QrCodeScanner)
+                PrimaryButton(tr("Scan the QR"), { Platform.scanQr { r -> if (r != null) go(r) } }, Modifier.fillMaxWidth(), icon = Icons.Rounded.QrCodeScanner)
             }
         }
         item {
             RtCard(Modifier.fillMaxWidth()) {
-                Text(if (Platform.canScanQr) "…or type the code under the QR" else "Type the code the camera phone shows under its QR", style = MaterialTheme.typography.bodyMedium)
+                Text(if (Platform.canScanQr) tr("…or type the code under the QR") else tr("Type the code the camera phone shows under its QR"), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(8.dp))
                 RtTextField(code, { code = it.uppercase().filter { ch -> ch.isLetterOrDigit() }.take(6); error = null }, "Race code", Modifier.fillMaxWidth())
                 Spacer(Modifier.height(10.dp))
-                SecondaryButton("Join", { go(code) }, Modifier.fillMaxWidth())
+                SecondaryButton(tr("Join"), { go(code) }, Modifier.fillMaxWidth())
                 error?.let { Spacer(Modifier.height(6.dp)); Text(it, color = RT.Amber, style = MaterialTheme.typography.bodySmall) }
             }
         }
@@ -108,7 +109,7 @@ fun WatchScreen(nav: Navigator, code: String) {
     val app = LocalApp.current
     val pro = currentTier().isPro
     var snap by remember { mutableStateOf<JsonObject?>(null) }
-    var state by remember { mutableStateOf("Joining…") }
+    var state by remember { mutableStateOf(tr("Joining…")) }
     LaunchedEffect(code, pro) {
         var fails = 0
         while (true) {
@@ -117,19 +118,19 @@ fun WatchScreen(nav: Navigator, code: String) {
                     fails = 0
                     when (o["error"]?.jsonPrimitive?.content) {
                         null -> { snap = o; state = "" }
-                        "gone" -> { snap = null; state = "This race has ended, or the code is wrong." }
-                        "full" -> { snap = null; state = "This race already has a viewer: the camera phone runs AnyLap Free (one viewer at a time). With Pro on the camera, everyone can follow." }
-                        else -> state = "Couldn't join."
+                        "gone" -> { snap = null; state = tr("This race has ended, or the code is wrong.") }
+                        "full" -> { snap = null; state = tr("This race already has a viewer: the camera phone runs AnyLap Free (one viewer at a time). With Pro on the camera, everyone can follow.") }
+                        else -> state = tr("Couldn't join.")
                     }
                 }
-                .onFailure { if (++fails > 2) state = "No connection – trying again…" }
+                .onFailure { if (++fails > 2) state = tr("No connection – trying again…") }
             delay(1_000)
         }
     }
     val s = snap
     ScreenScaffold(
-        title = s?.get("title")?.jsonPrimitive?.content ?: "Race $code",
-        subtitle = if (s != null) phaseText(s) else "Code $code",
+        title = s?.get("title")?.jsonPrimitive?.content ?: tr("Race {0}", code),
+        subtitle = if (s != null) phaseText(s) else tr("Code {0}", code),
         onBack = { nav.pop() },
     ) {
         if (s == null) {
@@ -142,10 +143,10 @@ fun WatchScreen(nav: Navigator, code: String) {
         val unit = s["speedUnit"]?.jsonPrimitive?.content ?: "km/h"
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Tag(if (hostPro) "Pro camera" else "Free camera", color = if (hostPro) RT.Gold else RT.TextDim)
-                Tag(if (viewerPro) "You: Pro" else "You: Free", color = if (viewerPro) RT.Gold else RT.TextDim)
+                Tag(if (hostPro) tr("Pro camera") else tr("Free camera"), color = if (hostPro) RT.Gold else RT.TextDim)
+                Tag(if (viewerPro) tr("You: Pro") else tr("You: Free"), color = if (viewerPro) RT.Gold else RT.TextDim)
                 Spacer(Modifier.weight(1f))
-                Text("${s["viewers"]?.jsonPrimitive?.intOrNull ?: 1} watching", style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
+                Text(tr("{0} watching", s["viewers"]?.jsonPrimitive?.intOrNull ?: 1), style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
             }
         }
         for (r in rows) item {
@@ -160,13 +161,13 @@ fun WatchScreen(nav: Navigator, code: String) {
                     Column(Modifier.weight(1f)) {
                         Text((r["number"]?.jsonPrimitive?.content?.let { "$it " } ?: "") + (r["name"]?.jsonPrimitive?.content ?: ""), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Last ${Format.lap(r["lastMs"]?.jsonPrimitive?.longOrNull)} · best ${Format.lap(r["bestMs"]?.jsonPrimitive?.longOrNull)}",
+                            tr("Last {0} · best {1}", Format.lap(r["lastMs"]?.jsonPrimitive?.longOrNull), Format.lap(r["bestMs"]?.jsonPrimitive?.longOrNull)),
                             style = MaterialTheme.typography.bodySmall, color = RT.TextDim,
                         )
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(r["gap"]?.jsonPrimitive?.content ?: "", style = MaterialTheme.typography.titleSmall)
-                        Text("${r["laps"]?.jsonPrimitive?.intOrNull ?: 0} laps", style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
+                        Text(tr("{0} laps", r["laps"]?.jsonPrimitive?.intOrNull ?: 0), style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
                     }
                 }
                 if (laps.isNotEmpty()) {
@@ -176,9 +177,9 @@ fun WatchScreen(nav: Navigator, code: String) {
                 if (stats != null) {
                     Spacer(Modifier.height(6.dp))
                     val parts = listOfNotNull(
-                        stats["avgMs"]?.jsonPrimitive?.longOrNull?.let { "avg ${Format.lap(it)}" },
-                        stats["sdMs"]?.jsonPrimitive?.longOrNull?.let { "spread ±${(it / 1000.0).fixed(2)} s" },
-                        stats["topSpeed"]?.jsonPrimitive?.floatOrNull?.let { "top ${it.fixed(0)} $unit" },
+                        stats["avgMs"]?.jsonPrimitive?.longOrNull?.let { tr("avg {0}", Format.lap(it)) },
+                        stats["sdMs"]?.jsonPrimitive?.longOrNull?.let { tr("spread ±{0} s", (it / 1000.0).fixed(2)) },
+                        stats["topSpeed"]?.jsonPrimitive?.floatOrNull?.let { tr("top {0} {1}", it.fixed(0), unit) },
                     )
                     if (parts.isNotEmpty()) Text(parts.joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = RT.Gold)
                 }
@@ -187,8 +188,8 @@ fun WatchScreen(nav: Navigator, code: String) {
         if (!(hostPro && viewerPro)) item {
             Text(
                 when {
-                    !hostPro -> "Lap stats like speed and consistency need Pro on the camera phone."
-                    else -> "Lap stats like speed and consistency are for Pro – yours and the cars' owners'."
+                    !hostPro -> tr("Lap stats like speed and consistency need Pro on the camera phone.")
+                    else -> tr("Lap stats like speed and consistency are for Pro – yours and the cars' owners'.")
                 },
                 style = MaterialTheme.typography.bodySmall, color = RT.TextFaint,
             )
@@ -197,10 +198,10 @@ fun WatchScreen(nav: Navigator, code: String) {
 }
 
 private fun phaseText(s: JsonObject): String = when (s["phase"]?.jsonPrimitive?.content) {
-    "RUNNING" -> "Live"
-    "COUNTDOWN" -> "Starting"
-    "FINISHED" -> "Finished"
-    else -> "Waiting for the start"
+    "RUNNING" -> tr("Live")
+    "COUNTDOWN" -> tr("Starting")
+    "FINISHED" -> tr("Finished")
+    else -> tr("Waiting for the start")
 }
 
 /** A QR code (dark modules on white, with its quiet zone). */

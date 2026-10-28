@@ -1,5 +1,7 @@
 package app.anylap.data
 
+import app.anylap.i18n.tr
+import app.anylap.i18n.trn
 import app.anylap.vision.Fingerprint
 import kotlinx.serialization.Serializable
 
@@ -16,9 +18,13 @@ enum class Sport(
     val maxBlobAreaFrac: Float,
     val defaultDistanceM: Float,
 ) {
-    RC("RC cars", "car", 5, 2.5f, 0.0012f, 0.12f, 2.5f),
-    RUNNING("Running", "runner", 10, 15f, 0.004f, 0.6f, 5f),
+    RC(tr("RC cars"), tr("car"), 5, 2.5f, 0.0012f, 0.12f, 2.5f),
+    RUNNING(tr("Running"), tr("runner"), 10, 15f, 0.004f, 0.6f, 5f),
 }
+
+/** "3 cars" / "1 runner" in the app language. */
+fun Sport.count(n: Int): String =
+    if (this == Sport.RC) trn(n, "{0} car", "{0} cars") else trn(n, "{0} runner", "{0} runners")
 
 @Serializable
 data class Racer(
@@ -99,9 +105,9 @@ data class CalibrationSample(
 
 @Serializable
 enum class RaceMode(val title: String, val short: String) {
-    PRACTICE("Practice", "Practice"),
-    LAPS("Race to laps", "Laps"),
-    TIME("Timed race", "Timed"),
+    PRACTICE(tr("Practice"), tr("Practice")),
+    LAPS(tr("Race to laps"), tr("Laps")),
+    TIME(tr("Timed race"), tr("Timed")),
 }
 
 @Serializable
@@ -111,11 +117,11 @@ enum class Direction { BOTH, FORWARD, REVERSE }
 @Serializable
 enum class FinishEdge(val title: String, val detail: String) {
     /** The front touches the line (as in motorsport). */
-    FRONT("Front touches the line", "Timed when the nose reaches the line, as in motorsport."),
+    FRONT(tr("Front touches the line"), tr("Timed when the nose reaches the line, as in motorsport.")),
     /** The whole racer has passed (rear clears the line). */
-    REAR("Whole car has passed", "Timed when the back of the car clears the line."),
+    REAR(tr("Whole car has passed"), tr("Timed when the back of the car clears the line.")),
     /** The middle of the racer (before Oct 2026; calibration). */
-    CENTRE("Middle of the car", "Timed when the middle of the car is on the line."),
+    CENTRE(tr("Middle of the car"), tr("Timed when the middle of the car is on the line.")),
 }
 
 /** Finish line, normalised 0..1 in the landscape camera image. */
@@ -164,19 +170,19 @@ data class Lap(
 @Serializable
 enum class ReviewKind(val title: String) {
     /** Nobody matched well enough; the app counted it for no one. */
-    UNKNOWN("Unknown car"),
+    UNKNOWN(tr("Unknown car")),
     /** Named, but the runner-up was close. */
-    LOW_MARGIN("Close call"),
+    LOW_MARGIN(tr("Close call")),
     /** Two racers were separated from one blob at the line. */
-    SPLIT("Cars touching"),
+    SPLIT(tr("Cars touching")),
     /** Turned down as not looking like any racer (a shadow, a hand, a dog). */
-    REJECTED("Not a racer?"),
+    REJECTED(tr("Not a racer?")),
     /** Passed the check line beyond the finish without being counted there – a possible missed lap. */
-    MISSED("Missed?"),
+    MISSED(tr("Missed?")),
     /** Named after a car that had just crossed; lap timing gave it to the runner-up that was due. */
-    RENAMED("Re-named by lap timing"),
+    RENAMED(tr("Re-named by lap timing")),
     /** Named after a car that had just crossed and no other car fits: not counted for anyone. */
-    NOT_COUNTED("Not counted"),
+    NOT_COUNTED(tr("Not counted")),
 }
 
 @Serializable
@@ -261,9 +267,9 @@ data class Session(
 ) {
     val title: String
         get() = when (config.mode) {
-            RaceMode.PRACTICE -> "${config.sport.title} practice"
-            RaceMode.LAPS -> "${config.targetLaps}-lap race"
-            RaceMode.TIME -> "${config.timeLimitSec / 60}-min race"
+            RaceMode.PRACTICE -> tr("{0} practice", config.sport.title)
+            RaceMode.LAPS -> tr("{0}-lap race", config.targetLaps)
+            RaceMode.TIME -> tr("{0}-min race", config.timeLimitSec / 60)
         }
 
     fun racer(id: String): Racer? = racers.firstOrNull { it.id == id }

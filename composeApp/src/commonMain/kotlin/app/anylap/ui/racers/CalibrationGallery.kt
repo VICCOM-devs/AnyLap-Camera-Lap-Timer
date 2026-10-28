@@ -1,5 +1,6 @@
 package app.anylap.ui.racers
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,9 +74,9 @@ private fun loadSampleImage(path: String?): ImageBitmap? = path?.let { p ->
 }
 
 fun SampleKind.title(): String = when (this) {
-    SampleKind.PHOTO -> "Photos"
-    SampleKind.PASS_SLOW -> "Slow passes"
-    SampleKind.PASS_FAST -> "Fast passes"
+    SampleKind.PHOTO -> tr("Photos")
+    SampleKind.PASS_SLOW -> tr("Slow passes")
+    SampleKind.PASS_FAST -> tr("Fast passes")
 }
 
 fun SampleKind.icon(): ImageVector = when (this) {
@@ -86,10 +87,10 @@ fun SampleKind.icon(): ImageVector = when (this) {
 
 /** Short caption under a thumbnail: the side for photos, the speed for passes. */
 fun CalibrationSample.caption(racer: Racer, kmh: Boolean = true): String = when (kind) {
-    SampleKind.PHOTO -> CalibrationPlan.photoViews(racer.sport).firstOrNull { it.key == view }?.title ?: "Photo"
+    SampleKind.PHOTO -> CalibrationPlan.photoViews(racer.sport).firstOrNull { it.key == view }?.title ?: tr("Photo")
     SampleKind.PASS_SLOW, SampleKind.PASS_FAST -> speedKmh?.let { v ->
         if (kmh) "${v.fixed(0)} km/h" else "${(v / 1.609f).fixed(0)} mph"
-    } ?: if (kind == SampleKind.PASS_SLOW) "Slow" else "Fast"
+    } ?: if (kind == SampleKind.PASS_SLOW) tr("Slow") else tr("Fast")
 }
 
 /** Thumbnail of one calibration sample, with a delete button in the corner. */
@@ -109,7 +110,7 @@ fun SampleTile(
             .background(RT.Surface3)
             .border(1.dp, RT.Stroke, RoundedCornerShape(12.dp))
             .clickable(onClick = onOpen)
-            .semantics { role = Role.Button; contentDescription = "$caption – open" },
+            .semantics { role = Role.Button; contentDescription = tr("{0} – open", caption) },
     ) {
         if (bmp != null) {
             Image(bmp, null, contentScale = ContentScale.Crop, filterQuality = FilterQuality.Medium, modifier = Modifier.fillMaxSize())
@@ -134,7 +135,7 @@ fun SampleTile(
                     .align(Alignment.TopEnd)
                     .size(36.dp)
                     .clickable(onClick = onDelete)
-                    .semantics { role = Role.Button; contentDescription = "Delete $caption" },
+                    .semantics { role = Role.Button; contentDescription = tr("Delete {0}", caption) },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
@@ -155,7 +156,7 @@ fun AddSampleTile(label: String, onClick: () -> Unit, size: Dp = 84.dp, required
             .background(RT.Surface)
             .border(1.dp, if (required) RT.Amber.copy(alpha = 0.6f) else RT.StrokeHigh, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .semantics { role = Role.Button; contentDescription = "Add $label" }
+            .semantics { role = Role.Button; contentDescription = tr("Add {0}", label) }
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -185,16 +186,16 @@ fun CalibrationGallery(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // the picture the app fits on the car at the line (outline, nose time, which car it is)
         if (racer.samplesOf(SampleKind.PASS_SLOW).isNotEmpty() || racer.samplesOf(SampleKind.PASS_FAST).isNotEmpty()) {
-            Text("TOP-DOWN PICTURE", style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
+            Text(tr("TOP-DOWN PICTURE"), style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(tile * 1.4f, tile).clip(RoundedCornerShape(12.dp)).background(RT.Surface3), contentAlignment = Alignment.Center) {
                     if (top != null) TopDownPicture(top, Modifier.fillMaxSize().padding(6.dp))
-                    else Text("Missing", style = MaterialTheme.typography.labelSmall, color = RT.Amber)
+                    else Text(tr("Missing"), style = MaterialTheme.typography.labelSmall, color = RT.Amber)
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    if (top != null) "From the passes, ${(top.lengthPx).fixed(0)} × ${(top.widthPx).fixed(0)} px at the line. Used to outline the car on Check cards and time its nose."
-                    else "None of the passes kept one. Record a slow pass with the camera straight above the line and the car alone.",
+                    if (top != null) tr("From the passes, {0} × {1} px at the line. Used to outline the car on Check cards and time its nose.", (top.lengthPx).fixed(0), (top.widthPx).fixed(0))
+                    else tr("None of the passes kept one. Record a slow pass with the camera straight above the line and the car alone."),
                     style = MaterialTheme.typography.bodySmall, color = RT.TextDim, modifier = Modifier.weight(1f),
                 )
             }
@@ -224,11 +225,11 @@ fun CalibrationGallery(
                 } else {
                     items.forEach { s -> SampleTile(s, s.caption(racer, kmh), { onOpen(s) }, { onDelete(s) }, tile) }
                     if (onAddPass != null && items.size < CalibrationPlan.MAX_PASSES_PER_SPEED) {
-                        AddSampleTile(if (items.size < target) "Record" else "More", { onAddPass(kind) }, tile, items.size < target)
+                        AddSampleTile(if (items.size < target) tr("Record") else tr("More"), { onAddPass(kind) }, tile, items.size < target)
                     }
                 }
                 if (items.isEmpty() && onAddPhoto == null && onAddPass == null) {
-                    Text("None yet", style = MaterialTheme.typography.bodySmall, color = RT.TextFaint)
+                    Text(tr("None yet"), style = MaterialTheme.typography.bodySmall, color = RT.TextFaint)
                 }
             }
         }
@@ -250,12 +251,12 @@ fun SampleDialog(racer: Racer, sample: CalibrationSample, kmh: Boolean, onDelete
                     contentAlignment = Alignment.Center,
                 ) {
                     if (bmp != null) Image(bmp, null, contentScale = ContentScale.Fit, filterQuality = FilterQuality.Medium, modifier = Modifier.fillMaxSize())
-                    else Text("No picture saved", color = RT.TextFaint)
+                    else Text(tr("No picture saved"), color = RT.TextFaint)
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    if (sample.kind == SampleKind.PHOTO) "Delete it if the car wasn't in the box or something else was in the picture."
-                    else "Delete it if this wasn't the ${racer.sport.unitName}, it crashed, or someone walked through.",
+                    if (sample.kind == SampleKind.PHOTO) tr("Delete it if the car wasn't in the box or something else was in the picture.")
+                    else tr("Delete it if this wasn't the {0}, it crashed, or someone walked through.", racer.sport.unitName),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 if (sample.kind != SampleKind.PHOTO) {
@@ -267,7 +268,7 @@ fun SampleDialog(racer: Racer, sample: CalibrationSample, kmh: Boolean, onDelete
                         }
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            if (t != null) "Top-down picture from this pass." else "No top-down picture from this pass (the car touched something, or too little of it was seen).",
+                            if (t != null) tr("Top-down picture from this pass.") else tr("No top-down picture from this pass (the car touched something, or too little of it was seen)."),
                             style = MaterialTheme.typography.bodySmall, color = RT.TextDim,
                         )
                     }
@@ -275,7 +276,7 @@ fun SampleDialog(racer: Racer, sample: CalibrationSample, kmh: Boolean, onDelete
                 sample.match?.let { m ->
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Looked ${(m * 100).fixed(0)}% like the other samples.",
+                        tr("Looked {0}% like the other samples.", (m * 100).fixed(0)),
                         style = MaterialTheme.typography.labelSmall, color = RT.TextDim,
                     )
                 }
@@ -285,10 +286,10 @@ fun SampleDialog(racer: Racer, sample: CalibrationSample, kmh: Boolean, onDelete
             TextButton(onClick = onDelete) {
                 Icon(Icons.Rounded.DeleteOutline, null, tint = RT.Accent, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Delete", color = RT.Accent)
+                Text(tr("Delete"), color = RT.Accent)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = RT.Text) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Close"), color = RT.Text) } },
     )
 }
 

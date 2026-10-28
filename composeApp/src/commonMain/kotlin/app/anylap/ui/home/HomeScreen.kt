@@ -1,5 +1,8 @@
 package app.anylap.ui.home
 
+import app.anylap.data.count
+import app.anylap.i18n.tr
+import app.anylap.i18n.trn
 import app.anylap.ui.UpdateCard
 import app.anylap.ui.LocalApp
 import app.anylap.ui.LocalNav
@@ -102,11 +105,11 @@ fun HomeScreen() {
         title = "AnyLap",
         subtitle = Platform.formatDate(Platform.nowMillis(), "EEEE d MMMM"),
         titleSlot = { BrandWordmark() },
-        actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = "Settings") },
+        actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = tr("Settings")) },
     ) {
         item { UpdateCard() }
         item {
-            if (settings.otherSports) PillTabs(listOf("RC cars", "Running"), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
+            if (settings.otherSports) PillTabs(listOf(tr("RC cars"), tr("Running")), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
         }
         item {
             HeroCard(
@@ -124,8 +127,8 @@ fun HomeScreen() {
         item {
             StripeCard(RT.Accent, Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Join) }) {
                 Column(Modifier.weight(1f)) {
-                    Text("Join a race", style = MaterialTheme.typography.titleMedium)
-                    Text("Follow the timing of another phone: scan its QR", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Join a race"), style = MaterialTheme.typography.titleMedium)
+                    Text(tr("Follow the timing of another phone: scan its QR"), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -135,22 +138,22 @@ fun HomeScreen() {
             StripeCard(RT.Gold, Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Events) }) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Race day", style = MaterialTheme.typography.titleMedium)
+                        Text(tr("Race day"), style = MaterialTheme.typography.titleMedium)
                         if (!tier.isPro) { Spacer(Modifier.width(8.dp)); ProBadge() }
                     }
                     Text(
-                        if (open > 0) "$open event${if (open == 1) "" else "s"} in progress" else "Heats, a points table and a final",
+                        if (open > 0) trn(open, "{0} event in progress", "{0} events in progress") else tr("Heats, a points table and a final"),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 Icon(Icons.Rounded.EmojiEvents, null, tint = RT.Gold)
             }
         }
-        item { SectionLabel("Overview", Icons.Rounded.Speed) }
+        item { SectionLabel(tr("Overview"), Icons.Rounded.Speed) }
         item {
             TileRow {
-                StatTile("Sessions", count.toString(), Modifier.weight(1f), Icons.Rounded.Flag)
-                StatTile("Laps timed", laps.toString(), Modifier.weight(1f), Icons.Rounded.Loop)
+                StatTile(tr("Sessions"), count.toString(), Modifier.weight(1f), Icons.Rounded.Flag)
+                StatTile(tr("Laps timed"), laps.toString(), Modifier.weight(1f), Icons.Rounded.Loop)
             }
         }
         item {
@@ -162,19 +165,19 @@ fun HomeScreen() {
                 sessions.filter { it.config.sport == sport }.flatMap { it.laps }.mapNotNull { it.speedKmh }.maxOrNull()
             }
             TileRow {
-                StatTile("Fastest lap", Format.lap(best), Modifier.weight(1f), Icons.Rounded.Timer, sub = bestRacer, valueColor = if (best != null) RT.Purple else RT.Text)
-                StatTile("Top speed", Format.speed(topSpeed, settings.speedUnitKmh), Modifier.weight(1f), Icons.Rounded.Speed)
+                StatTile(tr("Fastest lap"), Format.lap(best), Modifier.weight(1f), Icons.Rounded.Timer, sub = bestRacer, valueColor = if (best != null) RT.Purple else RT.Text)
+                StatTile(tr("Top speed"), Format.speed(topSpeed, settings.speedUnitKmh), Modifier.weight(1f), Icons.Rounded.Speed)
             }
         }
 
-        item { SectionLabel("Recent sessions", Icons.Rounded.History) }
+        item { SectionLabel(tr("Recent sessions"), Icons.Rounded.History) }
         val recent = sessions.filter { it.config.sport == sport }.take(12)
         if (recent.isEmpty()) {
             item {
                 EmptyState(
                     icon = if (sport == Sport.RC) Icons.Rounded.SportsMotorsports else Icons.Rounded.DirectionsRun,
-                    title = "No sessions yet",
-                    body = "Set up a finish line and your first laps will show up here.",
+                    title = tr("No sessions yet"),
+                    body = tr("Set up a finish line and your first laps will show up here."),
                 )
             }
         } else {
@@ -196,8 +199,8 @@ fun HomeScreen() {
             item(key = "locked") {
                 ProLockCard(
                     nav, ProFeature.HISTORY,
-                    title = "$locked older session${if (locked == 1) "" else "s"} saved",
-                    body = "Free shows your last ${Limits.FREE_HISTORY}. Unlock Pro to bring back every lap, replay and stat.",
+                    title = trn(locked, "{0} older session saved", "{0} older sessions saved"),
+                    body = tr("Free shows your last {0}. Unlock Pro to bring back every lap, replay and stat.", Limits.FREE_HISTORY),
                 )
             }
         }
@@ -218,22 +221,22 @@ private fun HeroCard(sport: Sport, racerCount: Int, maxRacers: Int, calibrated: 
         Canvas(Modifier.matchParentSize()) { speedLines(size, alpha = 0.06f) }
         ChequeredMark(Modifier.align(Alignment.TopEnd).offset(x = 26.dp, y = (-14).dp).size(150.dp).alpha(0.22f))
         Column(Modifier.padding(20.dp)) {
-            Text("READY TO RACE", style = MaterialTheme.typography.labelSmall, color = RT.AccentHot)
+            Text(tr("READY TO RACE"), style = MaterialTheme.typography.labelSmall, color = RT.AccentHot)
             Spacer(Modifier.height(6.dp))
             Text(
-                if (sport == Sport.RC) "LINE UP\nYOUR CARS" else "LINE UP\nYOUR RUNNERS",
+                if (sport == Sport.RC) tr("LINE UP\nYOUR CARS") else tr("LINE UP\nYOUR RUNNERS"),
                 style = MaterialTheme.typography.displaySmall.copy(lineHeight = 34.sp),
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Tag("$racerCount ${sport.unitName}${if (racerCount == 1) "" else "s"}", RT.Text)
-                Tag("$calibrated ready", if (calibrated > 0) RT.Green else RT.Amber)
-                Tag("max $maxRacers", RT.TextDim)
+                Tag(sport.count(racerCount), RT.Text)
+                Tag(tr("{0} ready", calibrated), if (calibrated > 0) RT.Green else RT.Amber)
+                Tag(tr("max {0}", maxRacers), RT.TextDim)
             }
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryButton(if (sport == Sport.RC) "New race" else "New session", onStart, Modifier.weight(1f), icon = Icons.Rounded.Flag)
-                SecondaryButton("Racers", onRacers, icon = Icons.Rounded.Groups)
+                PrimaryButton(if (sport == Sport.RC) tr("New race") else tr("New session"), onStart, Modifier.weight(1f), icon = Icons.Rounded.Flag)
+                SecondaryButton(tr("Racers"), onRacers, icon = Icons.Rounded.Groups)
             }
         }
     }
@@ -254,7 +257,7 @@ private fun SessionCard(s: Session, onClick: () -> Unit) {
             Spacer(Modifier.height(2.dp))
             Text(
                 Platform.formatDate(s.startedAt, "HH:mm") +
-                    " · ${s.racers.size} ${s.config.sport.unitName}${if (s.racers.size == 1) "" else "s"} · ${s.laps.size} laps",
+                    " · " + s.config.sport.count(s.racers.size) + " · " + trn(s.laps.size, "{0} lap", "{0} laps"),
                 style = MaterialTheme.typography.bodySmall,
             )
             if (fastest != null) {
@@ -270,7 +273,7 @@ private fun SessionCard(s: Session, onClick: () -> Unit) {
         if (podium.isNotEmpty()) {
             Spacer(Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.End) {
-                Icon(Icons.Rounded.EmojiEvents, "Winner", tint = RT.Gold, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.EmojiEvents, tr("Winner"), tint = RT.Gold, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.height(4.dp))
                 AvatarStack(podium, 30.dp)
             }
@@ -283,8 +286,8 @@ private fun dayLabel(epochMs: Long): String {
     val today = Platform.localDay(Platform.nowMillis())
     val fmt = Platform.formatDate(epochMs, "EEE, MMM d")
     return when (day) {
-        today -> "Today · $fmt"
-        today - 1 -> "Yesterday · $fmt"
+        today -> tr("Today · {0}", fmt)
+        today - 1 -> tr("Yesterday · {0}", fmt)
         else -> fmt
     }
 }

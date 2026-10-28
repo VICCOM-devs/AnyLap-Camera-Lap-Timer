@@ -1,5 +1,6 @@
 package app.anylap.data
 
+import app.anylap.i18n.tr
 import app.anylap.platform.Platform
 import app.anylap.platform.joinPath
 import kotlinx.coroutines.CoroutineScope
@@ -58,7 +59,7 @@ class Repository {
         val color = RacerPalette.firstOrNull { it !in usedColors } ?: RacerPalette[existing.size % RacerPalette.size]
         val number = (existing.maxOfOrNull { it.number } ?: 0) + 1
         val markerId = if (sport == Sport.RUNNING) nextMarkerId() else null
-        val name = if (sport == Sport.RC) "Car $number" else "Runner $number"
+        val name = if (sport == Sport.RC) tr("Car {0}", number) else tr("Runner {0}", number)
         return Racer(
             id = Uuid.random().toString(),
             name = name,

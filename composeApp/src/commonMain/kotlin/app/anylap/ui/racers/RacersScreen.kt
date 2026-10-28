@@ -1,5 +1,6 @@
 package app.anylap.ui.racers
 
+import app.anylap.i18n.tr
 import app.anylap.ui.LocalApp
 import app.anylap.ui.Navigator
 import app.anylap.ui.Screen
@@ -77,12 +78,12 @@ fun RacersScreen(nav: Navigator) {
         AlertDialog(
             onDismissRequest = { codeDialog = false },
             containerColor = RT.Surface2,
-            title = { Text("Add a friend's racer") },
+            title = { Text(tr("Add a friend's racer")) },
             text = {
                 Column {
-                    Text("Enter the 6-character code from their racer page.", color = RT.TextDim)
+                    Text(tr("Enter the 6-character code from their racer page."), color = RT.TextDim)
                     Spacer(Modifier.height(10.dp))
-                    RtTextField(claimCode, { claimCode = it.uppercase().filter(Char::isLetterOrDigit).take(6) }, "Code")
+                    RtTextField(claimCode, { claimCode = it.uppercase().filter(Char::isLetterOrDigit).take(6) }, tr("Code"))
                     claimError?.let { Text(it, color = RT.Amber, style = MaterialTheme.typography.bodySmall) }
                 }
             },
@@ -95,27 +96,27 @@ fun RacersScreen(nav: Navigator) {
                             .onFailure { claimError = friendlyAuthError(it) }
                         claiming = false
                     }
-                }) { Text("Add", color = RT.Accent) }
+                }) { Text(tr("Add"), color = RT.Accent) }
             },
-            dismissButton = { TextButton(onClick = { codeDialog = false }) { Text("Cancel", color = RT.Text) } },
+            dismissButton = { TextButton(onClick = { codeDialog = false }) { Text(tr("Cancel"), color = RT.Text) } },
         )
     }
 
-    ScreenScaffold(title = "Racers", subtitle = "Profiles, calibration and bibs") {
-        if (otherSports) item { PillTabs(listOf("RC cars", "Runners"), tab, { tab = it }, Modifier.fillMaxWidth()) }
+    ScreenScaffold(title = tr("Racers"), subtitle = tr("Profiles, calibration and bibs")) {
+        if (otherSports) item { PillTabs(listOf(tr("RC cars"), tr("Runners")), tab, { tab = it }, Modifier.fillMaxWidth()) }
         item {
             SectionLabel(
-                if (sport == Sport.RC) "Your cars" else "Your runners",
-                trailing = { Text("${list.size} saved · ${Limits.maxRacers(sport, tier)} per race", style = MaterialTheme.typography.bodySmall) },
+                if (sport == Sport.RC) tr("Your cars") else tr("Your runners"),
+                trailing = { Text(tr("{0} saved · {1} per race", list.size, Limits.maxRacers(sport, tier)), style = MaterialTheme.typography.bodySmall) },
             )
         }
         if (list.isEmpty()) {
             item {
                 EmptyState(
                     Icons.Rounded.Groups,
-                    if (sport == Sport.RC) "Add your first car" else "Add your first runner",
-                    if (sport == Sport.RC) "Give it a name, snap a photo and do a few calibration passes so the camera learns what it looks like."
-                    else "Each runner gets a printable bib with a marker the camera can read from metres away.",
+                    if (sport == Sport.RC) tr("Add your first car") else tr("Add your first runner"),
+                    if (sport == Sport.RC) tr("Give it a name, snap a photo and do a few calibration passes so the camera learns what it looks like.")
+                    else tr("Each runner gets a printable bib with a marker the camera can read from metres away."),
                 )
             }
         }
@@ -123,7 +124,7 @@ fun RacersScreen(nav: Navigator) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 PrimaryButton(
-                    if (sport == Sport.RC) "Add car" else "Add runner",
+                    if (sport == Sport.RC) tr("Add car") else tr("Add runner"),
                     onClick = {
                         val r = app.repo.newRacer(sport)
                         app.repo.upsertRacer(r)
@@ -133,14 +134,14 @@ fun RacersScreen(nav: Navigator) {
                     icon = Icons.Rounded.Add,
                 )
                 if (sport == Sport.RUNNING && list.isNotEmpty()) {
-                    SecondaryButton(if (tier.isPro) "All bibs" else "Bibs · Pro", onClick = {
+                    SecondaryButton(if (tier.isPro) tr("All bibs") else tr("Bibs · Pro"), onClick = {
                         if (tier.isPro) BibPdf.share(list) else nav.push(Screen.Paywall(ProFeature.BIBS))
                     }, icon = Icons.Rounded.Print)
                 }
             }
         }
         item {
-            SecondaryButton("Add with code", onClick = {
+            SecondaryButton(tr("Add with code"), onClick = {
                     when {
                         !tier.isPro -> nav.push(Screen.Paywall(ProFeature.SYNC))
                         account.userId == null -> nav.push(Screen.Account)
@@ -162,10 +163,10 @@ private fun RacerRow(r: Racer, onClick: () -> Unit) {
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Tag("#${r.number}", RT.TextDim)
-                    if (r.ownerUserId != null) Tag(r.ownerName?.let { "From $it" } ?: "Shared", RT.Purple)
+                    if (r.ownerUserId != null) Tag(r.ownerName?.let { tr("From {0}", it) } ?: tr("Shared"), RT.Purple)
                     when {
-                        r.isCalibrated -> Tag("Calibrated · ${r.fingerprintSamples}", RT.Green)
-                        r.sport == Sport.RC -> Tag("Needs calibration", RT.Amber)
+                        r.isCalibrated -> Tag(tr("Calibrated · {0}", r.fingerprintSamples), RT.Green)
+                        r.sport == Sport.RC -> Tag(tr("Needs calibration"), RT.Amber)
                         else -> {}
                     }
                     if (r.markerId != null) {

@@ -1,5 +1,6 @@
 package app.anylap
 
+import app.anylap.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -120,10 +121,10 @@ fun App() {
 private data class Tab(val screen: Screen, val label: String, val icon: ImageVector)
 
 private val tabs = listOf(
-    Tab(Screen.Home, "Home", Icons.Rounded.Home),
-    Tab(Screen.Race, "Race", Icons.Rounded.Flag),
-    Tab(Screen.Stats, "Stats", Icons.Rounded.BarChart),
-    Tab(Screen.Racers, "Racers", Icons.Rounded.Groups),
+    Tab(Screen.Home, tr("Home"), Icons.Rounded.Home),
+    Tab(Screen.Race, tr("Race"), Icons.Rounded.Flag),
+    Tab(Screen.Stats, tr("Stats"), Icons.Rounded.BarChart),
+    Tab(Screen.Racers, tr("Racers"), Icons.Rounded.Groups),
 )
 
 @Composable

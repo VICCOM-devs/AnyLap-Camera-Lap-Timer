@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -161,15 +162,15 @@ fun LineTools(
         RailButton(
             Icons.Rounded.SwapHoriz,
             when (direction) {
-                Direction.BOTH -> "Both ways"
-                Direction.FORWARD, Direction.REVERSE -> "One way"
+                Direction.BOTH -> tr("Both ways")
+                Direction.FORWARD, Direction.REVERSE -> tr("One way")
             },
             onDirection,
             size = 38.dp,
         )
-        RailButton(Icons.Rounded.CenterFocusStrong, "Centre", onCenter, size = 38.dp)
-        RailButton(Icons.Rounded.RestartAlt, "Reset bg", onResetBackground, size = 38.dp)
-        RailButton(Icons.Rounded.Check, "Done", onDone, size = 38.dp, filled = true)
+        RailButton(Icons.Rounded.CenterFocusStrong, tr("Centre"), onCenter, size = 38.dp)
+        RailButton(Icons.Rounded.RestartAlt, tr("Reset bg"), onResetBackground, size = 38.dp)
+        RailButton(Icons.Rounded.Check, tr("Done"), onDone, size = 38.dp, filled = true)
     }
 }
 

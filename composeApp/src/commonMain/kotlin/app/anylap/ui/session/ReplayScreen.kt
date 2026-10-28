@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,8 +69,8 @@ fun ReplayScreen(nav: Navigator, sessionId: String, racerId: String, lapNumber: 
     if (s == null || racer == null || lap == null || path == null || !Platform.exists(path)) {
         Box(Modifier.fillMaxSize().background(RT.Bg), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Replay unavailable.", color = RT.TextDim)
-                androidx.compose.material3.TextButton(onClick = { nav.pop() }) { Text("Back", color = RT.Accent) }
+                Text(tr("Replay unavailable."), color = RT.TextDim)
+                androidx.compose.material3.TextButton(onClick = { nav.pop() }) { Text(tr("Back"), color = RT.Accent) }
             }
         }
         return
@@ -115,20 +116,20 @@ fun ReplayScreen(nav: Navigator, sessionId: String, racerId: String, lapNumber: 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, { nav.pop() })
                 Spacer(Modifier.width(12.dp))
-                Text("Slow-mo replay", style = MaterialTheme.typography.titleLarge)
+                Text(tr("Slow-mo replay"), style = MaterialTheme.typography.titleLarge)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RacerAvatar(racer, 44.dp)
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(racer.name, style = MaterialTheme.typography.titleMedium)
-                    Text("Lap ${lap.number} · ${Format.lap(lap.timeMs)}", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Lap {0} · {1}", lap.number, Format.lap(lap.timeMs)), style = MaterialTheme.typography.bodySmall)
                     lap.speedKmh?.let {
                         Text(Format.speed(it, app.repo.settings.value.speedUnitKmh), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
-            PillTabs(listOf("Finish", "Whole lap"), wholeLap, { wholeLap = it; seekTo = null }, Modifier.fillMaxWidth())
+            PillTabs(listOf(tr("Finish"), tr("Whole lap")), wholeLap, { wholeLap = it; seekTo = null }, Modifier.fillMaxWidth())
             PillTabs(listOf("0.25x", "0.5x", "1x"), speedIdx, { speedIdx = it }, Modifier.fillMaxWidth())
             RtSlider(
                 value = ((positionMs - startMs).toFloat() / (endMs - startMs).coerceAtLeast(1)).coerceIn(0f, 1f),
@@ -146,7 +147,7 @@ fun ReplayScreen(nav: Navigator, sessionId: String, racerId: String, lapNumber: 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(if (playing) "Pause" else "Play", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    Text(if (playing) tr("Pause") else tr("Play"), color = Color.White, style = MaterialTheme.typography.titleMedium)
                 }
             }
         }

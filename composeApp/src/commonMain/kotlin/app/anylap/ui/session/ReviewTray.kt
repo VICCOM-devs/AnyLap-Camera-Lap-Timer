@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.i18n.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -91,7 +92,7 @@ fun ReviewCard(
             Tag(item.kind.title, color = if (item.open) kindColor(item.kind) else RT.TextDim)
             Spacer(Modifier.width(8.dp))
             Text(Format.lap(item.atMs), style = MaterialTheme.typography.bodySmall, color = RT.TextDim, modifier = Modifier.weight(1f))
-            if (item.open) Pill("Looks right", RT.Green, onCheck) else Text("✓ checked", style = MaterialTheme.typography.labelSmall, color = RT.Green)
+            if (item.open) Pill(tr("Looks right"), RT.Green, onCheck) else Text(tr("✓ checked"), style = MaterialTheme.typography.labelSmall, color = RT.Green)
         }
         item.note?.let {
             Spacer(Modifier.height(4.dp))
@@ -117,7 +118,7 @@ fun ReviewCard(
         if (sel?.atMs != null) {
             val atMs = sel.atMs
             val now = LapMath.ownerAt(s, atMs)
-            Text("Who is this?", style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
+            Text(tr("Who is this?"), style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
             Spacer(Modifier.height(6.dp))
             val ranked = (if (sel.subject) item.candidates.mapNotNull { c -> s.racer(c.racerId) } else emptyList())
             val order = ranked + s.racers.filterNot { r -> ranked.any { it.id == r.id } }
@@ -128,10 +129,10 @@ fun ReviewCard(
                         onReassign(atMs, r.id); picking = null
                     }
                 }
-                Choice("Not a car", RT.TextDim, selected = now == null && !item.open) { onReassign(atMs, ""); picking = null }
+                Choice(tr("Not a car"), RT.TextDim, selected = now == null && !item.open) { onReassign(atMs, ""); picking = null }
             }
         } else if (item.open) {
-            Text("Tap a car to change who it is.", style = MaterialTheme.typography.labelSmall, color = RT.TextFaint)
+            Text(tr("Tap a car to change who it is."), style = MaterialTheme.typography.labelSmall, color = RT.TextFaint)
         }
     }
 }
@@ -285,33 +286,33 @@ private fun photoFinish(s: Session, item: ReviewItem, boxes: List<ReviewBox>): S
     if (crossed.size < 2) return null
     val (a, ta) = crossed[0]; val (b, tb) = crossed[1]
     if (tb - ta >= 100) return null
-    return if (tb - ta < 1) "${a.name} and ${b.name}: dead heat" else "${a.name} ahead of ${b.name} by ${tb - ta} ms"
+    return if (tb - ta < 1) tr("{0} and {1}: dead heat", a.name, b.name) else tr("{0} ahead of {1} by {2} ms", a.name, b.name, tb - ta)
 }
 
 private fun scoreLine(s: Session, item: ReviewItem): String {
     val parts = item.candidates.take(3).mapNotNull { c -> s.racer(c.racerId)?.let { "${it.name} ${(c.score * 100).toInt()} %" } }
-    return (if (parts.isEmpty()) "No colour match" else parts.joinToString(" · ")) + "   ⓘ"
+    return (if (parts.isEmpty()) tr("No colour match") else parts.joinToString(" · ")) + "   ⓘ"
 }
 
 private fun explanation(s: Session, item: ReviewItem): String {
     val top = item.candidates.firstOrNull()?.let { c -> s.racer(c.racerId)?.name?.let { it to (c.score * 100).toInt() } }
-    val first = if (top != null) "${top.second} % = how closely this car matches ${top.first}'s calibration photos and passes (100 % = identical). The next ones are the runners-up." else "The car didn't look like any calibrated car."
+    val first = if (top != null) tr("{0} % = how closely this car matches {1}'s calibration photos and passes (100 % = identical). The next ones are the runners-up.", top.second, top.first) else tr("The car didn't look like any calibrated car.")
     val why = when (item.kind) {
-        ReviewKind.SPLIT -> "Cars touching: they were one blob at the line and the camera cut them apart."
-        ReviewKind.LOW_MARGIN -> "Close call: the runner-up scored almost as high, and the match wasn't clear on its own."
-        ReviewKind.UNKNOWN -> "Unknown: no car matched well enough to be named, so it wasn't counted."
-        ReviewKind.REJECTED -> "Not a racer?: it didn't look enough like any car (a shadow, a hand…), so it wasn't counted."
-        ReviewKind.MISSED -> "Missed?: something passed the second line just beyond the finish without being counted at the finish."
-        ReviewKind.RENAMED -> "Re-named: it was named after a car that had just crossed, so lap timing gave it to the runner-up that was due."
-        ReviewKind.NOT_COUNTED -> "Not counted: it was named after a car that had just crossed, and no other car fitted – so nobody got the lap."
+        ReviewKind.SPLIT -> tr("Cars touching: they were one blob at the line and the camera cut them apart.")
+        ReviewKind.LOW_MARGIN -> tr("Close call: the runner-up scored almost as high, and the match wasn't clear on its own.")
+        ReviewKind.UNKNOWN -> tr("Unknown: no car matched well enough to be named, so it wasn't counted.")
+        ReviewKind.REJECTED -> tr("Not a racer?: it didn't look enough like any car (a shadow, a hand…), so it wasn't counted.")
+        ReviewKind.MISSED -> tr("Missed?: something passed the second line just beyond the finish without being counted at the finish.")
+        ReviewKind.RENAMED -> tr("Re-named: it was named after a car that had just crossed, so lap timing gave it to the runner-up that was due.")
+        ReviewKind.NOT_COUNTED -> tr("Not counted: it was named after a car that had just crossed, and no other car fitted – so nobody got the lap.")
     }
-    val ghosts = if (item.frameMs > 0f) " The faint outlines show each car between the two frames, at its own speed; the solid one is when it reached the line." else ""
+    val ghosts = if (item.frameMs > 0f) tr(" The faint outlines show each car between the two frames, at its own speed; the solid one is when it reached the line.") else ""
     val timing = when (s.config.finishEdge) {
-        FinishEdge.FRONT -> "the car's front (the white edge of its outline) touches the finish line"
-        FinishEdge.REAR -> "the back of the car (the edge opposite the white one) clears the finish line"
-        FinishEdge.CENTRE -> "the middle of the car is on the finish line"
+        FinishEdge.FRONT -> tr("the car's front (the white edge of its outline) touches the finish line")
+        FinishEdge.REAR -> tr("the back of the car (the edge opposite the white one) clears the finish line")
+        FinishEdge.CENTRE -> tr("the middle of the car is on the finish line")
     }
-    val outline = " The coloured outline only shows which car it is – that car's calibration picture laid over it. The car itself sets the time: a lap is timed when $timing."
+    val outline = tr(" The coloured outline only shows which car it is – that car's calibration picture laid over it. The car itself sets the time: a lap is timed when {0}.", timing)
     return "$first $why$outline$ghosts"
 }
 

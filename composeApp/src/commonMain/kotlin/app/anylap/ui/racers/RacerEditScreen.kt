@@ -1,5 +1,6 @@
 package app.anylap.ui.racers
 
+import app.anylap.i18n.tr
 import app.anylap.ui.LocalApp
 import app.anylap.ui.Navigator
 import app.anylap.ui.Screen
@@ -79,8 +80,8 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
     val racers by app.repo.racers.collectAsState()
     val racer = racers.firstOrNull { it.id == racerId }
     if (racer == null) {
-        ScreenScaffold("Racer", onBack = { nav.pop() }) {
-            item { Text("This racer was deleted.", style = MaterialTheme.typography.bodyMedium) }
+        ScreenScaffold(tr("Racer"), onBack = { nav.pop() }) {
+            item { Text(tr("This racer was deleted."), style = MaterialTheme.typography.bodyMedium) }
         }
         return
     }
@@ -97,7 +98,7 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
 
     ScreenScaffold(
         title = racer.name,
-        subtitle = if (racer.sport == Sport.RC) "RC car" else "Runner",
+        subtitle = if (racer.sport == Sport.RC) tr("RC car") else tr("Runner"),
         onBack = { save(); nav.pop() },
         bottomPadding = 40.dp,
     ) {
@@ -106,13 +107,13 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                 RacerAvatar(racer, 104.dp)
             }
         }
-        item { SectionLabel("Details") }
+        item { SectionLabel(tr("Details")) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it; save(it) },
-                    label = { Text("Name") },
+                    label = { Text(tr("Name")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
@@ -125,11 +126,11 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                 )
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Number", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
+                    Text(tr("Number"), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim, modifier = Modifier.weight(1f))
                     Stepper(racer.number, { app.repo.upsertRacer(racer.copy(number = it)) }, 1..999, "")
                 }
                 Spacer(Modifier.height(16.dp))
-                Text("Colour", style = MaterialTheme.typography.bodyMedium, color = RT.TextDim)
+                Text(tr("Colour"), style = MaterialTheme.typography.bodyMedium, color = RT.TextDim)
                 Spacer(Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(RacerPalette) { c ->
@@ -151,24 +152,24 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
         }
 
         item {
-            SectionLabel("Camera calibration", Icons.Rounded.Tune, trailing = {
-                if (racer.isCalibrated) Tag("Ready", RT.Green) else Tag("Not calibrated", RT.Amber)
+            SectionLabel(tr("Camera calibration"), Icons.Rounded.Tune, trailing = {
+                if (racer.isCalibrated) Tag(tr("Ready"), RT.Green) else Tag(tr("Not calibrated"), RT.Amber)
             })
         }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 Text(
                     if (racer.sport == Sport.RC)
-                        "Teach the camera what this car looks like: a photo of each side, then a few slow and a few fast passes over the finish line – ideally where you'll race, in the same light."
+                        tr("Teach the camera what this car looks like: a photo of each side, then a few slow and a few fast passes over the finish line – ideally where you'll race, in the same light.")
                     else
-                        "The bib marker identifies this runner. Calibrating their clothing as well helps when the bib is hidden (arms, other runners).",
+                        tr("The bib marker identifies this runner. Calibrating their clothing as well helps when the bib is hidden (arms, other runners)."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = RT.TextDim,
                 )
                 Spacer(Modifier.height(12.dp))
                 if (racer.hasLegacyCalibration) {
                     Text(
-                        "Calibrated with an older version of the app (${racer.fingerprintSamples} samples). The camera reads colours differently now, so calibrate again.",
+                        tr("Calibrated with an older version of the app ({0} samples). The camera reads colours differently now, so calibrate again.", racer.fingerprintSamples),
                         style = MaterialTheme.typography.bodySmall,
                         color = RT.Amber,
                     )
@@ -188,9 +189,9 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PrimaryButton(
                         when {
-                            !racer.isCalibrated -> "Calibrate"
-                            racer.hasLegacyCalibration -> "Calibrate again"
-                            else -> "Review & add"
+                            !racer.isCalibrated -> tr("Calibrate")
+                            racer.hasLegacyCalibration -> tr("Calibrate again")
+                            else -> tr("Review & add")
                         },
                         {
                             save()
@@ -201,7 +202,7 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                         icon = Icons.Rounded.CameraAlt,
                     )
                     if (racer.isCalibrated) {
-                        SecondaryButton("Reset", { confirmReset = true }, icon = Icons.Rounded.RestartAlt)
+                        SecondaryButton(tr("Reset"), { confirmReset = true }, icon = Icons.Rounded.RestartAlt)
                     }
                 }
             }
@@ -209,7 +210,7 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
 
         val markerId = racer.markerId
         if (racer.sport == Sport.RUNNING && markerId != null) {
-            item { SectionLabel("Race bib") }
+            item { SectionLabel(tr("Race bib")) }
             item {
                 RtCard(Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -220,15 +221,15 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                         }
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Marker $markerId", style = MaterialTheme.typography.titleMedium)
+                            Text(tr("Marker {0}", markerId), style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "Print on A4 at 100 %, wear on the chest. Readable up to ~6 m from the camera.",
+                                tr("Print on A4 at 100 %, wear on the chest. Readable up to ~6 m from the camera."),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    SecondaryButton(if (tier.isPro) "Print / share bib" else "Print bib · Pro", {
+                    SecondaryButton(if (tier.isPro) tr("Print / share bib") else tr("Print bib · Pro"), {
                         save()
                         if (tier.isPro) BibPdf.share(listOf(racer.copy(name = name)))
                         else nav.push(Screen.Paywall(ProFeature.BIBS))
@@ -237,26 +238,26 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
             }
         }
 
-        item { SectionLabel("Other phones") }
+        item { SectionLabel(tr("Other phones")) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 if (racer.ownerUserId != null) {
-                    Text("Shared by ${racer.ownerName ?: "a friend"}", style = MaterialTheme.typography.titleSmall)
-                    Text("Sessions you time with this racer also show up in their history.", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Shared by {0}", racer.ownerName ?: tr("a friend")), style = MaterialTheme.typography.titleSmall)
+                    Text(tr("Sessions you time with this racer also show up in their history."), style = MaterialTheme.typography.bodySmall)
                 } else {
-                    Text("Race on a friend's phone", style = MaterialTheme.typography.titleSmall)
+                    Text(tr("Race on a friend's phone"), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Get a code they enter under Racers → Add with code. Their phone learns this racer, and laps they time land in your history.",
+                        tr("Get a code they enter under Racers → Add with code. Their phone learns this racer, and laps they time land in your history."),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(10.dp))
                     shareCode?.let {
                         Text(it, style = MaterialTheme.typography.displaySmall, color = RT.Gold)
-                        Text("Valid for 24 hours.", style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Valid for 24 hours."), style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(10.dp))
                     }
                     shareError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = RT.Amber); Spacer(Modifier.height(8.dp)) }
-                    SecondaryButton(if (tier.isPro) "Get share code" else "Get share code · Pro", {
+                    SecondaryButton(if (tier.isPro) tr("Get share code") else tr("Get share code · Pro"), {
                         save()
                         when {
                             !tier.isPro -> nav.push(Screen.Paywall(ProFeature.SYNC))
@@ -278,7 +279,7 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
             TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Rounded.DeleteOutline, null, tint = RT.Accent)
                 Spacer(Modifier.width(6.dp))
-                Text("Delete ${if (racer.sport == Sport.RC) "car" else "runner"}", color = RT.Accent)
+                Text(if (racer.sport == Sport.RC) tr("Delete car") else tr("Delete runner"), color = RT.Accent)
             }
         }
     }
@@ -295,12 +296,12 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
             containerColor = RT.Surface2,
-            title = { Text("Reset calibration?") },
-            text = { Text("All photos and passes for ${racer.name} are deleted. The avatar photo stays.", color = RT.TextDim) },
+            title = { Text(tr("Reset calibration?")) },
+            text = { Text(tr("All photos and passes for {0} are deleted. The avatar photo stays.", racer.name), color = RT.TextDim) },
             confirmButton = {
-                TextButton(onClick = { confirmReset = false; app.repo.resetCalibration(racer.id) }) { Text("Reset", color = RT.Accent) }
+                TextButton(onClick = { confirmReset = false; app.repo.resetCalibration(racer.id) }) { Text(tr("Reset"), color = RT.Accent) }
             },
-            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel", color = RT.Text) } },
+            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text(tr("Cancel"), color = RT.Text) } },
         )
     }
 
@@ -308,16 +309,16 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = RT.Surface2,
-            title = { Text("Delete ${racer.name}?") },
-            text = { Text("Past sessions keep their results.", color = RT.TextDim) },
+            title = { Text(tr("Delete {0}?", racer.name)) },
+            text = { Text(tr("Past sessions keep their results."), color = RT.TextDim) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     nav.pop()
                     app.repo.deleteRacer(racer.id)
-                }) { Text("Delete", color = RT.Accent) }
+                }) { Text(tr("Delete"), color = RT.Accent) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = RT.Text) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Cancel"), color = RT.Text) } },
         )
     }
 }
