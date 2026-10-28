@@ -94,11 +94,11 @@ begin
   insert into public.anylap_live_viewers (code, device, user_id, pro) values (l.code, p_device, me, vpro)
     on conflict (code, device) do update set last_seen = now(), user_id = excluded.user_id, pro = excluded.pro;
   -- expanded stats only for Pro camera + Pro viewer + Pro car owner
-  select coalesce(jsonb_agg(
+  select coalesce(jsonb_agg((
            case when l.host_pro and vpro and (
                   r->>'owner' is null or (r->>'owner')::uuid = l.user_id
                   or public.anylap_effective_pro((r->>'owner')::uuid, null))
-                then r else r - 'stats' end) - 'owner', '[]'::jsonb)   -- owner ids never leave the server
+                then r else r - 'stats' end) - 'owner'), '[]'::jsonb)   -- owner ids never leave the server
     into rows from jsonb_array_elements(coalesce(l.snapshot->'rows', '[]'::jsonb)) r;
   return (l.snapshot - 'rows') || jsonb_build_object(
     'rows', rows, 'updated_at', l.updated_at, 'hostPro', l.host_pro, 'viewerPro', vpro,
