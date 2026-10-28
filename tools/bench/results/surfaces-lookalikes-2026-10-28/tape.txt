@@ -1,0 +1,7 @@
+asphalttape 1: ENGINE ALONE: right 93 / 100, missed 7, extra 0 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.1 ms, max 18.1, bias 0.4 ? centre |err| 1.4 
+asphalttape 2: ENGINE ALONE: right 93 / 100, missed 7, extra 5 (wrong place 0) WITH LAP SOLVER: right 98 / 100, missed 2, extra 2, wrong place 0 ? nose timing |err| mean 1.6 ms, max 10.2, bias 0.6 ? centre |err| 1.5 
+dirttape 1: ENGINE ALONE: right 90 / 100, missed 10, extra 1 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.0 ms, max 18.7, bias 1.8 ? centre |err| 1.2 
+dirttape 2: ENGINE ALONE: right 81 / 100, missed 19, extra 2 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.5 ms, max 19.8, bias 2.0 ? centre |err| 1.7 
+carpettape 1: ENGINE ALONE: right 92 / 100, missed 8, extra 1 (wrong place 0) WITH LAP SOLVER: right 99 / 100, missed 1, extra 0, wrong place 0 ? nose timing |err| mean 2.4 ms, max 17.7, bias 1.8 ? centre |err| 1.4 
+carpettape 2: ENGINE ALONE: right 86 / 100, missed 14, extra 2 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 1, wrong place 0 ? nose timing |err| mean 2.3 ms, max 12.6, bias 1.5 ? centre |err| 2.2 
+DONE

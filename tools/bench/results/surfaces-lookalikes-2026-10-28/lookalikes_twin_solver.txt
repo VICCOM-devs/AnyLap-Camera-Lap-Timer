@@ -1,0 +1,13 @@
+asphaltlookU 1: ENGINE ALONE: right 66 / 100, missed 34, extra 6 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.1 ms, max 9.6, bias 0.3 ? centre |err| 1.5 
+asphaltlookU 2: ENGINE ALONE: right 66 / 100, missed 34, extra 3 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.4 ms, max 19.4, bias 0.4 ? centre |err| 1.2 
+asphaltlookU 3: ENGINE ALONE: right 65 / 100, missed 35, extra 5 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.1 ms, max 8.9, bias 0.4 ? centre |err| 1.1 
+asphaltlookU 4: ENGINE ALONE: right 61 / 100, missed 39, extra 8 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.3 ms, max 21.1, bias 0.5 ? centre |err| 1.4 
+dirtlookU 1: ENGINE ALONE: right 57 / 100, missed 43, extra 3 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.2 ms, max 14.5, bias 1.7 ? centre |err| 1.3 
+dirtlookU 2: ENGINE ALONE: right 53 / 100, missed 47, extra 2 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.3 ms, max 15.0, bias 2.0 ? centre |err| 1.0 
+dirtlookU 3: ENGINE ALONE: right 58 / 100, missed 42, extra 5 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.3 ms, max 14.0, bias 2.0 ? centre |err| 1.0 
+dirtlookU 4: ENGINE ALONE: right 54 / 100, missed 46, extra 6 (wrong place 0) WITH LAP SOLVER: right 99 / 100, missed 1, extra 0, wrong place 0 ? nose timing |err| mean 2.1 ms, max 7.1, bias 1.8 ? centre |err| 1.0 
+carpetlookU 1: ENGINE ALONE: right 65 / 100, missed 35, extra 6 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.3 ms, max 10.3, bias 1.7 ? centre |err| 1.4 
+carpetlookU 2: ENGINE ALONE: right 60 / 100, missed 40, extra 3 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.3 ms, max 8.1, bias 2.0 ? centre |err| 1.5 
+carpetlookU 3: ENGINE ALONE: right 70 / 100, missed 30, extra 1 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.1 ms, max 5.8, bias 1.6 ? centre |err| 1.3 
+carpetlookU 4: ENGINE ALONE: right 66 / 100, missed 34, extra 0 (wrong place 0) WITH LAP SOLVER: right 100 / 100, missed 0, extra 0, wrong place 0 ? nose timing |err| mean 2.4 ms, max 10.7, bias 1.8 ? centre |err| 1.3 
+DONE

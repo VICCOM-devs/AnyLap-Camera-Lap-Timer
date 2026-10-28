@@ -46,7 +46,7 @@ object LapSolver {
         val fitted: Boolean = false,
     )
 
-    enum class Why { ENGINE, RENAMED_BY_TIMING, NAMED_BY_TIMING, CHECK_LINE, SECOND_IN_BLOB, MISSING_LAP, NOT_COUNTED, UNKNOWN, HUMAN, IGNORED }
+    enum class Why { ENGINE, RENAMED_BY_TIMING, NAMED_BY_TIMING, CHECK_LINE, SECOND_IN_BLOB, MISSING_LAP, NOT_COUNTED, UNKNOWN, HUMAN, IGNORED, TWIN_TIMING, TWIN_UNSURE, TWIN_WHICH }
 
     /** One decision per input ([index]); extra ones (a second car in one blob) repeat the index. */
     class Out(val index: Int, val ns: Long, val racer: String?, val why: Why, val note: String)
@@ -62,10 +62,15 @@ object LapSolver {
     const val ALT_GAP = 0.2f
     const val NONE_VALUE = 0.55f
     /** Smaller than this share of one car: a piece of a car (a wing tip), not a car. */
+    /** A crossing this close to a counted crossing of the car it looks like is a piece of that car. */
+    const val PIECE_NS = 60_000_000L
     const val FRAGMENT = 0.4f
 
-    fun solve(xs: List<In>, racers: List<String>, startNs: Long?, minLapNs: Long, nowNs: Long): List<Out> {
+    fun solve(xs: List<In>, racers: List<String>, startNs: Long?, minLapNs: Long, nowNs: Long, twins: List<List<String>> = emptyList()): List<Out> {
         val order = xs.indices.sortedBy { xs[it].ns }
+        val twinDec = HashMap<Int, Out>()
+        val twinCars = HashSet<String>()
+        for (g in twins) if (g.size in 2..3 && g.all { it in racers }) { twinDec.putAll(Twins.solve(xs, g, startNs, minLapNs)); twinCars += g }
         val times = racers.associateWith { ArrayList<Pair<Long, Int>>() }.toMutableMap() // (ns, input index)
         val dec = HashMap<Int, Out>()
         val extra = ArrayList<Out>()
@@ -115,6 +120,7 @@ object LapSolver {
         for (i in order) {
             val x = xs[i]
             if (x.locked != null) { put(i, x.locked.ifEmpty { null }, Why.HUMAN, "set by hand"); continue }
+            twinDec[i]?.let { put(i, it.racer, it.why, it.note); continue }
             if (x.gated) { put(i, null, Why.NOT_COUNTED, "gate turned it down"); continue }
             if (x.named == null && x.sizeRatio > 0f && x.sizeRatio < FRAGMENT) { put(i, null, Why.IGNORED, "a fragment of a car (${fx(x.sizeRatio * 100, 0)} % of one)"); continue }
             if (x.rescue) {
@@ -134,10 +140,10 @@ object LapSolver {
                 // conflict: n already crossed too recently
                 val prev = times[n]!!.filter { it.first < x.ns }.maxByOrNull { it.first }!!.second
                 // a crossing can only be renamed to a due car that looks nearly as much like it as the name it had
-                val altCur = x.cands.filter { it.first != n && it.second >= maxOf(ALT_MIN, sc(i, n) - ALT_GAP) && it.first in times && due(it.first, x.ns) && !near(it.first, x.ns, minLapNs) }.maxByOrNull { it.second }
+                val altCur = x.cands.filter { it.first != n && it.second >= maxOf(ALT_MIN, sc(i, n) - ALT_GAP) && it.first in times && it.first !in twinCars && due(it.first, x.ns) && !near(it.first, x.ns, minLapNs) }.maxByOrNull { it.second }
                 val prevLocked = xs[prev].locked != null
                 unput(prev)
-                val altPrev = if (prevLocked) null else xs[prev].cands.filter { it.first != n && it.second >= maxOf(ALT_MIN, sc(prev, n) - ALT_GAP) && it.first in times && due(it.first, xs[prev].ns) && !near(it.first, xs[prev].ns, minLapNs) }.maxByOrNull { it.second }
+                val altPrev = if (prevLocked) null else xs[prev].cands.filter { it.first != n && it.second >= maxOf(ALT_MIN, sc(prev, n) - ALT_GAP) && it.first in times && it.first !in twinCars && due(it.first, xs[prev].ns) && !near(it.first, xs[prev].ns, minLapNs) }.maxByOrNull { it.second }
                 // "no other car" is worth a neutral score, so a weak rename isn't preferred to leaving a crossing uncounted
                 val keepPrev = sc(prev, n) + (altCur?.second ?: NONE_VALUE)
                 val keepCur = sc(i, n) + (altPrev?.second ?: NONE_VALUE)
@@ -153,7 +159,7 @@ object LapSolver {
                 continue
             }
             // unnamed: the only due candidate that looks like it
-            val dueC = x.cands.filter { it.first in times && it.second >= TRAY_MIN && due(it.first, x.ns) && !near(it.first, x.ns, minLapNs) }
+            val dueC = x.cands.filter { it.first in times && it.first !in twinCars && it.second >= TRAY_MIN && due(it.first, x.ns) && !near(it.first, x.ns, minLapNs) }
             val best = dueC.maxByOrNull { it.second }
             val second = dueC.filter { it !== best }.maxOfOrNull { it.second } ?: 0f
             if (best != null && best.second >= NAME_MIN && best.second - second >= 0.05f)
@@ -165,6 +171,7 @@ object LapSolver {
         val doubtful = { i: Int -> val o = dec[i]; o == null || o.racer == null }
         repeat(3) {
             for (c in racers) {
+                if (c in twinCars) continue   // the twin solver has already weighed every crossing of the pair
                 val p = pace(c) ?: continue
                 val l = (listOfNotNull(startNs) + times[c]!!.map { it.first }).sorted()
                 // gaps inside the race, and the open end (others still crossing after this car's last)
@@ -177,11 +184,13 @@ object LapSolver {
                     var bestJ = -1; var bestD = Double.MAX_VALUE; var how = Why.MISSING_LAP
                     for (j in xs.indices) {
                         val d = abs(xs[j].ns - expect)
-                        if (d > win || xs[j].locked != null || near(c, xs[j].ns, (EARLY * p).toLong())) continue
+                        if (d > win || xs[j].locked != null || j in twinDec || near(c, xs[j].ns, (EARLY * p).toLong())) continue
                         if (sc(j, c) < TRAY_MIN) continue
                         val o = dec[j]
                         val ok = when {
-                            o == null || o.racer == null -> !(o?.why == Why.IGNORED && sc(j, c) < RESCUE_MIN)
+                            // a second piece of a car counted at that very moment (cut out of touching cars) is that car, not this one
+                            o == null || o.racer == null -> !(o?.why == Why.IGNORED && sc(j, c) < RESCUE_MIN) &&
+                                !(xs[j].sizeRatio < BLOB_TWO && xs[j].cands.firstOrNull()?.let { (top, s) -> top != c && s > sc(j, c) + 0.2f && near(top, xs[j].ns, PIECE_NS) } == true)
                             xs[j].sizeRatio >= BLOB_TWO && o.racer != c -> true
                             else -> false
                         }
@@ -213,4 +222,132 @@ internal fun fx(v: Number, digits: Int): String {
     val sign = if (x < 0 && r != 0L) "-" else ""
     val whole = r / m; val frac = r % m
     return if (digits == 0) "$sign$whole" else "$sign$whole." + frac.toString().padStart(digits, '0')
+}
+
+/**
+ * Look-alike cars (calibration pictures nearly the same: same body, same paint, only a number apart)
+ * can't be told apart by how they look from above – only by when they cross. Every crossing that looks
+ * like one of the group is collected (a second piece of the same car within 60 ms dropped), and the
+ * whole race is solved at once: each crossing goes to the car whose lap rhythm it fits (or to nobody),
+ * minimising how far every lap is from that car's own pace, plus a small pull towards the better
+ * colour match. A crossing whose owner the rhythm can't settle (the other choice costs almost as
+ * little) is still counted for the likelier car but flagged for the Check tray.
+ */
+object Twins {
+    const val GROUP_MIN = 0.7f
+    const val DROP = 6.0
+    const val MISS = 6.0
+    const val LAP_CAP = 4.0
+    const val APPEAR_W = 20.0
+    const val UNSURE = 2.5
+    /** Colour-match advantage (cost units) the right naming of a pair must have over the swapped one. */
+    const val WHICH_MIN = 3.0
+
+    fun solve(xs: List<LapSolver.In>, g: List<String>, startNs: Long?, minLapNs: Long): Map<Int, LapSolver.Out> {
+        fun sc(i: Int, c: String) = xs[i].cands.firstOrNull { it.first == c }?.second ?: 0f
+        // the crossings that look like the group
+        val mine = xs.indices.filter { i ->
+            val x = xs[i]; val top = x.cands.firstOrNull()
+            !x.rescue && x.locked == null && !(x.sizeRatio > 0f && x.sizeRatio < LapSolver.FRAGMENT) &&
+                (x.named in g || (top != null && top.first in g && top.second >= GROUP_MIN))
+        }.sortedBy { xs[it].ns }
+        if (mine.size < 2) return emptyMap()
+        // pieces: within 60 ms keep at most one crossing per car of the group (named ones first, then the best match)
+        val slots = ArrayList<Int>(); val dropped = ArrayList<Int>()
+        var k = 0
+        while (k < mine.size) {
+            var e = k
+            while (e + 1 < mine.size && xs[mine[e + 1]].ns - xs[mine[k]].ns < LapSolver.PIECE_NS) e++
+            val cl = mine.subList(k, e + 1)
+            val cars = cl.sumOf { i -> if (xs[i].sizeRatio >= LapSolver.BLOB_TWO) 2 else 1 }.coerceAtMost(g.size)
+            val keep = cl.sortedWith(compareByDescending<Int> { xs[it].named in g }.thenByDescending { i -> g.maxOf { sc(i, it) } }).take(cars)
+            slots += keep; dropped += cl.filter { it !in keep }
+            k = e + 1
+        }
+        slots.sortBy { xs[it].ns }
+        val n = slots.size
+        val t = LongArray(n) { xs[slots[it]].ns }
+        val best = DoubleArray(n) { s -> g.maxOf { sc(slots[s], it).toDouble() } }
+
+        // pace per car: start from the gaps between all the group's crossings, refine from the assignment
+        // the field's lap (the other cars' named crossings): the group's own gaps mix laps with the few
+        // seconds between the two twins
+        val field = xs.indices.filter { xs[it].named != null && xs[it].named !in g }.groupBy { xs[it].named!! }.values
+            .flatMap { l -> l.map { xs[it].ns }.sorted().zipWithNext { a, b -> (b - a).toDouble() } }
+            .filter { it > minLapNs }.sorted()
+        val all = t.toList().zipWithNext { a, b -> (b - a).toDouble() }.filter { it > minLapNs }.sorted()
+        val p0 = field.getOrNull(field.size / 2) ?: all.lastOrNull() ?: 18e9
+        var pace = DoubleArray(g.size) { p0 }
+
+        fun lapCost(car: Int, last: Int, s: Int): Double {
+            if (last < 0) {
+                val d = t[s] - (startNs ?: Long.MIN_VALUE / 2)
+                return if (startNs != null && d < minLapNs) Double.POSITIVE_INFINITY else 0.0
+            }
+            val d = (t[s] - t[last]).toDouble(); val p = pace[car]
+            if (d < maxOf(minLapNs.toDouble(), 0.6 * p)) return Double.POSITIVE_INFINITY
+            val m = maxOf(1.0, kotlin.math.round(d / p))
+            val sigma = 0.02 * p
+            val err = (d - m * p) / sigma
+            return minOf(err * err, LAP_CAP) + MISS * (m - 1)
+        }
+
+        /** DP over (last slot of each car); [force] = slot → car index (-1 = nobody) to price alternatives. */
+        fun run(force: Pair<Int, Int>?): Pair<Double, IntArray> {
+            val start = IntArray(g.size) { -1 }.toList()
+            var cur = hashMapOf(start to 0.0)
+            val back = ArrayList<HashMap<List<Int>, Pair<List<Int>, Int>>>()
+            for (s in 0 until n) {
+                val nxt = HashMap<List<Int>, Double>(); val bk = HashMap<List<Int>, Pair<List<Int>, Int>>()
+                for ((st, c0) in cur) {
+                    for (a in -1 until g.size) {
+                        if (force != null && force.first == s && force.second != a) continue
+                        val c = if (a < 0) c0 + DROP else {
+                            val lc = lapCost(a, st[a], s); if (lc.isInfinite()) continue
+                            c0 + lc + APPEAR_W * (best[s] - sc(slots[s], g[a]))
+                        }
+                        val ns = if (a < 0) st else st.toMutableList().also { it[a] = s }
+                        if (c < (nxt[ns] ?: Double.POSITIVE_INFINITY)) { nxt[ns] = c; bk[ns] = st to a }
+                    }
+                }
+                cur = nxt; back += bk
+            }
+            val end = cur.minByOrNull { it.value } ?: return Double.POSITIVE_INFINITY to IntArray(n) { -1 }
+            val asg = IntArray(n); var st = end.key
+            for (s in n - 1 downTo 0) { val (p, a) = back[s][st]!!; asg[s] = a; st = p }
+            return end.value to asg
+        }
+
+        var (cost, asg) = run(null)
+        repeat(3) {
+            pace = DoubleArray(g.size) { c ->
+                val mineT = (0 until n).filter { asg[it] == c }.map { t[it].toDouble() }
+                val laps = mineT.zipWithNext { a, b -> (b - a) / maxOf(1.0, kotlin.math.round((b - a) / pace[c])) }.sorted()
+                if (laps.size >= 2) laps[laps.size / 2] else pace[c]
+            }
+            val r = run(null); cost = r.first; asg = r.second
+        }
+        // which is which: swapping two cars' names over the whole race keeps every lap time – only the
+        // colour match can tell them apart. Too close to call → ask once (one tap sets the whole race).
+        val which = HashSet<Int>()
+        for (a in g.indices) for (b in g.indices) if (a < b) {
+            val gain = (0 until n).sumOf { s -> when (asg[s]) { a -> sc(slots[s], g[a]) - sc(slots[s], g[b]); b -> sc(slots[s], g[b]) - sc(slots[s], g[a]); else -> 0f }.toDouble() } * APPEAR_W
+            if (gain < WHICH_MIN) { which += a; which += b }
+        }
+        val firstOf = g.indices.associateWith { c -> (0 until n).firstOrNull { asg[it] == c } }
+        val out = HashMap<Int, LapSolver.Out>()
+        for (s in 0 until n) {
+            val i = slots[s]; val a = asg[s]
+            // how much worse is the best answer with this crossing given to someone else?
+            val alt = (-1 until g.size).filter { it != a }.minOf { run(s to it).first }
+            val who = if (a >= 0) g[a] else null
+            val others = g.filter { it != who }.joinToString(" or ")
+            out[i] = if (who == null) LapSolver.Out(i, t[s], null, LapSolver.Why.NOT_COUNTED, "looks like ${g.joinToString(" / ")}, fits neither car's lap rhythm")
+            else if (a in which && firstOf[a] == s) LapSolver.Out(i, t[s], who, LapSolver.Why.TWIN_WHICH, "$who or $others? They look the same and drive the same pace – which is which can't be told; one answer sets the whole race")
+            else if (alt - cost < UNSURE) LapSolver.Out(i, t[s], who, LapSolver.Why.TWIN_UNSURE, "$who or $others? They look the same from above; lap timing slightly favours $who")
+            else LapSolver.Out(i, t[s], who, LapSolver.Why.TWIN_TIMING, "$who by lap timing (looks the same as $others from above)")
+        }
+        for (i in dropped) out[i] = LapSolver.Out(i, xs[i].ns, null, LapSolver.Why.NOT_COUNTED, "a second piece of a car counted at the same moment")
+        return out
+    }
 }

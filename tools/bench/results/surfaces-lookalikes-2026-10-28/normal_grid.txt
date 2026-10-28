@@ -1,0 +1,11 @@
+asphalt 1: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 1.9 ms
+asphalt 2: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 2.6 ms
+asphalt 3: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 2.0 ms
+carpet 1: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 1.9 ms
+carpet 2: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 2.0 ms
+carpet 3: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 1.9 ms
+carpet 4: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 2.2 ms
+dirt 1: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 1.7 ms
+dirt 2: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 1.8 ms
+dirt 3: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 1.9 ms
+dirt 4: camera alone 100/100, with lap timing 100/100, missed 0, extra 0, nose 2.2 ms

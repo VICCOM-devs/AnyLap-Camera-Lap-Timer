@@ -24,6 +24,10 @@ import kotlin.random.Random
 private const val OUT = "/home/claude/blend/out"
 
 /** Check-card canvas: [CARD_S] px square, the picture centred with at least a [CARD_M] px free band round it for the tags (the page draws the same). */
+/** Clip name prefix: SURF=dirt → dirt_minis_… (the cars laid onto another ground, pack.py layer). */
+val MP = (System.getenv("SURF")?.let { "${it}_" } ?: "") + "minis_"
+
+const val TWIN_SIM = 0.88f
 const val CARD_S = 420f
 const val CARD_M = 40f
 const val CARD_CHAR = 8.4f
@@ -41,10 +45,10 @@ fun main(args: Array<String>) {
     MPP = Clip.flatJson(metaTxt)["metersPerProcPx"]!!.toFloat()
     val alongMap = Regex("\"(-?[0-9.]+)\":\\s*(-?[0-9.eE]+)").findAll(metaTxt.substringAfter("\"along\"")).associate { it.groupValues[1].toDouble() to it.groupValues[2].toDouble() }
     fun along(lane: Double) = alongMap.minByOrNull { abs(it.key - lane) }!!.value
-    val empty = Clip.load("minis_empty")
-    val all = File(DIR).list()!!.filter { it.startsWith("minis_") && it.endsWith(".yuv") }.map { it.removeSuffix(".yuv") }
+    val empty = Clip.load("${MP}empty")
+    val all = File(DIR).list()!!.filter { it.startsWith("${MP}") && it.endsWith(".yuv") }.map { it.removeSuffix(".yuv") }
     val gridOnly = System.getenv("GRID")?.split(",")?.map { it.trim() }   // e.g. the look-alike grid
-    val cars = all.filter { it.startsWith("minis_cal_") && it.contains("_3.5_") }.map { it.removePrefix("minis_cal_").substringBefore("_+0.00") }
+    val cars = all.filter { it.startsWith("${MP}cal_") && it.contains("_3.5_") }.map { it.removePrefix("${MP}cal_").substringBefore("_+0.00") }
         .filter { gridOnly == null || it in gridOnly }.sorted()
     println("cars: $cars · line $LINE · ${"%.2f".format(MPP * 1000)} mm/px · picture fit ${if (useFit) "on" else "off"}")
     HINTS.clear()
@@ -57,13 +61,16 @@ fun main(args: Array<String>) {
     if (args.getOrNull(2) == "cal") return
     if (args.getOrNull(2) == "gate") { gateTest(empty, racers); return }
 
-    val passes = cars.associateWith { c -> all.filter { it.startsWith("minis_race_${c}_") || it.startsWith("minis_diag_${c}_") }.map { Clip.load(it) } }
+    val passes = cars.associateWith { c -> all.filter { it.startsWith("${MP}race_${c}_") || it.startsWith("${MP}diag_${c}_") }.map { Clip.load(it) } }
 
     // ---------------------------------------------------------------- schedule
     val rnd = Random(seed)
     class Ev(var t: Double, val car: String, var lane: Double, var pass: Clip?, val lap: Int, var tag: String = "")
     val evs = ArrayList<Ev>()
-    val pace = cars.associateWith { 17.6 + rnd.nextDouble() * 1.0 }
+    val pace0 = cars.associateWith { 17.6 + rnd.nextDouble() * 1.0 }
+    // SAMEPACE=a:b,c:d – the second car of each pair drives the first one's pace (+0.05 s): the hardest case for lap timing
+    val same = System.getenv("SAMEPACE")?.split(",")?.map { it.substringBefore(":") to it.substringAfter(":") } ?: emptyList()
+    val pace = pace0.mapValues { (c, p) -> same.firstOrNull { it.second == c }?.let { pace0[it.first]!! + 0.05 } ?: p }
     val grid = cars.shuffled(rnd)
     val incidents = ArrayList<String>()
     for (c in cars) {
@@ -146,7 +153,18 @@ fun main(args: Array<String>) {
     val ins = events.map { e ->
         LapSolver.In(e.timestampNs, if (e.accepted) e.racerId else null, e.candidates, e.confidence, e.split, e.rescue, !e.accepted && !e.rescue, e.sizeRatio, fitted = e.fit != null && e.racerId != null)
     }
-    val outs = LapSolver.solve(ins, cars, 0L, 2_500_000_000L, (frames * 1e9 / FPS).toLong())
+    // look-alike groups: calibration pictures at least TWIN_SIM alike (the app would warn about these after calibration)
+    val twins = if (System.getenv("NOTWINS") != null) emptyList() else run {
+        val seen = HashSet<String>(); val gs = ArrayList<List<String>>()
+        for (c in cars) {
+            if (c in seen) continue
+            val grp = cars.filter { o -> o == c || (sim[c to o] ?: 0f) >= TWIN_SIM }
+            if (grp.size >= 2) { gs += grp; seen += grp }
+        }
+        gs
+    }
+    if (twins.isNotEmpty()) println("look-alike groups (≥ $TWIN_SIM): $twins")
+    val outs = LapSolver.solve(ins, cars, 0L, 2_500_000_000L, (frames * 1e9 / FPS).toLong(), twins)
     val counted = outs.filter { it.racer != null }
     // engine-only view (what the analyzer alone would have counted) for comparison
     val engineOnly = events.filter { it.accepted && it.racerId != null }
@@ -275,7 +293,7 @@ fun inQuad(q: FloatArray, x: Float, y: Float, w: Int, h: Int): Boolean {
 }
 
 fun calibrateMini(car: String, empty: Clip, errs: MutableList<Double>): RacerRef {
-    val passes = listOf(Clip.load("minis_cal_${car}_+0.00_3.5_+0"), Clip.load("minis_cal_${car}_+0.00_7.0_+0"))
+    val passes = listOf(Clip.load("${MP}cal_${car}_+0.00_3.5_+0"), Clip.load("${MP}cal_${car}_+0.00_7.0_+0"))
     val tl = Timeline(empty, seed = car.hashCode())
     var at = 120
     val truthT = ArrayList<Double>()
@@ -300,7 +318,7 @@ fun calibrateMini(car: String, empty: Clip, errs: MutableList<Double>): RacerRef
 
 /** Every diagonal / gate pass of every car alone, as a race car: nose timing error, accepted or not, name. */
 fun gateTest(empty: Clip, racers: List<RacerRef>) {
-    val names = File(DIR).list()!!.filter { (it.startsWith("minis_diag_") || it.startsWith("minis_gate_") || it.startsWith("minis_race_")) && it.endsWith(".yuv") }.map { it.removeSuffix(".yuv") }.sorted()
+    val names = File(DIR).list()!!.filter { (it.startsWith("${MP}diag_") || it.startsWith("${MP}gate_") || it.startsWith("${MP}race_")) && it.endsWith(".yuv") }.map { it.removeSuffix(".yuv") }.sorted()
     for (n in names) {
         val c = Clip.load(n)
         val tl = Timeline(empty, seed = n.hashCode()); tl.placed += Placed(c, 120, 0f)

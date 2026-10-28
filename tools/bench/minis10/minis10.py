@@ -55,6 +55,33 @@ SPECS = [
          sponsors=["AERIX", "NOVA", "KINETIQ"], seed=10),
 ]
 
+# Look-alike twins (Simulation chat, Oct 28): same colour as one of the ten, mostly the same body.
+# Red 17 = Red 7's body and livery, only the number and sponsors differ (the hardest case);
+# White 8 = White 33's body, other livery; Blue 41 = Blue 14's colour on a GT body;
+# Grey 91 = Silver 19's body, a shade darker; Black 98 = Black 88's body, other sticker colours.
+TWINS = [
+    dict(name="Red 17", kind="gt", L=17.0, W=8.7, H=4.6, wr=1.15, base=(0.78, 0.04, 0.03), acc=(0.97, 0.97, 0.95),
+         acc2=(0.03, 0.03, 0.03), livery="twin", num="17", rim=(0.75, 0.75, 0.78), damage=1,
+         sponsors=["SOLVIK", "TEMPO", "GLIMT OIL"], seed=11),
+    dict(name="White 8", kind="rally", L=15.2, W=8.4, H=5.8, wr=1.4, base=(0.93, 0.93, 0.91), acc=(0.05, 0.20, 0.75),
+         acc2=(0.98, 0.42, 0.02), livery="band", num="8", rim=(0.95, 0.95, 0.95), damage=1,
+         sponsors=["FJÄLL", "POLARIS", "DUNE"], seed=12),
+    dict(name="Blue 41", kind="gt", L=17.0, W=8.7, H=4.6, wr=1.15, base=(0.04, 0.16, 0.70), acc=(0.96, 0.96, 0.96),
+         acc2=(0.95, 0.75, 0.05), livery="split", num="41", rim=(0.08, 0.08, 0.08), damage=0,
+         sponsors=["CIRRUS", "VEKTOR", "ION CELL"], seed=13),
+    dict(name="Grey 91", kind="super", L=17.4, W=9.0, H=4.1, wr=1.15, base=(0.55, 0.57, 0.60), acc=(0.03, 0.03, 0.03),
+         acc2=(0.80, 0.04, 0.04), livery="centre", num="91", rim=(0.10, 0.10, 0.10), damage=0, metal=0.55,
+         sponsors=["GRAFIT", "QUARTZ", "LIMA"], seed=14),
+    dict(name="Black 98", kind="drift", L=16.6, W=9.6, H=4.7, wr=1.2, base=(0.035, 0.035, 0.04), acc=(0.95, 0.85, 0.05),
+         acc2=(0.20, 0.90, 0.30), livery="stickerbomb", num="98", rim=(0.85, 0.85, 0.85), damage=1, matte=True,
+         sponsors=["SLIDE", "KAIJU", "ROKKU", "DRFT", "SMOKE"], seed=15),
+]
+# the same two twins with a fluorescent tape strip across the roof (look-alike fix test)
+TAPED = [dict(t, name=t["name"] + " tape", tape=c) for t, c in ((TWINS[0], (0.10, 0.95, 0.15)), (TWINS[4], (0.98, 0.95, 0.05)))]
+if os.environ.get("MINIS") == "twins": SPECS = TWINS
+elif os.environ.get("MINIS") == "tape": SPECS = TAPED
+elif os.environ.get("MINIS") == "all": SPECS = SPECS + TWINS
+
 # shape tables per kind: control points over s (0 = rear, 1 = front), heights as fraction of H,
 # half-width as fraction of W/2. arch = (rear axle s, front axle s). cab = cabin profile.
 SHAPES = {
@@ -616,6 +643,10 @@ def build_car(sp, origin=(0, 0, 0)):
         box(f"{name}__mirror", (0.007, 0.004, 0.0045), (sg * (hw_ + 0.004), y, z), basem, root, bevel=0.001)
     # ---- aero
     add_aero(sp, S, root, L, W, H, ra, fa, carbon, accm, basem, dark, rnd)
+    if sp.get("tape"):   # a strip of fluorescent tape across the roof (seen from above)
+        cab = S.get("cab", (.4, .6))
+        tm = pmat(f"{name} tape", sp["tape"], rough=0.5, emit=tuple(x * 0.35 for x in sp["tape"]))
+        box(f"{name}__tape", (W * 0.62, 0.024, 0.0012), (0, -L / 2 + (cab[0] + cab[1]) / 2 * L, H + 0.0008), tm, root)
     return root
 
 def add_wheel(name, root, loc, r, w, side, rubber, rimm, dark, spokes=5, camber=0.0):

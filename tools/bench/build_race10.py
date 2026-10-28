@@ -12,6 +12,8 @@ LIVERY = {'Red_7': '#d8231c', 'Blue_14': '#2a5bd0', 'Yellow_2': '#f0c419', 'Whit
           'Black_88': '#3a3a42', 'Orange_4': '#f07a12', 'Silver_19': '#aab0b8', 'Purple_27': '#7a2bb0', 'Teal_61': '#16a3a3'}
 KIND = {'Red_7': 'GT3', 'Blue_14': 'LMP', 'Yellow_2': 'Formula', 'White_33': 'Rally', 'Green_51': 'Touring', 'Black_88': 'Drift',
         'Orange_4': 'Group 5', 'Silver_19': 'Supercar', 'Purple_27': 'Stock car', 'Teal_61': 'Hypercar'}
+LIVERY.update({'Red_17': '#b81d17', 'White_8': '#d9d7cf', 'Blue_41': '#3d6be0', 'Grey_91': '#8a8f96', 'Black_98': '#3a3a3a', 'Red_17_tape': '#b81d17', 'Black_98_tape': '#3a3a3a'})
+KIND.update({'Red_17': 'GT3 twin', 'White_8': 'Rally twin', 'Blue_41': 'GT3', 'Grey_91': 'Supercar twin', 'Black_98': 'Drift twin', 'Red_17_tape': 'GT3 twin + tape', 'Black_98_tape': 'Drift twin + tape'})
 def nice(c): return c.replace('_', ' ') if c else 'Unknown'
 def sw(c): return f'<span class="sw" style="background:{LIVERY.get(c, "#555")}"></span>'
 def fmt(t): return '—' if t is None else (f"{int(t // 60)}:{t % 60:06.3f}" if t >= 60 else f"{t:.3f}")
@@ -200,7 +202,8 @@ def card_picture(e, focus_ids):
 # ---------------------------------------------------------------- Check tray
 WHY = {'RENAMED_BY_TIMING': ('Renamed by lap timing', 'timing'), 'NAMED_BY_TIMING': ('Named by lap timing', 'timing'),
        'CHECK_LINE': ('Added from the check line', 'timing'), 'SECOND_IN_BLOB': ('Two cars in one blob', 'timing'),
-       'MISSING_LAP': ('Missing lap found', 'timing'), 'NOT_COUNTED': ('Not counted', 'warn'), 'UNKNOWN': ('Unknown car', 'warn')}
+       'MISSING_LAP': ('Missing lap found', 'timing'), 'NOT_COUNTED': ('Not counted', 'warn'), 'UNKNOWN': ('Unknown car', 'warn'),
+       'TWIN_UNSURE': ('Look-alikes: order unsure', 'timing'), 'TWIN_WHICH': ('Look-alikes: which is which?', 'warn')}
 evByI = {e['i']: e for e in ev}
 outsByI = {}
 for o in outs: outsByI.setdefault(o['i'], []).append(o)
@@ -293,7 +296,7 @@ for k, it in enumerate(items):
     cls = 'warn' if it['kind'] in ('Not counted', 'Unknown car', 'Missed?', 'Not a racer?') else ('bad' if '(truth)' in it['kind'] else ('timing' if it['kind'] in [v[0] for v in WHY.values()] else ''))
     cards.append(f'''<div class="card {cls}" id="c{k}" data-opts='{opts}'>
 <div class="pic">{'<img src="' + url + '" alt="overhead frame at the line">' if url else '<div class="noimg">no picture</div>'}{taps}</div>
-<div class="cb"><div class="kl"><b>{it['kind']}</b> · {fmt(it['t'])} s</div>{('<div class="pc">' + it['note'].split(' / ')[0] + '</div>') if it['note'].startswith('A second piece') else ''}
+<div class="cb"><div class="kl"><b>{it['kind']}</b> · {fmt(it['t'])} s</div>{('<div class="pc">' + next((n for n in it['note'].split(' / ') if 'which is which' in n), it['note'].split(' / ')[0]) + '</div>') if (it['note'].startswith('A second piece') or 'Look-alikes' in it['kind']) else ''}
 <div class="sc" onclick="this.nextElementSibling.classList.toggle('on')">{cand or it['note']}</div><div class="ex">{EXPLAIN.format(sc=it['cands'][0][1] if it['cands'] else '–', who=who)}<br><br>{it['note']}</div>
 <div class="tru" onclick="this.classList.add('on')"><span>Show truth</span><em>{('Truth: ' + ', '.join(nice(x['car']) + ' lap ' + str(x['lap']) + (' (' + x['tag'] + ')' if x['tag'] else '') for x in trs)) if trs else 'Truth: no car crossed'} · app decision <b class="{'ok' if verdict == 'Right' else 'no'}">{verdict.lower()}</b></em></div></div></div>''')
 nCheck = len(items)
@@ -411,6 +414,10 @@ diagRows = ''.join(f'<tr><td class="mono">{fmt(x["t"])}</td><td>{sw(x["car"])}{n
 gate = open(f'{B}/out/gate.txt').read() if os.path.exists(f'{B}/out/gate.txt') else ''
 seedRows = ''
 import glob
+PAGE_TITLE = os.environ.get('PAGE_TITLE', f'AnyLap · 10 cars · {NL} laps · simulated race v3')
+PAGE_KICK = os.environ.get('PAGE_KICK', 'AnyLap · Simulated race v3 · overhead · 60 fps · nose timing · calibration-picture fit')
+PAGE_H1 = os.environ.get('PAGE_H1', f'10 cars · {NL} laps')
+PAGE_NOTE = os.environ.get('PAGE_NOTE', '')
 TABLE = os.environ.get('TABLE', f'{B}/out/fit_race10_*.json')
 for f in sorted(glob.glob(TABLE), key=lambda x: int(re.sub(r'\D', '', os.path.basename(x).split('_')[-1]) or 0)):
     Q = json.load(open(f))['summary']; sd = f.split('_')[-1].split('.')[0]
@@ -418,7 +425,7 @@ for f in sorted(glob.glob(TABLE), key=lambda x: int(re.sub(r'\D', '', os.path.ba
 
 right = S['right']; N = S['crossings']
 html = f'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AnyLap · 10 cars · {NL} laps · simulated race v3</title>
+<title>{PAGE_TITLE}</title>
 <style>
 :root{{--bg:#0B0B0D;--s1:#141418;--s2:#1C1C22;--s3:#26262E;--stroke:#2E2E38;--text:#F3F3F5;--dim:#A3A3AE;--faint:#6B6B78;--red:#E10600;--good:#2CC26B;--warn:#F2B01E;--bad:#FF4D4D;--or:#FF8A00;--font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased}}
@@ -457,7 +464,7 @@ td.bad{{background:rgba(242,176,30,.14);color:var(--warn)}}td.miss{{background:r
 .pfg{{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}}.pf{{margin:0}}.pf img{{width:100%;border-radius:12px;display:block}}.pfr{{margin-top:10px}}.big{{font-size:20px;font-weight:900}}
 tr.on td{{background:rgba(225,6,0,.12)}}pre{{white-space:pre-wrap;font-size:12px;color:var(--dim);background:var(--s2);border-radius:10px;padding:10px}}
 </style></head><body><div class="wrap">
-<header><h1><small>AnyLap · Simulated race v3 · overhead · 60 fps · nose timing · calibration-picture fit</small>10 cars · {NL} laps</h1>
+<header><h1><small>{PAGE_KICK}</small>{PAGE_H1}</h1>
 <div class="pills"><span class="pill ghost">{S['durationS']/60:.1f} min</span><span class="pill ghost">{N} crossings · {S['diag']} diagonal · {S['abreast']} abreast</span><span class="pill">Check ({nCheck})</span></div></header>
 <div class="hero"><div class="n">{right}<small> / {N}</small></div><div><b style="font-size:18px">crossings counted for the right car, at the right place</b>
 <p>Camera alone: {S['engineRight']} / {N} ({S['engineMissed']} missed, {S['engineExtra']} wrong or extra). With lap-timing identity: {right} / {N} ({S['missed']} missed, {S['extra']} wrong or extra). Final order {'matches' if sameOrder else 'differs from'} the truth.</p></div></div>
@@ -469,7 +476,7 @@ tr.on td{{background:rgba(225,6,0,.12)}}pre{{white-space:pre-wrap;font-size:12px
 <div class="kpi"><b>{sum(v for k, v in dec.items() if k not in ('ENGINE','IGNORED'))}</b><span>decided by lap timing</span></div>
 </div>
 <div class="tabs"><div class="tab on" onclick="show(0,this)">Standings</div><div class="tab" onclick="show(1,this)">Laps</div><div class="tab" onclick="show(2,this)">Graphs</div><div class="tab" onclick="show(3,this)">Check ({nCheck})</div><div class="tab" onclick="show(4,this)">Start &amp; finish</div><div class="tab" onclick="show(5,this)">Setup</div></div>
-<section class="panel on"><div class="card0"><h2>Eight races, same cars, different seeds</h2><table><thead><tr><th>Seed</th><th>Camera alone</th><th>With lap timing</th><th>Missed</th><th>Wrong / extra</th><th>Abreast</th><th>Diagonal</th><th>Nose timing</th></tr></thead><tbody>{seedRows}</tbody></table>
+<section class="panel on"><div class="card0"><h2>{len(seedRows.split('<tr'))-1} races, same cars, different seeds</h2><table><thead><tr><th>Seed</th><th>Camera alone</th><th>With lap timing</th><th>Missed</th><th>Wrong / extra</th><th>Abreast</th><th>Diagonal</th><th>Nose timing</th></tr></thead><tbody>{seedRows}</tbody></table>
 <p class="note">The race on this page is seed {seed} (highlighted). Right = the right car, within 0.15 s, <b>and</b> in the right place across the track (a swapped pair counts as wrong). Seeds 9–12 were run fresh after the picture fit was written.</p></div>
 <div class="card0"><h2>Result</h2><table><thead><tr><th>P</th><th>Car</th><th>Laps</th><th>Time</th><th>Gap</th><th>Best</th><th>Avg</th><th>Spread</th></tr></thead><tbody>{rowsE}</tbody></table></div>
 <div class="card0"><h2>App vs truth</h2><table><thead><tr><th>P</th><th>App</th><th>Truth</th><th></th></tr></thead><tbody>{cmp}</tbody></table></div></section>
@@ -487,7 +494,7 @@ tr.on td{{background:rgba(225,6,0,.12)}}pre{{white-space:pre-wrap;font-size:12px
 <p class="note" style="text-align:center"><button class="pill" onclick="startLights()">Replay start</button></p>
 <p class="note">Standing start from the grid behind the line; the race clock starts at lights-out (5 reds, one per second, then a random hold). Grid: {', '.join(nice(c) for c in R['grid'])}. Lap 1 arrivals were bunched within ~2 s.</p></div>
 <div class="card0"><h2>Photo finishes · {len(finishes)} pairs within 60 ms</h2><p class="note">Finish counts when <b>the front touches the line</b> (Settings → Timing; “the whole car has passed” is the other choice).</p><div class="pfg">{''.join(ghostCards) or '<p class="note">none</p>'}</div></div></section>
-<section class="panel"><div class="card0"><h2>How this race was made</h2><p class="note">The ten new minis (GT3, LMP, Formula, rally, touring, drift, Group 5, supercar, stock car, hypercar; 15–19.5 cm, wear and stickers), each rendered alone from 1.8 m straight above (480×270, Cycles, 1/120 s blur): two calibration passes, four lanes, a fast pass and two diagonal crossings (+25°, −38°) per car. Passes composited onto the empty track with sensor noise: standing start from lights-out, {NL} laps, per-car pace 17.6–18.6 s ±0.3 s, spins, a forced photo finish (1 frame apart, abreast, lap 4) and a three-wide arrival (lap 7). Diagonal crossings only when no other car is near (cars can't pass through each other in a composite).</p>
+<section class="panel"><div class="card0"><h2>How this race was made</h2>{('<p class="note">' + PAGE_NOTE + '</p>') if PAGE_NOTE else ''}<p class="note">The ten new minis (GT3, LMP, Formula, rally, touring, drift, Group 5, supercar, stock car, hypercar; 15–19.5 cm, wear and stickers), each rendered alone from 1.8 m straight above (480×270, Cycles, 1/120 s blur): two calibration passes, four lanes, a fast pass and two diagonal crossings (+25°, −38°) per car. Passes composited onto the empty track with sensor noise: standing start from lights-out, {NL} laps, per-car pace 17.6–18.6 s ±0.3 s, spins, a forced photo finish (1 frame apart, abreast, lap 4) and a three-wide arrival (lap 7). Diagonal crossings only when no other car is near (cars can't pass through each other in a composite).</p>
 <p class="note">Engine (this branch): nose timing (blob edge ahead of the centroid, minus the mask rim and half the blur streak), crossing box + velocity on every event; <b>LapIdentity</b> after the camera: conflicts, unnamed crossings, check-line rescues and missing laps decided by each car's lap rhythm. Decisions: {', '.join(f"{k.replace('_',' ').lower()} {v}" for k, v in dec.items())}.</p>
 <p class="note">Pace: {', '.join(f"{nice(c)} {R['pace'][c]:.2f}" for c in cars)} s. Spins: {', '.join(R['incidents']).replace('_',' ') or 'none'}.</p></div>
 <div class="card0"><h2>Diagonal crossings in the race</h2><table><thead><tr><th>Time</th><th>Car</th><th>Angle</th><th>Counted</th><th>Timing</th></tr></thead><tbody>{diagRows}</tbody></table></div>

@@ -52,4 +52,24 @@ class LapSolverTest {
         val xs = base.map { if (it.named == "A" && it.ns == s(36.0)) In(it.ns, "A", it.cands, it.margin, locked = "") else it }
         assertEquals(5, counts(solve(xs))["A"])
     }
+
+    /**
+     * Two cars that look the same from above (T1, T2: 0.97 / 0.97) – the camera's names are a coin toss.
+     * T1 laps in 18.0 s, T2 in 18.6 s, T2 starting 1 s behind; C is a different-looking car (the field's pace).
+     * Lap timing over the whole race must give every crossing to the right twin, none to the wrong one.
+     */
+    @Test fun lookAlikeTwinsAreSortedByTheirLapRhythm() {
+        val xs = ArrayList<In>()
+        for (k in 1..8) {
+            val coin = (k * 7) % 3 == 0
+            xs += In(s(18.0 * k), if (coin) "T2" else "T1", listOf("T1" to 0.97f, "T2" to 0.97f), 0.0f)
+            xs += In(s(1.0 + 18.6 * k), if (coin) "T1" else "T2", listOf("T2" to 0.97f, "T1" to 0.96f), 0.01f)
+            xs += In(s(9.0 + 18.3 * k), "C", listOf("C" to 0.95f, "T1" to 0.4f), 0.5f)
+        }
+        val o = LapSolver.solve(xs, listOf("T1", "T2", "C"), 0L, 2_500_000_000L, s(200.0), twins = listOf(listOf("T1", "T2")))
+        val got = LapSolver.counted(o)
+        assertEquals((1..8).map { s(18.0 * it) }, got["T1"])
+        assertEquals((1..8).map { s(1.0 + 18.6 * it) }, got["T2"])
+        assertEquals(8, got["C"]?.size)
+    }
 }
