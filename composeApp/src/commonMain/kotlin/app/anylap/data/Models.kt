@@ -278,7 +278,8 @@ data class AppSettings(
     /** Pre-release only: Pro switched on for testing (no store yet). */
     val testingProUnlocked: Boolean = false,
     /** Settings → Timing: which part of a car is timed at the line (copied into each session). */
-    val finishEdge: FinishEdge = FinishEdge.FRONT,    /** Settings → Sports: show running (and later other sports) next to RC everywhere. Off = an RC app. */
+    val finishEdge: FinishEdge = FinishEdge.FRONT,
+    /** Settings → Sports: show running (and later other sports) next to RC everywhere. Off = an RC app. */
     val otherSports: Boolean = false,
 )
 
