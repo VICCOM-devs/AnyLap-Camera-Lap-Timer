@@ -3,6 +3,7 @@ package app.anylap.ui.home
 import app.anylap.data.count
 import app.anylap.i18n.tr
 import app.anylap.i18n.trn
+import app.anylap.BuildInfo
 import app.anylap.ui.UpdateCard
 import app.anylap.ui.LocalApp
 import app.anylap.ui.LocalNav
@@ -103,7 +104,7 @@ fun HomeScreen() {
 
     ScreenScaffold(
         title = "AnyLap",
-        subtitle = Platform.formatDate(Platform.nowMillis(), "EEEE d MMMM"),
+        subtitle = Platform.formatDate(Platform.nowMillis(), "EEEE d MMMM") + "  ·  v" + BuildInfo.label,
         titleSlot = { BrandWordmark() },
         actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = tr("Settings")) },
     ) {

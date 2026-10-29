@@ -59,6 +59,7 @@ Best lap	Bästa varv
 Best lap per session	Bästa varv per session
 Best lap, consistency and top speed per session for {0}	Bästa varv, jämnhet och toppfart per session för {0}
 Best pace	Bästa tempo
+Best spot: a straight after a slow corner. Phone as high and as straight above the line as the stand allows – roughly square is enough.	Bästa plats: en raksträcka efter en långsam kurva. Telefonen så högt och så rakt ovanför linjen som stativet tillåter – ungefär vinkelrätt räcker.
 Bib not seen yet	Nummerlappen inte sedd än
 Bib read ✓	Nummerlapp läst ✓
 Bibs · Pro	Nummerlappar · Pro
@@ -211,6 +212,8 @@ LEADER	LEDARE
 LIGHTS OUT AND AWAY WE GO…	LAMPORNA SLOCKNAR – OCH IVÄG…
 LINE UP\nYOUR CARS	STÄLL UPP\nDINA BILAR
 LINE UP\nYOUR RUNNERS	STÄLL UPP\nDINA LÖPARE
+Lap added by lap timing	Varv tillagt av varvtidslogiken
+Lap added: after the race, lap timing found this car's lap overdue and this crossing near the expected time looks like it – so it was counted.	Varv tillagt: efter racet såg varvtidslogiken att bilens varv var försenat och att den här passeringen nära förväntad tid ser ut som bilen – så den räknades.
 Lap length	Varvlängd
 Lap stats like speed and consistency are for Pro – yours and the cars' owners'.	Varvstatistik som fart och jämnhet kräver Pro – både din och bilägarnas.
 Lap stats like speed and consistency need Pro on the camera phone.	Varvstatistik som fart och jämnhet kräver Pro i kameramobilen.
@@ -234,6 +237,11 @@ Line not on your tape? Tap Line.	Ligger linjen inte på tejpen? Tryck på Linje.
 Line up camera	Rikta kameran
 Live	Live
 Live timing screen	Live-tidtagning
+Look-alikes	Lika bilar
+Look-alikes at the same pace: the camera can't tell these two apart and neither can lap timing – their names may be the wrong way round for the whole race. One tap swaps them. A strip of bright tape on one car fixes this next time.	Lika bilar i samma tempo: kameran kan inte skilja dem åt och inte varvtiderna heller – namnen kan vara omkastade för hela racet. Ett tryck byter dem. En remsa klar tejp på en av bilarna löser det nästa gång.
+Look-alikes: two cars look the same from above, so lap timing decided – and it was close. Tap the car if it is the other one.	Lika bilar: två bilar ser likadana ut uppifrån, så varvtiderna fick avgöra – och det var jämnt. Tryck på bilen om det är den andra.
+Look-alikes: which car?	Lika bilar: vilken bil?
+Look-alikes: which is which?	Lika bilar: vem är vem?
 Looked {0}% like the other samples.	Liknade de andra proven till {0} %.
 Looks right	Ser rätt ut
 Lower is faster. Purple ring = all-time best.	Lägre är snabbare. Lila ring = bästa någonsin.
@@ -289,6 +297,7 @@ Off: AnyLap is an RC lap timer. On: pick the sport for each session, racers and 
 Offline – will sync when you're back online.	Offline – synkar när du är online igen.
 On the camera phone: tap Sync. Then scan the QR it shows.	På kameramobilen: tryck på Synk. Skanna sedan QR-koden som visas.
 One way	Ett håll
+Only {0} fps: fast cars may be missed. Close other apps, lower the resolution in your phone's camera settings, or get more light.	Bara {0} fps: snabba bilar kan missas. Stäng andra appar, sänk upplösningen i telefonens kamerainställningar eller ordna mer ljus.
 Open practice. Each racer's clock starts at their first crossing; every pass after that is a lap. Ranked by best lap.	Fri träning. Varje förares klocka startar vid första passeringen; varje passering efter det är ett varv. Rankas efter bästa varv.
 Other phones	Andra mobiler
 Other phones can join	Andra mobiler kan ansluta
@@ -325,6 +334,7 @@ Pro is active	Pro är aktivt
 Profiles, calibration and bibs	Profiler, kalibrering och nummerlappar
 Purchase restored.	Köpet är återställt.
 Purchases open when AnyLap is in the stores.	Köp öppnar när AnyLap finns i butikerna.
+Put a strip of bright tape (pink, orange, yellow, green, cyan or blue – a different colour on each car) along the roof or side of one of them, then re-run its calibration passes. Otherwise the two may get each other's laps.	Sätt en remsa klar tejp (rosa, orange, gul, grön, cyan eller blå – olika färg på varje bil) längs taket eller sidan på en av dem och kör om dess kalibreringspass. Annars kan de två få varandras varv.
 P{0} {1} – {2} pts ({3} wins)	P{0} {1} – {2} p ({3} segrar)
 P{0} {1}: {2} laps, best {3}, avg {4}	P{0} {1}: {2} varv, bästa {3}, snitt {4}
 RACER · LAST LAP	FÖRARE · SENASTE VARV
@@ -435,6 +445,7 @@ Stop	Stoppa
 Store opens at launch	Butiken öppnar vid lansering
 Stored in the EU (Stockholm). We keep your racers' names, numbers, colours and appearance data, and your lap times – no video, no location, no contacts.	Lagras i EU (Stockholm). Vi sparar förarnas namn, nummer, färger och utseendedata samt dina varvtider – ingen video, ingen plats, inga kontakter.
 Subscriptions renew automatically until cancelled in your store account. Nothing you've timed is ever deleted if Pro ends – older sessions are just hidden again.	Abonnemang förnyas automatiskt tills du säger upp dem i ditt butikskonto. Inget du tagit tid på raderas om Pro tar slut – äldre sessioner döljs bara igen.
+Swap {0} ↔ {1} for the whole race	Byt {0} ↔ {1} för hela racet
 Sync	Synk
 Sync failed. It will retry automatically.	Synken misslyckades. Den försöker igen automatiskt.
 Sync is off	Synk är av
@@ -475,7 +486,7 @@ Timed when the nose reaches the line, as in motorsport.	Tiden tas när fronten n
 Timed with AnyLap – camera lap timer · viccom.se	Tidtagning med AnyLap – varvtider med kameran · viccom.se
 Timing	Tidtagning
 Timing is for practice and fun, not official results.	Tidtagningen är för träning och kul, inte för officiella resultat.
-Tip: 1.5–4 m works well for 1/28–1/10 cars. Point the camera across the track, square to it.	Tips: 1,5–4 m fungerar bra för bilar i skala 1/28–1/10. Rikta kameran tvärs över banan, vinkelrätt.
+Tip: 1.5–4 m works well for 1/28–1/10 cars. Best spot: a straight just after a slow corner. Mount the phone as high and as straight above the line as your stand allows – roughly square to the track is enough. 60 fps matters more than resolution.	Tips: 1,5–4 m fungerar bra för 1/28–1/10-bilar. Bästa plats: en raksträcka strax efter en långsam kurva. Montera telefonen så högt och så rakt ovanför linjen som stativet tillåter – ungefär vinkelrätt mot banan räcker. 60 fps är viktigare än upplösning.
 Tip: 3–6 m keeps bib markers readable. Point the camera across the track at chest height.	Tips: 3–6 m gör nummerlapparna läsbara. Rikta kameran tvärs över banan i brösthöjd.
 Today · {0}	I dag · {0}
 Top speed	Toppfart
@@ -543,11 +554,13 @@ their crossings will ask you who it was.	när de passerar får du frågan vem de
 top {0} {1}	topp {0} {1}
 {0} % = how closely this car matches {1}'s calibration photos and passes (100 % = identical). The next ones are the runners-up.	{0} % = hur väl bilen matchar kalibreringsfotona och passeringarna för {1} (100 % = identisk). De följande är tvåor och treor.
 {0} FPS	{0} FPS
+{0} FPS – aim for 60	{0} FPS – sikta på 60
 {0} Fill the white box with the car.	{0} Fyll den vita rutan med bilen.
 {0} Fill the white box.	{0} Fyll den vita rutan.
 {0} LAPS	{0} VARV
 {0} MIN	{0} MIN
 {0} ahead of {1} by {2} ms	{0} före {1} med {2} ms
+{0} and {1} look the same to the camera ({2} % alike).	{0} och {1} ser likadana ut för kameran ({2} % lika).
 {0} and {1}: dead heat	{0} och {1}: dött lopp
 {0} car|{0} cars	{0} bil|{0} bilar
 {0} event in progress|{0} events in progress	{0} tävling pågår|{0} tävlingar pågår

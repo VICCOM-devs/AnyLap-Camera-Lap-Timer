@@ -80,6 +80,8 @@ fun ReviewCard(
     item: ReviewItem,
     onReassign: (atMs: Long, to: String) -> Unit,
     onCheck: () -> Unit,
+    /** Look-alike twins: swap the two racers' names for the whole race. */
+    onSwap: (a: String, b: String) -> Unit = { _, _ -> },
 ) {
     val bmp = remember(item.imagePath) { loadReviewImage(item.imagePath) }
     // legacy items (before boxes were stored): the subject is the whole picture
@@ -104,6 +106,16 @@ fun ReviewCard(
             Spacer(Modifier.height(6.dp))
         }
         photoFinish(s, item, boxes)?.let { Text(it, style = MaterialTheme.typography.titleSmall) }
+        if (item.swap.size == 2 && item.open) {
+            val a = s.racer(item.swap[0]); val b = s.racer(item.swap[1])
+            if (a != null && b != null) {
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Pill(tr("Swap {0} ↔ {1} for the whole race", a.name, b.name), RT.Amber) { onSwap(a.id, b.id) }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+        }
 
         // the numbers – tap for what they mean
         Text(
@@ -305,6 +317,9 @@ private fun explanation(s: Session, item: ReviewItem): String {
         ReviewKind.MISSED -> tr("Missed?: something passed the second line just beyond the finish without being counted at the finish.")
         ReviewKind.RENAMED -> tr("Re-named: it was named after a car that had just crossed, so lap timing gave it to the runner-up that was due.")
         ReviewKind.NOT_COUNTED -> tr("Not counted: it was named after a car that had just crossed, and no other car fitted – so nobody got the lap.")
+        ReviewKind.AUDIT_LAP -> tr("Lap added: after the race, lap timing found this car's lap overdue and this crossing near the expected time looks like it – so it was counted.")
+        ReviewKind.TWIN_UNSURE -> tr("Look-alikes: two cars look the same from above, so lap timing decided – and it was close. Tap the car if it is the other one.")
+        ReviewKind.TWIN_WHICH -> tr("Look-alikes at the same pace: the camera can't tell these two apart and neither can lap timing – their names may be the wrong way round for the whole race. One tap swaps them. A strip of bright tape on one car fixes this next time.")
     }
     val ghosts = if (item.frameMs > 0f) tr(" The faint outlines show each car between the two frames, at its own speed; the solid one is when it reached the line.") else ""
     val timing = when (s.config.finishEdge) {
@@ -317,7 +332,7 @@ private fun explanation(s: Session, item: ReviewItem): String {
 }
 
 private fun kindColor(k: ReviewKind): Color = when (k) {
-    ReviewKind.SPLIT, ReviewKind.LOW_MARGIN, ReviewKind.RENAMED -> RT.Amber
+    ReviewKind.SPLIT, ReviewKind.LOW_MARGIN, ReviewKind.RENAMED, ReviewKind.AUDIT_LAP, ReviewKind.TWIN_UNSURE, ReviewKind.TWIN_WHICH -> RT.Amber
     else -> RT.AccentHot
 }
 

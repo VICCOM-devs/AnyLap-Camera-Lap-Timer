@@ -183,6 +183,12 @@ enum class ReviewKind(val title: String) {
     RENAMED(tr("Re-named by lap timing")),
     /** Named after a car that had just crossed and no other car fits: not counted for anyone. */
     NOT_COUNTED(tr("Not counted")),
+    /** The end-of-race audit counted a crossing the camera hadn't (a lap was overdue, or the car was seen at the check line). */
+    AUDIT_LAP(tr("Lap added by lap timing")),
+    /** Two look-alike cars: lap timing favours one of them, but only just. */
+    TWIN_UNSURE(tr("Look-alikes: which car?")),
+    /** Two look-alike cars at the same pace: their names may be swapped for the whole race. */
+    TWIN_WHICH(tr("Look-alikes: which is which?")),
 }
 
 @Serializable
@@ -235,6 +241,8 @@ data class ReviewItem(
     val checked: Boolean = false,
     /** Plain-words reason the app adds after the race (e.g. "a second piece of Orange 4 – already counted"). */
     val note: String? = null,
+    /** Two racer ids whose names may be the wrong way round for the whole race (one tap swaps them). */
+    val swap: List<String> = emptyList(),
 ) {
     val open: Boolean get() = resolvedTo == null && !checked
 }
