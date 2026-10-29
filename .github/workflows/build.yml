@@ -14,7 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build number into the app
-        run: sed -i "s/const val BUILD = 0/const val BUILD = ${GITHUB_RUN_NUMBER}/" composeApp/src/commonMain/kotlin/app/anylap/BuildInfo.kt
+        run: |
+          v="$(grep '^appVersionName=' gradle.properties | cut -d= -f2)"
+          sed -i -e "s/const val BUILD = 0/const val BUILD = ${GITHUB_RUN_NUMBER}/" -e "s/const val VERSION = \"dev\"/const val VERSION = \"$v\"/" composeApp/src/commonMain/kotlin/app/anylap/BuildInfo.kt
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

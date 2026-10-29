@@ -31,6 +31,7 @@ import app.anylap.ui.components.RtCard
 import app.anylap.ui.components.ScreenScaffold
 import app.anylap.ui.components.SecondaryButton
 import app.anylap.ui.components.SectionLabel
+import app.anylap.BuildInfo
 import app.anylap.ui.theme.RT
 import app.anylap.pro.Limits
 import app.anylap.cloud.Account
@@ -150,7 +151,7 @@ fun SettingsScreen(nav: Navigator) {
         item { SectionLabel(tr("About"), Icons.Rounded.Info) }
         item {
             RtCard(Modifier.fillMaxWidth()) {
-                Text("AnyLap · ${Platform.name}", style = MaterialTheme.typography.titleSmall)
+                Text("AnyLap ${BuildInfo.label} · ${Platform.name}", style = MaterialTheme.typography.titleSmall)
                 Text(
                     tr("Camera lap timing for RC cars and runners. Video is processed on this phone and never uploaded. Lap data leaves the phone only if you turn on sync. ") +
                         tr("Timing is for practice and fun, not official results."),

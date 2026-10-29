@@ -45,7 +45,7 @@ jobs:
           [[ "$GITHUB_REF" == refs/tags/v* ]] && name="${GITHUB_REF#refs/tags/v}"
           echo "VERSION_CODE=$code" >> "$GITHUB_ENV"
           echo "VERSION_NAME=$name" >> "$GITHUB_ENV"
-          sed -i "s/const val BUILD = 0/const val BUILD = $code/" composeApp/src/commonMain/kotlin/app/anylap/BuildInfo.kt
+          sed -i -e "s/const val BUILD = 0/const val BUILD = $code/" -e "s/const val VERSION = \"dev\"/const val VERSION = \"$name\"/" composeApp/src/commonMain/kotlin/app/anylap/BuildInfo.kt
           echo "::notice::AnyLap $name (versionCode $code)"
 
       - uses: actions/setup-java@v4
