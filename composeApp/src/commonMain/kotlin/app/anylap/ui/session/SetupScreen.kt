@@ -53,6 +53,7 @@ import app.anylap.data.RaceMode
 import app.anylap.data.Racer
 import app.anylap.data.SessionConfig
 import app.anylap.data.Sport
+import app.anylap.ui.racers.LookAlikeWarning
 import app.anylap.ui.components.PillTabs
 import app.anylap.ui.components.RtSlider
 import app.anylap.ui.components.PrimaryButton
@@ -164,7 +165,7 @@ fun SetupScreen(nav: Navigator) {
                         Spacer(Modifier.height(10.dp))
                     }
                     if (cfg.sport == Sport.RC && selected.size > 1) {
-                        app.anylap.ui.racers.LookAlikeWarning(sportRacers.filter { it.id in selected })
+                        LookAlikeWarning(sportRacers.filter { it.id in selected })
                         Spacer(Modifier.height(10.dp))
                     }
                     val uncalibrated = sportRacers.filter { it.id in selected && !it.isCalibrated && it.markerId == null }
