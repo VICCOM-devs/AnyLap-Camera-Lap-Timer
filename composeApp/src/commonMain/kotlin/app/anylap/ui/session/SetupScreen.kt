@@ -163,6 +163,10 @@ fun SetupScreen(nav: Navigator) {
                         )
                         Spacer(Modifier.height(10.dp))
                     }
+                    if (cfg.sport == Sport.RC && selected.size > 1) {
+                        app.anylap.ui.racers.LookAlikeWarning(sportRacers.filter { it.id in selected })
+                        Spacer(Modifier.height(10.dp))
+                    }
                     val uncalibrated = sportRacers.filter { it.id in selected && !it.isCalibrated && it.markerId == null }
                     if (selected.size > 1 && uncalibrated.isNotEmpty()) {
                         Text(
@@ -203,7 +207,7 @@ fun SetupScreen(nav: Navigator) {
                     valueRange = 0.5f..15f,
                 )
                 Text(
-                    if (cfg.sport == Sport.RC) tr("Tip: 1.5–4 m works well for 1/28–1/10 cars. Point the camera across the track, square to it.")
+                    if (cfg.sport == Sport.RC) tr("Tip: 1.5–4 m works well for 1/28–1/10 cars. Best spot: a straight just after a slow corner. Mount the phone as high and as straight above the line as your stand allows – roughly square to the track is enough. 60 fps matters more than resolution.")
                     else tr("Tip: 3–6 m keeps bib markers readable. Point the camera across the track at chest height."),
                     style = MaterialTheme.typography.bodySmall,
                 )

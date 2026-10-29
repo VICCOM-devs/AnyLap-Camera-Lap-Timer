@@ -87,6 +87,7 @@ import app.anylap.ui.components.code
 import app.anylap.ui.components.uiColor
 import app.anylap.ui.theme.Num
 import app.anylap.ui.theme.RT
+import app.anylap.data.Sport
 import app.anylap.util.fixed
 import kotlinx.coroutines.delay
 
@@ -134,7 +135,16 @@ fun LiveLayout(
                     // Compact: a one-line summary and fps, nothing covering the track.
                     Row(Modifier.align(Alignment.TopStart).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         HudChip("${modeLabel(config)} · ${config.sport.count(race.standings.size)}")
-                        HudChip(tr("{0} FPS", fps.fixed(0)))
+                        val lowFps = config.sport == Sport.RC && fps > 0.0 && fps < LOW_FPS
+                        HudChip(if (lowFps) tr("{0} FPS – aim for 60", fps.fixed(0)) else tr("{0} FPS", fps.fixed(0)), warn = lowFps)
+                    }
+                    if (!editingLine) {
+                        val lowFps = config.sport == Sport.RC && fps > 0.0 && fps < LOW_FPS
+                        CameraHint(
+                            if (lowFps) tr("Only {0} fps: fast cars may be missed. Close other apps, lower the resolution in your phone's camera settings, or get more light.", fps.fixed(0))
+                            else tr("Best spot: a straight after a slow corner. Phone as high and as straight above the line as the stand allows – roughly square is enough."),
+                            Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                        )
                     }
                     if (editingLine) {
                         LineTools(
@@ -267,13 +277,16 @@ private fun ClockHud(race: RaceState, config: SessionConfig) {
 }
 
 @Composable
-private fun HudChip(text: String) {
+private fun HudChip(text: String, warn: Boolean = false) {
     Text(
         text,
-        style = MaterialTheme.typography.labelSmall.copy(color = Color.White, letterSpacing = 1.sp),
-        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 8.dp, vertical = 5.dp),
+        style = MaterialTheme.typography.labelSmall.copy(color = if (warn) Color.Black else Color.White, letterSpacing = 1.sp),
+        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (warn) RT.Amber else Color.Black.copy(alpha = 0.6f)).padding(horizontal = 8.dp, vertical = 5.dp),
     )
 }
+
+/** RC needs 60 fps (20 km/h = 9 cm per frame); below this the chip and hint warn. */
+private const val LOW_FPS = 45.0
 
 @Composable
 private fun RecChip() {

@@ -111,4 +111,25 @@ object LapMath {
         val reviews = s.reviews.map { if (it.id == itemId) it.copy(resolvedTo = to) else it }
         return rebuilt(s.copy(crossings = cr, reviews = reviews))
     }
+
+    /**
+     * Two look-alike cars whose names can't be told apart by the camera: swap every crossing of [a] and
+     * [b] (the whole race), swap the names on the Check cards too, and mark the asking card as checked.
+     */
+    fun swap(s: Session, itemId: String, a: String, b: String): Session {
+        if (a == b || s.racers.none { it.id == a } || s.racers.none { it.id == b }) return s
+        val cr = s.crossings.toMutableMap()
+        val la = cr[a] ?: emptyList(); val lb = cr[b] ?: emptyList()
+        cr[a] = lb; cr[b] = la
+        fun sw(id: String?) = when (id) { a -> b; b -> a; else -> id }
+        val reviews = s.reviews.map { r ->
+            r.copy(
+                decided = sw(r.decided),
+                resolvedTo = sw(r.resolvedTo),
+                boxes = r.boxes.map { bx -> bx.copy(racerId = sw(bx.racerId)) },
+                checked = r.checked || r.id == itemId || (r.swap.toSet() == setOf(a, b)),
+            )
+        }
+        return rebuilt(s.copy(crossings = cr, reviews = reviews))
+    }
 }

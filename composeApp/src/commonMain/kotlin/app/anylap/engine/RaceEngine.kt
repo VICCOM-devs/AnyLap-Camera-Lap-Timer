@@ -17,6 +17,7 @@ import app.anylap.data.Racer
 import app.anylap.data.Session
 import app.anylap.data.SessionConfig
 import app.anylap.vision.CardFit
+import app.anylap.vision.Fingerprint
 import app.anylap.vision.CrossingEvent
 import app.anylap.vision.Snapshot
 import app.anylap.vision.IdSource
@@ -93,8 +94,16 @@ class RaceEngine(
     private val _state = MutableStateFlow(RaceState())
     val state: StateFlow<RaceState> = _state
 
-    /** Counted crossings per racer, with lap timing as a second opinion on the names. */
-    private val identity: LapIdentity
+    /** Counted crossings per racer, with lap timing as a second opinion on the names. Replaced by the end-of-race audit. */
+    private var identity: LapIdentity
+
+    /**
+     * Every crossing event of the race (counted or not) with the human's verdict, if any – the end-of-race
+     * audit ([audit]) re-decides all of them at once with each car's lap rhythm in mind.
+     */
+    private class Logged(val event: CrossingEvent?, val ns: Long, var locked: String? = null, val manual: Cross? = null)
+    private val log = ArrayList<Logged>()
+    private var audited = false
     private val unassigned = ArrayList<Unassigned>()
     private var nextUnassignedId = 1L
     private var startNs = 0L
@@ -166,6 +175,7 @@ class RaceEngine(
         if (_state.value.phase != Phase.RUNNING) return
         if (e.timestampNs < startNs) return
         trackCross[e.trackId] = e.timestampNs
+        log += Logged(e, e.timestampNs, locked = if (e.source == IdSource.MARKER && e.racerId != null) e.racerId else null)
         val id = e.racerId
         if (id == null || racers.none { it.id == id }) {
             if (racers.isEmpty()) return
@@ -200,7 +210,9 @@ class RaceEngine(
     /** A crossing the appearance gate turned down: kept with its picture so a missed car can be rescued. */
     fun onRejected(e: CrossingEvent) {
         if (_state.value.phase != Phase.RUNNING) return
-        if (e.timestampNs < startNs || e.snapshot == null) return
+        if (e.timestampNs < startNs) return
+        log += Logged(e, e.timestampNs)
+        if (e.snapshot == null) return
         review(e, if (e.rescue) ReviewKind.MISSED else ReviewKind.REJECTED, decided = null)
     }
 
@@ -340,10 +352,14 @@ class RaceEngine(
         val u = unassigned.firstOrNull { it.id == unassignedId } ?: return
         unassigned.remove(u)
         resolveReview(unassignedId, racerId)
-        if (!add(racerId, Cross(u.elapsedNs, u.speedKmh, LapSource.ASSIGNED, 1f), emptyList(), locked = true)) publish(null)
+        val c = Cross(u.elapsedNs, u.speedKmh, LapSource.ASSIGNED, 1f)
+        val l = log.firstOrNull { it.ns == u.elapsedNs }
+        if (l != null) l.locked = racerId else log += Logged(null, c.ns, racerId, c)
+        if (!add(racerId, c, emptyList(), locked = true)) publish(null)
     }
 
     fun dismiss(unassignedId: Long) {
+        unassigned.firstOrNull { it.id == unassignedId }?.let { u -> log.firstOrNull { it.ns == u.elapsedNs }?.locked = "" }
         unassigned.removeAll { it.id == unassignedId }
         resolveReview(unassignedId, "")
         publish(null)
@@ -352,12 +368,16 @@ class RaceEngine(
     /** Manual lap at this moment (e.g. the camera missed one). */
     fun addManualLap(racerId: String) {
         if (_state.value.phase != Phase.RUNNING) return
-        add(racerId, Cross(Platform.monotonicNanos(), null, LapSource.MANUAL, 1f), emptyList(), locked = true)
+        val c = Cross(Platform.monotonicNanos(), null, LapSource.MANUAL, 1f)
+        log += Logged(null, c.ns, racerId, c)
+        add(racerId, c, emptyList(), locked = true)
     }
 
     fun removeLastLap(racerId: String) {
         val last = identity.crossings(racerId).lastOrNull() ?: return
         identity.remove(racerId, last)
+        // the human says that wasn't a lap: the audit must not give it back
+        log.firstOrNull { it.ns == last.ns }?.locked = ""
         publish(null)
     }
 
@@ -530,6 +550,7 @@ class RaceEngine(
 
     @OptIn(ExperimentalUuidApi::class)
     fun buildSession(videoPath: String?, recordingStartNs: Long?): Session {
+        audit()
         val st = _state.value
         val durationMs = if (endNs > 0) (endNs - startNs) / 1_000_000 else st.elapsedMs
         return Session(
@@ -552,6 +573,101 @@ class RaceEngine(
     @OptIn(ExperimentalUuidApi::class)
     private val sessionId = Uuid.random().toString()
 
+    // ------------------------------------------------------------------ end-of-race audit
+
+    /**
+     * Once the race is over, every crossing of the race is re-decided at once by [LapSolver] – the camera's
+     * names weighed against each car's own lap rhythm, look-alike pairs solved over the whole race by the
+     * twin solver – and the counted crossings replaced by its answer. Human verdicts are never moved.
+     * Every change becomes a Check card: re-named, not counted, a lap added, or "which of the twins?".
+     * Runs once, in the background (from [buildSession]).
+     */
+    fun audit() {
+        if (audited || _state.value.phase != Phase.FINISHED || racers.isEmpty() || log.isEmpty()) return
+        audited = true
+        val ids = racers.map { it.id }
+        val ins = log.map { l ->
+            val e = l.event
+            if (e == null) LapSolver.In(l.ns, l.locked?.ifEmpty { null }, listOfNotNull(l.locked?.takeIf { it.isNotEmpty() }?.let { it to 1f }), locked = l.locked)
+            else LapSolver.In(
+                e.timestampNs, if (e.accepted) e.racerId?.takeIf { it in ids } else null, e.candidates.filter { it.first in ids },
+                e.confidence, e.split, e.rescue, gated = !e.accepted && !e.rescue, sizeRatio = e.sizeRatio,
+                locked = l.locked, fitted = e.quad != null && e.racerId != null,
+            )
+        }
+        val twins = twinGroups(racers).filter { g -> ins.count { x -> x.named in g || (x.cands.firstOrNull()?.let { it.first in g && it.second >= Twins.GROUP_MIN } == true) } <= TWIN_MAX_CROSSINGS }
+        val outs = try {
+            LapSolver.solve(ins, ids, if (isRace) startNs else null, minLapNs, if (endNs > 0) endNs else Platform.monotonicNanos(), twins)
+        } catch (t: Throwable) { return }
+
+        // who owned each crossing before
+        val oldOwner = HashMap<Long, String>()
+        for (r in racers) for (c in crossesOf(r.id)) oldOwner[c.ns] = r.id
+        val oldCross = HashMap<Long, Cross>()
+        for (r in racers) for (c in crossesOf(r.id)) oldCross[c.ns] = c
+
+        val fresh = LapIdentity(minLapNs)
+        ids.forEach { fresh.register(it) }
+        val extraCount = outs.groupingBy { it.index }.eachCount()
+        for (o in outs) {
+            val racer = o.racer ?: continue
+            val l = log[o.index]; val e = l.event
+            val cross = when {
+                e == null -> l.manual ?: Cross(l.ns, null, LapSource.MANUAL, 1f)
+                o.why == LapSolver.Why.HUMAN -> oldCross[e.timestampNs]?.takeIf { oldOwner[e.timestampNs] == racer } ?: Cross(e.timestampNs, e.speedKmh, LapSource.ASSIGNED, 1f, e)
+                else -> {
+                    val src = if (e.source == IdSource.MARKER) LapSource.MARKER else LapSource.AUTO
+                    val conf = e.candidates.firstOrNull { it.first == racer }?.second ?: e.confidence
+                    Cross(e.timestampNs, e.speedKmh, src, conf, e)
+                }
+            }
+            fresh.force(racer, LapIdentity.Entry(cross.ns, e?.candidates ?: emptyList(), locked = l.locked != null || cross.source == LapSource.MARKER, cross))
+        }
+        identity = fresh
+
+        // the changes, as Check cards
+        for (o in outs) {
+            val l = log[o.index]; val e = l.event ?: continue
+            if (o.why == LapSolver.Why.HUMAN || o.why == LapSolver.Why.IGNORED) continue
+            val old = oldOwner[e.timestampNs]; val new = o.racer
+            val note = withNames(o.note)
+            val second = (extraCount[o.index] ?: 1) > 1 && o.why == LapSolver.Why.SECOND_IN_BLOB
+            when {
+                o.why == LapSolver.Why.TWIN_WHICH && new != null -> auditCard(e, ReviewKind.TWIN_WHICH, new, note, swap = twins.firstOrNull { new in it }?.take(2) ?: emptyList())
+                o.why == LapSolver.Why.TWIN_UNSURE -> auditCard(e, ReviewKind.TWIN_UNSURE, new, note)
+                second -> auditCard(e, ReviewKind.AUDIT_LAP, new, note)
+                old == new -> {}
+                old != null && new == null -> auditCard(e, ReviewKind.NOT_COUNTED, null, note)
+                old != null -> auditCard(e, ReviewKind.RENAMED, new, note)
+                else -> auditCard(e, ReviewKind.AUDIT_LAP, new, note)
+            }
+            if (new != null) unassigned.removeAll { it.elapsedNs == e.timestampNs }
+        }
+        publish(null)
+    }
+
+    /** A Check card for an audit decision: the card that already shows this crossing is updated, else a new one. */
+    private fun auditCard(e: CrossingEvent, kind: ReviewKind, decided: String?, note: String, swap: List<String> = emptyList()) {
+        val atMs = (e.timestampNs - startNs) / 1_000_000
+        val i = reviews.indexOfFirst { kotlin.math.abs(it.atMs - atMs) <= 1 }
+        if (i >= 0) {
+            val r = reviews[i]
+            val keepKind = r.kind == ReviewKind.SPLIT || r.kind == ReviewKind.LOW_MARGIN
+            reviews[i] = r.copy(kind = if (keepKind && kind != ReviewKind.TWIN_WHICH) r.kind else kind, decided = decided, note = note.ifEmpty { r.note }, swap = swap.ifEmpty { r.swap }, resolvedTo = null)
+            return
+        }
+        val before = reviews.size
+        review(e, kind, decided)
+        if (reviews.size > before) reviews[reviews.size - 1] = reviews.last().copy(note = note.ifEmpty { null }, swap = swap)
+    }
+
+    /** The solver talks in racer ids; the cards in names. */
+    private fun withNames(note: String): String {
+        var n = note
+        for (r in racers) n = n.replace(r.id, r.name)
+        return n
+    }
+
     companion object {
         /** Naming margin below which a crossing goes to the "Check these" tray (2× the engine's minimum). */
         const val LOW_MARGIN = 0.12f
@@ -561,5 +677,32 @@ class RaceEngine(
         const val MAX_REVIEWS = 60
         /** Red lights before the start (races). */
         const val START_LIGHTS = 5
+        /** Cars whose calibration looks at least this alike are solved as look-alike twins over the whole race (bench: 0.88). */
+        const val TWIN_SIM = 0.88f
+        /** The twin solver is exhaustive: beyond this many crossings of one group it would take too long on a phone. */
+        const val TWIN_MAX_CROSSINGS = 40
+
+        /** Look-alike groups (2–3 cars) by calibration similarity ≥ [TWIN_SIM]; a car is in at most one group. */
+        fun twinGroups(racers: List<Racer>, threshold: Float = TWIN_SIM): List<List<String>> {
+            val fp = racers.filter { it.fingerprint.isNotEmpty() }.associate { it.id to it.fingerprint.toFloatArray() }
+            val seen = HashSet<String>(); val out = ArrayList<List<String>>()
+            for (a in racers) {
+                if (a.id in seen || a.id !in fp) continue
+                val g = racers.filter { b -> b.id !in seen && b.id in fp && (b.id == a.id || Fingerprint.similarity(fp[a.id]!!, fp[b.id]!!) >= threshold) }.map { it.id }
+                if (g.size >= 2) { out += g.take(3); seen += g.take(3) }
+            }
+            return out
+        }
+
+        /** Every look-alike pair with its similarity (for the warning after calibration). */
+        fun lookAlikes(racers: List<Racer>, threshold: Float = TWIN_SIM): List<Triple<Racer, Racer, Float>> {
+            val out = ArrayList<Triple<Racer, Racer, Float>>()
+            val fp = racers.filter { it.fingerprint.isNotEmpty() }
+            for (i in fp.indices) for (j in i + 1 until fp.size) {
+                val sim = Fingerprint.similarity(fp[i].fingerprint.toFloatArray(), fp[j].fingerprint.toFloatArray())
+                if (sim >= threshold) out += Triple(fp[i], fp[j], sim)
+            }
+            return out.sortedByDescending { it.third }
+        }
     }
 }

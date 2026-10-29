@@ -139,6 +139,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                         s, item,
                         onReassign = { atMs, to -> app.repo.saveSession(LapMath.reassign(s, item.id, atMs, to)) },
                         onCheck = { app.repo.saveSession(LapMath.check(s, item.id)) },
+                        onSwap = { a, b -> app.repo.saveSession(LapMath.swap(s, item.id, a, b)) },
                     )
                 }
             }

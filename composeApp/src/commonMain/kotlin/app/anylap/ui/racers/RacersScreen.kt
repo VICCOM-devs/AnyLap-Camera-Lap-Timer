@@ -120,6 +120,7 @@ fun RacersScreen(nav: Navigator) {
                 )
             }
         }
+        if (sport == Sport.RC) item { LookAlikeWarning(list) }
         items(list, key = { it.id }) { r -> RacerRow(r) { nav.push(Screen.RacerEdit(r.id)) } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
