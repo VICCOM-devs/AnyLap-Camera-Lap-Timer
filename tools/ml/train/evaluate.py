@@ -26,7 +26,7 @@ def embed(net, x, device, bs=512):
         e, c, n = net(x[i:i + bs].to(device)); out.append(e.cpu()); cnt.append(c.argmax(1).cpu()); nose.append(n.cpu())
     return torch.cat(out), torch.cat(cnt), torch.cat(nose)
 
-def evaluate(net, ds, device, races=20, grid=8, k_cal=6, n_query=12, seed=123, lookalike=False):
+def evaluate(net, ds, device, races=20, grid=8, k_cal=6, n_query=12, seed=123, lookalike=False, n_intruder=24):
     """ds: a SpriteDataset over the held-out cars. Returns a dict of metrics."""
     net.eval()
     rng = np.random.default_rng(seed)
@@ -77,10 +77,20 @@ def evaluate(net, ds, device, races=20, grid=8, k_cal=6, n_query=12, seed=123, l
             nb = f"nb{y['neighbours']}"; by_nb.setdefault(nb, [0, 0]); by_nb[nb][0] += ok; by_nb[nb][1] += 1
             count_right += int(int(cq[qi]) == y["count"]); count_total += 1
             nose_err.append(math.hypot(float(nq[qi, 0]) - y["nose_dx"], float(nq[qi, 1]) - y["nose_dy"]) * ds.size)
+    # intruders: how often a cat / rat / shoe … at the line is called a car (count head says 1 or 2)
+    from compose import INTRUDERS
+    intr = {}
+    for kind in (INTRUDERS if n_intruder > 0 else []):
+        xs = []
+        for _ in range(n_intruder):
+            img, _ = ds.sample(rng, force_intruder=kind); xs.append(img.transpose(2, 0, 1))
+        _, ci, _ = embed(net, torch.from_numpy(np.stack(xs)).float() / 255, device)
+        intr[kind] = round(100 * float((ci >= 1).float().mean()), 1)
     pct = lambda d: {k: round(100 * v[0] / max(1, v[1]), 1) for k, v in sorted(d.items())}
     return dict(accuracy=round(100 * right / max(1, total), 2), n=total, by_elevation=pct(by_elev), by_size=pct(by_scale),
                 by_blur=pct(by_blur), by_neighbours=pct(by_nb), count_accuracy=round(100 * count_right / max(1, count_total), 1),
-                nose_err_px_median=round(float(np.median(nose_err)), 2) if nose_err else None, lookalike=lookalike)
+                nose_err_px_median=round(float(np.median(nose_err)), 2) if nose_err else None, lookalike=lookalike,
+                intruder_called_car=intr, intruder_called_car_mean=round(float(np.mean(list(intr.values()))), 1) if intr else None)
 
 if __name__ == "__main__":
     import argparse, os, sys

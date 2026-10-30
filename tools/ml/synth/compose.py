@@ -124,6 +124,101 @@ class Grounds:
             return np.asarray(crop, np.float32) / 255
         return procedural_ground(rng, h, w)
 
+
+# ---------------------------------------------------------------- intruders ("not a car")
+INTRUDERS = ["rat", "mouse", "cat", "bird", "shoe", "hand", "leaf", "ball", "cable", "debris", "shadow"]
+# real length (cm) range of each, so they come at the right size next to the cars
+INTRUDER_CM = {"rat": (18, 40), "mouse": (7, 14), "cat": (40, 60), "bird": (10, 30), "shoe": (24, 32), "hand": (17, 21),
+               "leaf": (4, 15), "ball": (5, 22), "cable": (30, 90), "debris": (3, 15), "shadow": (40, 160)}
+FUR = [(0.45, 0.42, 0.38), (0.35, 0.30, 0.25), (0.55, 0.50, 0.45), (0.15, 0.13, 0.12), (0.85, 0.83, 0.80), (0.75, 0.45, 0.20),
+       (0.60, 0.55, 0.50), (0.25, 0.22, 0.20)]
+SKIN = [(0.95, 0.80, 0.70), (0.85, 0.65, 0.50), (0.65, 0.45, 0.32), (0.45, 0.30, 0.22), (0.30, 0.20, 0.15)]
+
+def _fur(rng, h, w, base, stripes=False):
+    """Fur / skin / material texture: noise around a base colour, optional tabby stripes or patches."""
+    n = _noise(rng, h, w, octaves=3)
+    fine = rng.random((h, w)).astype(np.float32)
+    rgb = np.array(base, np.float32)[None, None] * (0.75 + 0.35 * n[..., None] + 0.12 * (fine[..., None] - 0.5))
+    if stripes:
+        yy, xx = np.mgrid[0:h, 0:w]
+        st = (np.sin(xx * rng.uniform(0.15, 0.4) + n * 8) > 0.4)[..., None]
+        rgb = np.where(st, rgb * 0.55, rgb)
+    return np.clip(rgb, 0, 1)
+
+def intruder_sprite(rng, kind, px_per_cm):
+    """RGBA float sprite (nose/head towards +x) of an intruder at the given scale, plus its shadow alpha."""
+    from PIL import ImageDraw
+    Lcm = rng.uniform(*INTRUDER_CM[kind]); Lp = max(4, Lcm * px_per_cm)
+    size = int(min(1024, max(16, Lp * 1.6)))
+    m = Image.new("L", (size, size), 0); d = ImageDraw.Draw(m)
+    c = size / 2
+    stripes = False
+    def ell(cx, cy, rx, ry): d.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=255)
+    if kind in ("rat", "mouse"):
+        body = Lp * (0.55 if kind == "rat" else 0.62)
+        ell(c - body * 0.05, c, body / 2, body * rng.uniform(0.17, 0.24))
+        ell(c + body * 0.45, c, body * 0.18, body * 0.12)                         # head
+        for sg in (-1, 1): ell(c + body * 0.38, c + sg * body * 0.12, body * 0.06, body * 0.06)   # ears
+        tail = [(c - body * 0.5 - t * (Lp - body) * 0.9, c + math.sin(t * 3 + rng.uniform(0, 3)) * body * 0.15) for t in np.linspace(0, 1, 12)]
+        d.line(tail, fill=255, width=max(1, int(body * 0.04)))
+        col = FUR[rng.integers(len(FUR))]
+    elif kind == "cat":
+        body = Lp * 0.6
+        ell(c - body * 0.05, c, body / 2, body * rng.uniform(0.2, 0.26))
+        ell(c + body * 0.5, c, body * 0.17, body * 0.16)
+        for sg in (-1, 1):
+            d.polygon([(c + body * 0.5, c + sg * body * 0.08), (c + body * 0.62, c + sg * body * 0.2), (c + body * 0.42, c + sg * body * 0.17)], fill=255)
+        for fx in (0.3, -0.3):   # legs mid-stride, seen from above they stick out a bit
+            for sg in (-1, 1): ell(c + body * fx + sg * body * 0.06, c + sg * body * 0.25, body * 0.07, body * 0.05)
+        tail = [(c - body * 0.5 - t * body * 0.7, c + math.sin(t * 2.5 + rng.uniform(0, 3)) * body * 0.25) for t in np.linspace(0, 1, 12)]
+        d.line(tail, fill=255, width=max(1, int(body * 0.07)))
+        col = FUR[rng.integers(len(FUR))]; stripes = rng.random() < 0.4
+    elif kind == "bird":
+        body = Lp * 0.5
+        ell(c, c, body / 2, body * 0.22); ell(c + body * 0.45, c, body * 0.15, body * 0.13)
+        if rng.random() < 0.5:   # wings spread
+            for sg in (-1, 1): d.polygon([(c + body * 0.15, c), (c - body * 0.2, c + sg * Lp * 0.7), (c - body * 0.35, c + sg * Lp * 0.6), (c - body * 0.2, c)], fill=255)
+        d.polygon([(c - body * 0.45, c - body * 0.1), (c - body * 0.9, c - body * 0.2), (c - body * 0.9, c + body * 0.2), (c - body * 0.45, c + body * 0.1)], fill=255)
+        col = FUR[rng.integers(len(FUR))] if rng.random() < 0.7 else tuple(rng.uniform(0.1, 0.9, 3))
+    elif kind == "shoe":
+        ell(c, c, Lp / 2, Lp * 0.17); ell(c + Lp * 0.25, c, Lp * 0.22, Lp * 0.2)
+        col = tuple(rng.uniform(0.05, 0.95, 3)) if rng.random() < 0.6 else (rng.uniform(0.02, 0.9),) * 3
+    elif kind == "hand":
+        ell(c - Lp * 0.15, c, Lp * 0.27, Lp * 0.22)
+        for k, off in enumerate((-0.15, -0.05, 0.05, 0.15)):
+            d.line([(c + Lp * 0.05, c + off * Lp), (c + Lp * 0.45, c + off * Lp * 1.2)], fill=255, width=max(1, int(Lp * 0.07)))
+        d.line([(c - Lp * 0.1, c - Lp * 0.2), (c + Lp * 0.15, c - Lp * 0.38)], fill=255, width=max(1, int(Lp * 0.08)))
+        col = SKIN[rng.integers(len(SKIN))]
+    elif kind == "leaf":
+        ell(c, c, Lp / 2, Lp * rng.uniform(0.15, 0.35))
+        col = tuple(np.array(rng.choice([(0.25, 0.5, 0.15), (0.6, 0.45, 0.1), (0.45, 0.25, 0.1), (0.8, 0.6, 0.1)])) * rng.uniform(0.7, 1.1))
+    elif kind == "ball":
+        ell(c, c, Lp / 2, Lp / 2)
+        col = tuple(rng.uniform(0.05, 1.0, 3))
+    elif kind == "cable":
+        pts = [(c - Lp / 2 + t * Lp, c + math.sin(t * rng.uniform(2, 6) + rng.uniform(0, 3)) * Lp * 0.15) for t in np.linspace(0, 1, 20)]
+        d.line(pts, fill=255, width=max(1, int(Lp * rng.uniform(0.01, 0.025))))
+        col = (rng.uniform(0.02, 0.9),) * 3 if rng.random() < 0.6 else tuple(rng.uniform(0.05, 0.95, 3))
+    elif kind == "debris":
+        pts = [(c + math.cos(a) * Lp / 2 * rng.uniform(0.4, 1.0), c + math.sin(a) * Lp / 2 * rng.uniform(0.3, 1.0)) for a in np.sort(rng.uniform(0, 2 * math.pi, 7))]
+        d.polygon(pts, fill=255)
+        col = tuple(rng.uniform(0.05, 1.0, 3))
+    else:   # shadow only (a person, a bird overhead, a flag): nothing solid, a soft dark shape
+        ell(c, c, Lp / 2, Lp * rng.uniform(0.15, 0.4))
+        col = None
+    mask = np.asarray(m.filter(ImageFilter.GaussianBlur(0.6)), np.float32) / 255
+    rgba = np.zeros((size, size, 4), np.float32)
+    if col is not None:
+        tex = _fur(rng, size, size, col, stripes)
+        if kind == "ball" and rng.random() < 0.5:   # panels / stripes on balls
+            yy, xx = np.mgrid[0:size, 0:size]; tex = np.where(((xx // max(2, int(Lp / 5)) + yy // max(2, int(Lp / 5))) % 2 == 0)[..., None], tex, 1 - tex)
+        yy, xx = np.mgrid[0:size, 0:size]
+        shade = 1 - 0.35 * np.clip(np.hypot(xx - c, yy - c) / max(1, Lp / 2), 0, 1) ** 2   # rounder things are darker at their edge
+        rgba[..., :3] = tex * shade[..., None]
+        rgba[..., 3] = mask
+    shadow = mask if kind != "cable" else mask * 0.5
+    return rgba, shadow
+
 # ---------------------------------------------------------------- image ops
 def rotate_scale(rgba, angle_deg, scale, out_size):
     """Rotate about the sprite centre and scale; return float RGBA on an out_size canvas (centre kept)."""
@@ -167,7 +262,9 @@ class SpriteDataset:
     nose_dx/dy (subject nose relative to crop centre, in crop widths), heading_deg (image angle of the nose),
     elev, px_per_cm, blur_px, neighbours.
     """
-    def __init__(self, sprite_root, ids=None, size=64, photo_dir=None, p_neighbour=0.35, p_empty=0.06, min_px_per_cm=0.6, max_px_per_cm=8.0):
+    def __init__(self, sprite_root, ids=None, size=64, photo_dir=None, p_neighbour=0.35, p_empty=0.06, min_px_per_cm=0.6, max_px_per_cm=8.0,
+                 p_intruder=0.10):
+        self.p_intruder = p_intruder
         self.lib = Library(sprite_root, ids)
         self.size = size
         self.grounds = Grounds(photo_dir)
@@ -208,7 +305,7 @@ class SpriteDataset:
         nx, ny = meta["nose"][0] - meta["tail"][0], meta["nose"][1] - meta["tail"][1]
         return math.degrees(math.atan2(-ny, nx)) + theta
 
-    def sample(self, rng, identity=None, elev=None, px_per_cm=None):
+    def sample(self, rng, identity=None, elev=None, px_per_cm=None, force_intruder=None):
         S = self.size; canvas = S * 2
         car = self.lib.cars[identity] if identity is not None else rng.choice(self.lib.cars)
         view = self.lib.pick_view(rng, car, elev)
@@ -239,8 +336,13 @@ class SpriteDataset:
             col = np.array(rng.choice([(0.95, 0.95, 0.95), (0.1, 0.85, 0.9), (0.95, 0.85, 0.1), (0.95, 0.3, 0.1), (0.05, 0.05, 0.05)]), np.float32) * light
             ground = ground * (1 - stripe * 0.9) + col * stripe * 0.9
 
+        comp = ground.copy(); shadows = np.zeros((canvas, canvas), np.float32); layers = []
         cars = []
         empty = rng.random() < self.p_empty
+        intruder = None
+        if not empty and (force_intruder or rng.random() < self.p_intruder):
+            intruder = force_intruder or INTRUDERS[rng.integers(len(INTRUDERS))]
+            empty = True
         if not empty:
             cars.append((car, view, offset, True))
             # neighbours: abreast or nose-to-tail, touching or a small gap, same scale and elevation
@@ -264,12 +366,32 @@ class SpriteDataset:
                     off = (offset[0] + sgn * dist * math.cos(head), offset[1] - sgn * dist * math.sin(head))
                 cars.append((other, ov, off, False))
 
-        comp = ground.copy(); shadows = np.zeros((canvas, canvas), np.float32); layers = []
         nose = centre = None
         for cid, v, off, subject in cars:
             c, shd, n_, ce, m = self._place(rng, cid, v, px_per_cm, theta, canvas, off, light, shadow_k, shadow_blur, blur_px)
             shadows = np.maximum(shadows, shd[..., 3]); layers.append(c)
             if subject: nose, centre = n_, ce
+        if intruder is not None:   # a cat / rat / foot … at the line instead of a car, maybe with a car nearby
+            sp_, sh_ = intruder_sprite(rng, intruder, px_per_cm)
+            ang = float(rng.uniform(0, 360))
+            spi = Image.fromarray(to_uint8(sp_)).rotate(ang, resample=Image.BICUBIC, expand=True)
+            shi = Image.fromarray(to_uint8(sh_)).rotate(ang, resample=Image.BILINEAR, expand=True)
+            if blur_px > 1.5:
+                bl = motion_blur(np.asarray(spi, np.float32) / 255, blur_px, ang); spi = Image.fromarray(to_uint8(bl))
+            ox = int(canvas / 2 + offset[0] - spi.width / 2); oy = int(canvas / 2 + offset[1] - spi.height / 2)
+            lay = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0)); lay.paste(spi, (ox, oy), spi)
+            shl = Image.new("L", (canvas, canvas), 0)
+            sdx, sdy = int(rng.uniform(-0.2, 0.2) * spi.width), int(rng.uniform(-0.2, 0.2) * spi.height)
+            shl.paste(shi, (ox + sdx, oy + sdy), shi)
+            shl = shl.filter(ImageFilter.GaussianBlur(float(1 + shadow_blur)))
+            shadows = np.maximum(shadows, np.asarray(shl, np.float32) / 255 * shadow_k * (1.0 if intruder == "shadow" else 0.7))
+            if intruder != "shadow": layers.append(np.asarray(lay, np.float32) / 255)
+            if rng.random() < 0.25:   # a car passing nearby, off-centre
+                other = self.lib.cars[rng.integers(len(self.lib.cars))]
+                ov = self.lib.pick_view(rng, other, e)
+                far = (rng.choice([-1, 1]) * S * 0.75, rng.uniform(-0.4, 0.4) * S)
+                c_, shd_, _, _, _ = self._place(rng, other, ov, px_per_cm, theta, canvas, far, light, shadow_k, shadow_blur, blur_px)
+                shadows = np.maximum(shadows, shd_[..., 3]); layers.append(c_)
         # a stray moving shadow (walking legs, a barrier post) sometimes
         if rng.random() < 0.2:
             blob = np.zeros((canvas, canvas), np.float32)
@@ -299,32 +421,39 @@ class SpriteDataset:
         out = np.asarray(pil, np.uint8)
 
         if empty:
-            y = dict(identity=-1, count=0, nose_dx=0.0, nose_dy=0.0, heading=0.0)
+            y = dict(identity=-1, count=0, nose_dx=0.0, nose_dy=0.0, heading=0.0, intruder=intruder or "")
         else:
             # count = cars whose centre is inside the crop (the subject + neighbours that made it in)
             cnt = 0
             for cid, v, off, subject in cars:
                 if abs(off[0]) < S * 0.5 and abs(off[1]) < S * 0.5: cnt += 1
-            y = dict(identity=self.lib.index[car], count=min(cnt, 2),
+            y = dict(intruder="", identity=self.lib.index[car], count=min(cnt, 2),
                      nose_dx=(nose[0] - canvas / 2) / S, nose_dy=(nose[1] - canvas / 2) / S, heading=self._heading(meta, theta) % 360)
         y.update(elev=e, px_per_cm=px_per_cm, blur_px=float(blur_px), neighbours=max(0, len(cars) - 1), car=car, view=view, car_len_px=car_len_px)
         return out, y
 
 # ---------------------------------------------------------------- torch glue
-def torch_dataset(sprite_root, ids, size, photo_dir=None, seed=0, **kw):
+try:
     import torch
-    from torch.utils.data import IterableDataset
+    from torch.utils.data import IterableDataset as _IterBase
+except ImportError:   # Blender's Python has no torch; only the trainer needs this part
+    torch = None; _IterBase = object
 
-    class _DS(IterableDataset):
-        def __init__(self): self.ds = SpriteDataset(sprite_root, ids, size, photo_dir, **kw)
-        def __iter__(self):
-            wi = torch.utils.data.get_worker_info()
-            rng = np.random.default_rng(seed + (wi.id if wi else 0) * 7919 + int.from_bytes(os.urandom(4), "little"))
-            while True:
-                img, y = self.ds.sample(rng)
-                x = torch.from_numpy(np.ascontiguousarray(img.transpose(2, 0, 1))).float() / 255
-                yield x, torch.tensor(y["identity"]), torch.tensor(y["count"]), torch.tensor([y["nose_dx"], y["nose_dy"]], dtype=torch.float32), torch.tensor([y["elev"], y["px_per_cm"]], dtype=torch.float32)
-    return _DS()
+class SpriteStream(_IterBase):
+    """Endless composed samples for a DataLoader. Module-level (Windows starts workers by pickling)."""
+    def __init__(self, sprite_root, ids, size, photo_dir=None, seed=0, **kw):
+        self.args = (sprite_root, ids, size, photo_dir); self.kw = kw; self.seed = seed; self.ds = None
+    def __iter__(self):
+        if self.ds is None: self.ds = SpriteDataset(*self.args, **self.kw)
+        wi = torch.utils.data.get_worker_info()
+        rng = np.random.default_rng(self.seed + (wi.id if wi else 0) * 7919 + int.from_bytes(os.urandom(4), "little"))
+        while True:
+            img, y = self.ds.sample(rng)
+            x = torch.from_numpy(np.ascontiguousarray(img.transpose(2, 0, 1))).float() / 255
+            yield x, torch.tensor(y["identity"]), torch.tensor(y["count"]), torch.tensor([y["nose_dx"], y["nose_dy"]], dtype=torch.float32), torch.tensor([y["elev"], y["px_per_cm"]], dtype=torch.float32)
+
+def torch_dataset(sprite_root, ids, size, photo_dir=None, seed=0, **kw):
+    return SpriteStream(sprite_root, ids, size, photo_dir, seed, **kw)
 
 if __name__ == "__main__":
     import argparse, sys

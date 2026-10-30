@@ -69,7 +69,7 @@ def main():
         torch.save(dict(model=net.state_dict(), head=head.state_dict(), opt=opt.state_dict(), step=step, best=best, width=a.width, size=a.size,
                         held_out=held, train_ids=train_ids, metrics=metrics), os.path.join(a.out, name))
 
-    net.train(); t0 = time.time(); run = dict(loss=0.0, arc=0.0, cnt=0.0, nose=0.0, n=0)
+    net.train(); t0 = time.time(); t_start = time.time(); run = dict(loss=0.0, arc=0.0, cnt=0.0, nose=0.0, n=0)
     for x, y, cnt, nose, _ in loader:
         if step >= a.steps: break
         if real is not None and real.num_classes > 0:
@@ -95,10 +95,13 @@ def main():
         run["loss"] += loss.item(); run["arc"] += arc.item(); run["cnt"] += lc.item(); run["nose"] += ln.item(); run["n"] += 1
         if step % 100 == 0:
             rate = 100 * a.batch / (time.time() - t0); t0 = time.time()
-            print(f"step {step} loss {run['loss']/run['n']:.3f} arc {run['arc']/run['n']:.3f} count {run['cnt']/run['n']:.3f} nose {run['nose']/run['n']:.4f} lr {sched.get_last_lr()[0]:.2e} {rate:.0f} img/s", flush=True)
+            done = step / a.steps; eta = (time.time() - t_start) / max(1e-9, done) * (1 - done) / 3600
+            print(f"[{100 * done:4.1f} %  ~{eta:.1f} h left] step {step} loss {run['loss']/run['n']:.3f} arc {run['arc']/run['n']:.3f} count {run['cnt']/run['n']:.3f} nose {run['nose']/run['n']:.4f} lr {sched.get_last_lr()[0]:.2e} {rate:.0f} img/s", flush=True)
             run = dict(loss=0.0, arc=0.0, cnt=0.0, nose=0.0, n=0)
         if step % a.eval_every == 0 or step == a.steps:
             m = json.loads(json.dumps(evaluate(net, held_ds, dev, races=12), default=float))
+            if step % (a.eval_every * 5) == 0 or step == a.steps:   # look-alike stress less often (slower)
+                m["lookalike_accuracy"] = evaluate(net, held_ds, dev, races=8, lookalike=True, n_intruder=0)["accuracy"]
             m["step"] = step; m["time"] = time.time()
             if real is not None and real.has_eval: m["real"] = real.evaluate(net, dev)
             print("EVAL", json.dumps(m), flush=True); log.write(json.dumps(m) + "\n"); log.flush()
