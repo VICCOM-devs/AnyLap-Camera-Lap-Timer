@@ -17,9 +17,9 @@ export/export.py            ONNX + LiteRT (.tflite), sha256 + metadata for anyla
 
 ## Setup on the PC (Windows, RTX 3060 Ti)
 
-1. **Blender 4.2+** (installed). Its own Python needs Pillow for the liveries – in a terminal:
-   `"C:\Program Files\Blender Foundation\Blender 4.5\4.5\python\bin\python.exe" -m pip install pillow`
-   (adjust the version in the path; numpy is bundled). In Blender: Edit → Preferences → System → Cycles Render Devices → OptiX.
+1. **Blender 4.5** (installed). Its Python needs Pillow for the liveries; Program Files is read-only, so install it beside:
+   `"C:\Program Files\Blender Foundation\Blender 4.5\4.5\python\bin\python.exe" -m pip install pillow --target C:\anylap-ml\blender-libs`
+   and before every Blender run in a new window: `set PYTHONPATH=C:\anylap-ml\blender-libs` (+ `--python-use-system-env` on the command). In Blender: Edit → Preferences → System → Cycles Render Devices → OptiX.
 2. **Python 3.11–3.13** with CUDA PyTorch:
    ```
    py -m venv D:\anylap-ml\venv
@@ -31,9 +31,14 @@ export/export.py            ONNX + LiteRT (.tflite), sha256 + metadata for anyla
 
 ## Run
 
-**1. Sprite library (one evening, GPU).** 300 cars × 132 views × 2 renders ≈ 5–6 h on the 3060 Ti at 24 samples.
+**1. Sprite library (GPU, the long part).** Every car is new: 9 classes – scale cars (bodies mutated and blended from 9 kinds),
+formula, pan, touring (with body clips + antenna), buggy, truggy, monster truck, short-course truck, crawler – each with its own
+proportions, ride height, wheels (size, width, rims, knobby tread), RC hardware (shock towers, shocks, arms, bumpers, rails, spare,
+light bar, cage) and paint (10 liveries + procedural ones, sponsors, number, wear, dirt, matte/metal, tape). ~2–3 min per car on the
+3060 Ti at 12 samples; 18 h ≈ 400–500 cars.
 ```
-blender -b -P D:\AnyLap\tools\ml\sprites\render_sprites.py -- --out D:\anylap-ml\sprites --cars 300 --seed 0
+set PYTHONPATH=C:\anylap-ml\blender-libs
+"C:\Program Files\Blender Foundation\Blender 4.5\blender.exe" -b --python-use-system-env -P C:\AnyLap\tools\ml\sprites\render_sprites.py -- --out C:\anylap-ml\sprites --cars 600 --samples 12
 ```
 Resumable (finished cars are skipped); `--first 300 --cars 300 --seed 0` adds another 300 later. `--quick` renders a tiny
 set for a smoke test. Check a few `D:\anylap-ml\sprites\car0000\*_car.png` in any viewer.
