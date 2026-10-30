@@ -1,5 +1,6 @@
 package app.anylap.ui.settings
 
+import app.anylap.learn.Crops
 import app.anylap.i18n.tr
 import app.anylap.data.FinishEdge
 import androidx.compose.foundation.layout.Row
@@ -153,8 +154,8 @@ fun SettingsScreen(nav: Navigator) {
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                val pending by app.anylap.learn.Crops.pending.collectAsState()
-                val uploaded by app.anylap.learn.Crops.uploaded.collectAsState()
+                val pending by Crops.pending.collectAsState()
+                val uploaded by Crops.uploaded.collectAsState()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(tr("Help improve car recognition"), style = MaterialTheme.typography.titleSmall)
@@ -174,7 +175,7 @@ fun SettingsScreen(nav: Navigator) {
                         checked = settings.shareCrops,
                         onCheckedChange = { v ->
                             app.repo.updateSettings { it.copy(shareCrops = v, cropsNoticeSeen = true) }
-                            if (v) app.anylap.learn.Crops.flushSoon(app.cloud) else app.anylap.learn.Crops.clear()
+                            if (v) Crops.flushSoon(app.cloud) else Crops.clear()
                         },
                         colors = SwitchDefaults.colors(checkedTrackColor = RT.Accent),
                     )

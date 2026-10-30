@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.learn.Learn
 import app.anylap.i18n.tr
 import app.anylap.platform.Platform
 import app.anylap.util.fixed
@@ -143,12 +144,12 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                         onReassign = { atMs, to ->
                             app.repo.saveSession(LapMath.reassign(s, item.id, atMs, to))
                             // a verdict is the best teacher: the car learns this view, the picture is shared with the answer
-                            scope.launch(kotlinx.coroutines.Dispatchers.Default) { try { app.anylap.learn.Learn.verdict(app.repo, app.cloud, s, item, to, atMs) } catch (t: Throwable) {} }
+                            scope.launch(kotlinx.coroutines.Dispatchers.Default) { try { Learn.verdict(app.repo, app.cloud, s, item, to, atMs) } catch (t: Throwable) {} }
                         },
                         onCheck = {
                             app.repo.saveSession(LapMath.check(s, item.id))
                             val who = item.resolvedTo ?: item.decided
-                            if (!who.isNullOrEmpty()) scope.launch(kotlinx.coroutines.Dispatchers.Default) { try { app.anylap.learn.Learn.verdict(app.repo, app.cloud, s, item, who) } catch (t: Throwable) {} }
+                            if (!who.isNullOrEmpty()) scope.launch(kotlinx.coroutines.Dispatchers.Default) { try { Learn.verdict(app.repo, app.cloud, s, item, who) } catch (t: Throwable) {} }
                         },
                         onSwap = { a, b -> app.repo.saveSession(LapMath.swap(s, item.id, a, b)) },
                     )

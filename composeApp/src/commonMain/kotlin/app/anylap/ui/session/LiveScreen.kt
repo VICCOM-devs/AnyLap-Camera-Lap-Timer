@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.learn.Learn
 import app.anylap.i18n.I18n
 import app.anylap.i18n.tr
 import app.anylap.util.fixed
@@ -237,9 +238,9 @@ private fun LiveContent(nav: Navigator) {
                 try {
                     val st = session.camera.stats.value
                     val setup = session.camera.setup
-                    app.anylap.learn.Learn.afterRace(
+                    Learn.afterRace(
                         app.repo, app.cloud, engine, result,
-                        app.anylap.learn.Learn.Camera(session.analyzer.config.exposureS, st.fps, session.analyzer.config.metersPerProcPx, setup.previewWidth, setup.previewHeight),
+                        Learn.Camera(session.analyzer.config.exposureS, st.fps, session.analyzer.config.metersPerProcPx, setup.previewWidth, setup.previewHeight),
                     )
                 } catch (t: Throwable) { println("AnyLap: learning after the race failed: $t") }
                 app.pendingRound?.let { (eventId, roundId) -> app.repo.linkRound(eventId, roundId, result.id) }
