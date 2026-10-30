@@ -233,6 +233,15 @@ private fun LiveContent(nav: Navigator) {
                 val result = engine.buildSession(path, recordingStartNs)
                     .let { it.copy(config = it.config.copy(line = line, direction = direction)) }
                 app.repo.saveSession(result)
+                // Self-learning + shared crops (Settings → Car recognition); never lets a failure cost the result.
+                try {
+                    val st = session.camera.stats.value
+                    val setup = session.camera.setup
+                    app.anylap.learn.Learn.afterRace(
+                        app.repo, app.cloud, engine, result,
+                        app.anylap.learn.Learn.Camera(session.analyzer.config.exposureS, st.fps, session.analyzer.config.metersPerProcPx, setup.previewWidth, setup.previewHeight),
+                    )
+                } catch (t: Throwable) { println("AnyLap: learning after the race failed: $t") }
                 app.pendingRound?.let { (eventId, roundId) -> app.repo.linkRound(eventId, roundId, result.id) }
                 app.pendingRound = null
                 app.pendingConfig = null

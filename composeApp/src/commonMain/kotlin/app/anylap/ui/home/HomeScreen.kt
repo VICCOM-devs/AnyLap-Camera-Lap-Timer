@@ -109,6 +109,7 @@ fun HomeScreen() {
         actions = { CircleIconButton(Icons.Rounded.Settings, { nav.push(Screen.Settings) }, contentDescription = tr("Settings")) },
     ) {
         item { UpdateCard() }
+        item { CropsNotice() }
         item {
             if (settings.otherSports) PillTabs(listOf(tr("RC cars"), tr("Running")), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
         }

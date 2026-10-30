@@ -8,6 +8,8 @@ private fun SampleKind.weight(): Float = when (this) {
     // Photos include a bit of the ground around the car, so they count half.
     SampleKind.PHOTO -> 0.5f
     SampleKind.PASS_SLOW, SampleKind.PASS_FAST -> 1f
+    // Scaled so that all learned views together never outweigh the calibration (see withCalibration).
+    SampleKind.LEARNED -> 1f
 }
 
 /** Assisted-calibration plan: what to capture, in order. */
@@ -32,12 +34,19 @@ object CalibrationPlan {
     }
 }
 
-/** Replaces the calibration samples and recomputes the fingerprint used for matching. */
+/**
+ * Replaces the calibration samples and recomputes the fingerprint used for matching. Views learned
+ * from races together weigh at most as much as the calibration itself (photos + passes), however
+ * many there are – a mislabelled crossing can colour the fingerprint a little, never take it over.
+ */
 fun Racer.withCalibration(samples: List<CalibrationSample>): Racer {
-    val fp = Fingerprint.average(samples.map { it.fingerprint to it.kind.weight() })
+    val calWeight = samples.filter { it.kind != SampleKind.LEARNED }.sumOf { it.kind.weight().toDouble() }.toFloat()
+    val learned = samples.count { it.kind == SampleKind.LEARNED }
+    val learnedWeight = if (learned == 0) 0f else minOf(1f, (if (calWeight > 0f) calWeight else 1f) / learned)
+    val fp = Fingerprint.average(samples.map { it.fingerprint to (if (it.kind == SampleKind.LEARNED) learnedWeight else it.kind.weight()) })
     return copy(calibration = samples, fingerprint = fp, fingerprintSamples = samples.size)
 }
 
-/** Per-sample fingerprints for matching (a two-tone car can match its left or its right side). */
+/** Per-sample fingerprints for matching (a two-tone car can match its left or its right side, or a learned view under other light). */
 fun Racer.matchViews(): List<FloatArray> =
     calibration.filter { it.fingerprint.size == Fingerprint.SIZE }.map { it.fingerprint.toFloatArray() }

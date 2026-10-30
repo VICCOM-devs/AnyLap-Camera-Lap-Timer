@@ -17,6 +17,8 @@ import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -130,6 +132,7 @@ class Cloud(private val repo: Repository) {
         createSupabaseClient(BackendConfig.URL, BackendConfig.PUBLISHABLE_KEY) {
             install(Auth)
             install(Postgrest)
+            install(Storage)
         }
     }
 
@@ -317,6 +320,39 @@ class Cloud(private val repo: Repository) {
         } catch (e: Exception) {
             println("AnyLap cloud: live stop failed: $e")
         }
+    }
+
+    // ------------------------------------------------------------------ car-recognition crops
+
+    /**
+     * Shares one finish-line crop (Settings → Car recognition): the picture goes to the private bucket
+     * `anylap-crops` under the user's id, the labels and camera facts to `anylap_crops`. Needs an account
+     * (a guest one is started if there is none – the same as Sync and the live board). Only the service
+     * role can read either; the user's GDPR delete removes both.
+     * @return true when stored (the caller deletes the local file), false to try again later.
+     */
+    suspend fun uploadCrop(item: app.anylap.learn.CropItem): Boolean {
+        if (_account.value.userId == null) {
+            connect()
+            if (client.auth.currentUserOrNull() == null) startGuest().getOrElse { return false }
+        }
+        val uid = client.auth.currentUserOrNull()?.id ?: return false
+        val bytes = Platform.readBytes(item.imagePath) ?: return true // picture gone: nothing to share, drop it
+        val ext = if (item.mime == "image/jpeg") "jpg" else "bmp"
+        val path = "$uid/${item.sessionId}/${item.id}.$ext"
+        client.storage.from("anylap-crops").upload(path, bytes) { upsert = true; contentType = io.ktor.http.ContentType.parse(item.mime) }
+        client.from("anylap_crops").upsert(buildJsonObject {
+            put("id", item.id)
+            put("user_id", uid)
+            put("session_id", item.sessionId)
+            put("at_ms", item.atMs)
+            put("racer_id", item.racerId)
+            put("kind", item.kind)
+            put("path", path)
+            put("meta", item.meta)
+            put("app_build", app.anylap.BuildInfo.BUILD)
+        })
+        return true
     }
 
     // ------------------------------------------------------------------ GDPR

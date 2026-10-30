@@ -49,6 +49,9 @@ actual object Platform {
     // iOS is not patched per change (house rule): no beep yet.
     actual fun beep() {}
 
+    // iOS is not patched per change (house rule): crops are uploaded as BMP until there is a device to test on.
+    actual fun encodeJpeg(width: Int, height: Int, argb: IntArray, quality: Int): ByteArray? = null
+
     actual val name: String = "iOS"
 
     actual fun monotonicNanos(): Long = (CACurrentMediaTime() * 1_000_000_000.0).toLong()

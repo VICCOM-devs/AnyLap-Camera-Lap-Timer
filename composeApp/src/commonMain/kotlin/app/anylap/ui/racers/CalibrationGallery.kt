@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -77,12 +78,14 @@ fun SampleKind.title(): String = when (this) {
     SampleKind.PHOTO -> tr("Photos")
     SampleKind.PASS_SLOW -> tr("Slow passes")
     SampleKind.PASS_FAST -> tr("Fast passes")
+    SampleKind.LEARNED -> tr("Learned from races")
 }
 
 fun SampleKind.icon(): ImageVector = when (this) {
     SampleKind.PHOTO -> Icons.Rounded.CameraAlt
     SampleKind.PASS_SLOW -> Icons.Rounded.SlowMotionVideo
     SampleKind.PASS_FAST -> Icons.Rounded.Speed
+    SampleKind.LEARNED -> Icons.Rounded.AutoAwesome
 }
 
 /** Short caption under a thumbnail: the side for photos, the speed for passes. */
@@ -91,6 +94,9 @@ fun CalibrationSample.caption(racer: Racer, kmh: Boolean = true): String = when 
     SampleKind.PASS_SLOW, SampleKind.PASS_FAST -> speedKmh?.let { v ->
         if (kmh) "${v.fixed(0)} km/h" else "${(v / 1.609f).fixed(0)} mph"
     } ?: if (kind == SampleKind.PASS_SLOW) tr("Slow") else tr("Fast")
+    SampleKind.LEARNED -> if (learnedBy == "verdict") tr("Your verdict") else speedKmh?.let { v ->
+        if (kmh) "${v.fixed(0)} km/h" else "${(v / 1.609f).fixed(0)} mph"
+    } ?: tr("Race")
 }
 
 /** Thumbnail of one calibration sample, with a delete button in the corner. */
@@ -202,6 +208,8 @@ fun CalibrationGallery(
         }
         for (kind in SampleKind.entries) {
             val items = racer.samplesOf(kind)
+            // learned views have no target – the row only shows once a race has taught something
+            if (kind == SampleKind.LEARNED && items.isEmpty()) continue
             val target = if (kind == SampleKind.PHOTO) views.size else CalibrationPlan.PASSES_PER_SPEED
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(kind.icon(), null, tint = RT.TextDim, modifier = Modifier.size(14.dp))
@@ -209,9 +217,15 @@ fun CalibrationGallery(
                 Text(kind.title().uppercase(), style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    "${items.size}/$target",
+                    if (kind == SampleKind.LEARNED) "${items.size}" else "${items.size}/$target",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (items.size >= target) RT.Green else RT.TextFaint,
+                    color = if (kind != SampleKind.LEARNED && items.size >= target) RT.Green else RT.TextFaint,
+                )
+            }
+            if (kind == SampleKind.LEARNED) {
+                Text(
+                    tr("Crossings from your races that the camera, the lap timing and you agreed on – extra views of the car under that day's light. Only the colours are used."),
+                    style = MaterialTheme.typography.bodySmall, color = RT.TextDim,
                 )
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,7 +238,7 @@ fun CalibrationGallery(
                     }
                 } else {
                     items.forEach { s -> SampleTile(s, s.caption(racer, kmh), { onOpen(s) }, { onDelete(s) }, tile) }
-                    if (onAddPass != null && items.size < CalibrationPlan.MAX_PASSES_PER_SPEED) {
+                    if (kind != SampleKind.LEARNED && onAddPass != null && items.size < CalibrationPlan.MAX_PASSES_PER_SPEED) {
                         AddSampleTile(if (items.size < target) tr("Record") else tr("More"), { onAddPass(kind) }, tile, items.size < target)
                     }
                 }
@@ -255,11 +269,14 @@ fun SampleDialog(racer: Racer, sample: CalibrationSample, kmh: Boolean, onDelete
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    if (sample.kind == SampleKind.PHOTO) tr("Delete it if the car wasn't in the box or something else was in the picture.")
-                    else tr("Delete it if this wasn't the {0}, it crashed, or someone walked through.", racer.sport.unitName),
+                    when (sample.kind) {
+                        SampleKind.PHOTO -> tr("Delete it if the car wasn't in the box or something else was in the picture.")
+                        SampleKind.LEARNED -> tr("Learned from a race. Delete it if this isn't the {0}.", racer.sport.unitName)
+                        else -> tr("Delete it if this wasn't the {0}, it crashed, or someone walked through.", racer.sport.unitName)
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
-                if (sample.kind != SampleKind.PHOTO) {
+                if (sample.kind.isPass) {
                     Spacer(Modifier.height(10.dp))
                     val t = remember(sample.topPicture) { sample.topPicture?.let { CarTemplate.decode(it.toFloatArray()) } }
                     Row(verticalAlignment = Alignment.CenterVertically) {

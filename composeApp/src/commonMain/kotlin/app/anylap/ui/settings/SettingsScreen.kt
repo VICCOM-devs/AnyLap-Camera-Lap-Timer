@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Info
@@ -131,6 +132,50 @@ fun SettingsScreen(nav: Navigator) {
                     Switch(
                         checked = settings.otherSports,
                         onCheckedChange = { v -> app.repo.updateSettings { it.copy(otherSports = v) } },
+                        colors = SwitchDefaults.colors(checkedTrackColor = RT.Accent),
+                    )
+                }
+            }
+        }
+
+        item { SectionLabel(tr("Car recognition"), Icons.Rounded.AutoAwesome) }
+        item {
+            RtCard(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tr("Keep learning my cars"), style = MaterialTheme.typography.titleSmall)
+                        Text(tr("Crossings the camera, the lap timing and you agreed on become extra views of each car, on this phone. See them under the car's calibration."), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(
+                        checked = settings.learnCars,
+                        onCheckedChange = { v -> app.repo.updateSettings { it.copy(learnCars = v) } },
+                        colors = SwitchDefaults.colors(checkedTrackColor = RT.Accent),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                val pending by app.anylap.learn.Crops.pending.collectAsState()
+                val uploaded by app.anylap.learn.Crops.uploaded.collectAsState()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tr("Help improve car recognition"), style = MaterialTheme.typography.titleSmall)
+                        Text(tr("Shares small pictures of the cars at the line, with which car it was, to train the recognition model of future versions – so it also works for cars nobody has calibrated yet. No names, no video, no location; shared under your account (a guest account is created if you have none)."), style = MaterialTheme.typography.bodySmall)
+                        if (uploaded > 0 || pending > 0) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                listOfNotNull(
+                                    if (uploaded > 0) tr("{0} shared", uploaded) else null,
+                                    if (pending > 0) tr("{0} waiting", pending) else null,
+                                ).joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall, color = RT.TextDim,
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = settings.shareCrops,
+                        onCheckedChange = { v ->
+                            app.repo.updateSettings { it.copy(shareCrops = v, cropsNoticeSeen = true) }
+                            if (v) app.anylap.learn.Crops.flushSoon(app.cloud) else app.anylap.learn.Crops.clear()
+                        },
                         colors = SwitchDefaults.colors(checkedTrackColor = RT.Accent),
                     )
                 }
