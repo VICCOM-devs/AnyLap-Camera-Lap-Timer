@@ -35,6 +35,8 @@ kotlin {
             // Supabase (accounts + sync). 3.2.x is the last line built for Kotlin 2.2; bump with Kotlin.
             implementation("io.github.jan-tennert.supabase:postgrest-kt:3.2.6")
             implementation("io.github.jan-tennert.supabase:auth-kt:3.2.6")
+            // Car-recognition crops shared to improve the model (Storage bucket anylap-crops)
+            implementation("io.github.jan-tennert.supabase:storage-kt:3.2.6")
             implementation("io.ktor:ktor-client-core:3.3.1")
         }
         iosMain.dependencies {

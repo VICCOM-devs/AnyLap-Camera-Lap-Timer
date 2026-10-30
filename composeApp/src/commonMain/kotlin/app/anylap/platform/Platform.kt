@@ -45,6 +45,9 @@ expect object Platform {
 
     /** A short beep (start lights). No-op where not available. */
     fun beep()
+
+    /** ARGB pixels → JPEG bytes (for uploads); null where no encoder is available (then BMP is used). */
+    fun encodeJpeg(width: Int, height: Int, argb: IntArray, quality: Int): ByteArray?
 }
 
 /** Spoken lap announcements. */

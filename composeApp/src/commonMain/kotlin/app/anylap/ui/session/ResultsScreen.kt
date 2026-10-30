@@ -1,5 +1,6 @@
 package app.anylap.ui.session
 
+import app.anylap.learn.Learn
 import app.anylap.i18n.tr
 import app.anylap.platform.Platform
 import app.anylap.util.fixed
@@ -43,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,6 +65,7 @@ import app.anylap.data.Session
 import app.anylap.data.ReviewItem
 import app.anylap.engine.Format
 import app.anylap.engine.LapMath
+import kotlinx.coroutines.launch
 import app.anylap.engine.Stats
 import app.anylap.ui.charts.BarList
 import app.anylap.ui.charts.ChartSeries
@@ -93,6 +96,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
     val sessions by app.repo.sessions.collectAsState()
     val settings by app.repo.settings.collectAsState()
     val s = sessions.firstOrNull { it.id == sessionId }
+    val scope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -137,8 +141,16 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
                 item(key = "rv-${item.id}") {
                     ReviewCard(
                         s, item,
-                        onReassign = { atMs, to -> app.repo.saveSession(LapMath.reassign(s, item.id, atMs, to)) },
-                        onCheck = { app.repo.saveSession(LapMath.check(s, item.id)) },
+                        onReassign = { atMs, to ->
+                            app.repo.saveSession(LapMath.reassign(s, item.id, atMs, to))
+                            // a verdict is the best teacher: the car learns this view, the picture is shared with the answer
+                            scope.launch(kotlinx.coroutines.Dispatchers.Default) { try { Learn.verdict(app.repo, app.cloud, s, item, to, atMs) } catch (t: Throwable) {} }
+                        },
+                        onCheck = {
+                            app.repo.saveSession(LapMath.check(s, item.id))
+                            val who = item.resolvedTo ?: item.decided
+                            if (!who.isNullOrEmpty()) scope.launch(kotlinx.coroutines.Dispatchers.Default) { try { Learn.verdict(app.repo, app.cloud, s, item, who) } catch (t: Throwable) {} }
+                        },
                         onSwap = { a, b -> app.repo.saveSession(LapMath.swap(s, item.id, a, b)) },
                     )
                 }

@@ -254,6 +254,8 @@ class RaceEngine(
             line = snap?.line?.toList() ?: emptyList(),
             shotMs = snap?.let { (it.timestampNs - startNs) / 1_000_000 },
             frameMs = (snap?.frameNs ?: 0L) / 1e6f,
+            // so a verdict on the card can teach the app this view of the car
+            fingerprint = e.fingerprint?.takeIf { it.size == Fingerprint.SIZE && !e.split && e.area > 0 }?.toList(),
         )
         reviews += item
         reviewTracks[id] = boxes.map { it.trackId }
@@ -572,6 +574,39 @@ class RaceEngine(
 
     @OptIn(ExperimentalUuidApi::class)
     private val sessionId = Uuid.random().toString()
+
+    // ------------------------------------------------------------------ self-learning
+
+    /**
+     * Crossings certain enough to teach the app which car is which ([Learning]): counted for the racer after
+     * the audit, a whole single car, not on any Check card, named by a human / the bib / a clear colour match
+     * (or a confident fit), and ending a lap that fits the racer's own rhythm. Call after [buildSession].
+     */
+    fun learned(): List<Learning.Confirmed> {
+        if (!audited && _state.value.phase == Phase.FINISHED) audit()
+        val out = ArrayList<Learning.Confirmed>()
+        for (r in racers) {
+            val laps = lapsFor(r.id)
+            val lapTimes = laps.map { it.timeMs }
+            for (c in crossesOf(r.id)) {
+                val e = c.event ?: continue
+                val atMs = (c.ns - startNs) / 1_000_000
+                val lap = laps.firstOrNull { it.atMs == atMs }?.timeMs
+                val onCard = reviews.any { kotlin.math.abs(it.atMs - atMs) <= 1 }
+                val locked = log.firstOrNull { it.ns == c.ns }?.locked == r.id && c.source == LapSource.ASSIGNED
+                val by = Learning.certainty(r.id, e, lapTimes, lap, onCard, locked) ?: continue
+                out += Learning.Confirmed(r.id, e, by, atMs)
+            }
+        }
+        return out
+    }
+
+    /** Every logged crossing with a picture and who the race finally counted it for (null = nobody), by session ms. */
+    fun pictured(): List<Triple<Long, String?, CrossingEvent>> {
+        val owner = HashMap<Long, String>()
+        for (r in racers) for (c in crossesOf(r.id)) owner[c.ns] = r.id
+        return log.mapNotNull { l -> val e = l.event ?: return@mapNotNull null; if (e.snapshot == null) null else Triple((e.timestampNs - startNs) / 1_000_000, owner[e.timestampNs], e) }
+    }
 
     // ------------------------------------------------------------------ end-of-race audit
 

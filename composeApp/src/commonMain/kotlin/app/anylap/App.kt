@@ -73,6 +73,7 @@ fun App() {
     val nav = remember { Navigator() }
     LaunchedEffect(Unit) { AppGraph.state.cloud.start() }
     LaunchedEffect(Unit) { app.anylap.update.Updates.onResume() } // launch (Android also checks on every resume)
+    LaunchedEffect(Unit) { if (AppGraph.state.repo.settings.value.let { it.shareCrops && it.cropsNoticeSeen }) app.anylap.learn.Crops.flushSoon(AppGraph.state.cloud) }
     LaunchedEffect(Unit) {
         AppGraph.state.pendingJoin.collect { c -> if (c != null) { AppGraph.state.pendingJoin.value = null; nav.push(Screen.Watch(c)) } }
     }

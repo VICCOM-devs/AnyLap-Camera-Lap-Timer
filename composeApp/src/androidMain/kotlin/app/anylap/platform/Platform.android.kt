@@ -74,6 +74,12 @@ actual object Platform {
 
     actual fun readBytes(path: String): ByteArray? = File(path).takeIf { it.exists() }?.readBytes()
 
+    actual fun encodeJpeg(width: Int, height: Int, argb: IntArray, quality: Int): ByteArray? = try {
+        val bmp = android.graphics.Bitmap.createBitmap(argb, width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val out = java.io.ByteArrayOutputStream()
+        if (bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), out)) out.toByteArray() else null
+    } catch (t: Throwable) { null }
+
     actual fun exists(path: String): Boolean = File(path).let { it.exists() && it.length() > 0 }
 
     actual fun delete(path: String) {

@@ -57,11 +57,14 @@ data class Racer(
     /** Calibrated with an older build (no samples, or an older fingerprint format): nothing to review, only reset. */
     val hasLegacyCalibration: Boolean get() = fingerprint.isNotEmpty() && (calibration.isEmpty() || fingerprint.size != Fingerprint.SIZE)
 
-    /** (along, area) of this racer's calibration passes: size hints for splitting merged racers. */
+    /**
+     * (along, area) of this racer's calibration passes: size hints for splitting merged racers. Learned
+     * samples are left out: they come from other sessions, where the camera may have stood elsewhere.
+     */
     fun sizeHints(): List<FloatArray> = calibration.mapNotNull { s ->
         val a = s.area ?: return@mapNotNull null
         val p = s.along ?: return@mapNotNull null
-        if (s.kind == SampleKind.PHOTO || a <= 0) null else floatArrayOf(p, a.toFloat())
+        if (!s.kind.isPass || a <= 0) null else floatArrayOf(p, a.toFloat())
     }
 
     fun samplesOf(kind: SampleKind): List<CalibrationSample> = calibration.filter { it.kind == kind }
@@ -71,7 +74,7 @@ data class Racer(
      * true size averaged over every pass that has one. Null until a pass has been recorded.
      */
     fun topTemplate(): app.anylap.vision.CarTemplate? {
-        val all = calibration.filter { it.kind != SampleKind.PHOTO }.mapNotNull { s -> s.topPicture?.let { app.anylap.vision.CarTemplate.decode(it.toFloatArray()) }?.let { s.kind to it } }
+        val all = calibration.filter { it.kind.isPass }.mapNotNull { s -> s.topPicture?.let { app.anylap.vision.CarTemplate.decode(it.toFloatArray()) }?.let { s.kind to it } }
         if (all.isEmpty()) return null
         val p = (all.firstOrNull { it.first == SampleKind.PASS_SLOW } ?: all.first()).second
         return app.anylap.vision.CarTemplate(p.w, p.h, p.y, p.u, p.v, p.mask, all.map { it.second.lengthPx }.average().toFloat(), all.map { it.second.widthPx }.average().toFloat(), p.lumaRef)
@@ -79,7 +82,18 @@ data class Racer(
 }
 
 @Serializable
-enum class SampleKind { PHOTO, PASS_SLOW, PASS_FAST }
+enum class SampleKind {
+    PHOTO, PASS_SLOW, PASS_FAST,
+    /**
+     * Learned from a race: a crossing the camera, the lap timing and (where there was one) the human all
+     * agreed on, kept as one more view of the racer under that session's light. Counts for colour only
+     * (not size, not the top-down picture – the camera may stand elsewhere next time).
+     */
+    LEARNED;
+
+    /** A calibration pass driven for the camera (slow or fast). */
+    val isPass: Boolean get() = this == PASS_SLOW || this == PASS_FAST
+}
 
 @Serializable
 data class CalibrationSample(
@@ -101,6 +115,9 @@ data class CalibrationSample(
     val along: Float? = null,
     /** Passes: top-down picture of the racer + its true size ([app.anylap.vision.CarTemplate.encode]), for the fit of touching or doubtful crossings. Local only. */
     val topPicture: List<Float>? = null,
+    /** Learned samples: the session the crossing was learned from, and how it was confirmed ("auto", "verdict"). */
+    val sessionId: String? = null,
+    val learnedBy: String? = null,
 )
 
 @Serializable
@@ -243,6 +260,8 @@ data class ReviewItem(
     val note: String? = null,
     /** Two racer ids whose names may be the wrong way round for the whole race (one tap swaps them). */
     val swap: List<String> = emptyList(),
+    /** Colour fingerprint of the car the card is about, so a verdict can teach the app (local only). */
+    val fingerprint: List<Float>? = null,
 ) {
     val open: Boolean get() = resolvedTo == null && !checked
 }
@@ -295,6 +314,17 @@ data class AppSettings(
     val finishEdge: FinishEdge = FinishEdge.FRONT,
     /** Settings → Sports: show running (and later other sports) next to RC everywhere. Off = an RC app. */
     val otherSports: Boolean = false,
+    /**
+     * Settings → Car recognition: keep learning each car from its confirmed crossings (local, on this phone).
+     */
+    val learnCars: Boolean = true,
+    /**
+     * Settings → Car recognition: share small pictures of the cars at the line (with which car it was) so the
+     * recognition model that ships in future versions gets better for everyone. Uploads wait until the
+     * notice has been shown ([cropsNoticeSeen]).
+     */
+    val shareCrops: Boolean = true,
+    val cropsNoticeSeen: Boolean = false,
 )
 
 val RacerPalette: List<Long> = listOf(

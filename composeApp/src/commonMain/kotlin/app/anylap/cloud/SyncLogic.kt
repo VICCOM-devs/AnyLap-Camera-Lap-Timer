@@ -43,7 +43,7 @@ object SyncLogic {
         videoPath = null,
         videoOffsetMs = 0,
         racers = s.racers.map { it.copy(photoPath = null, fingerprint = emptyList(), fingerprintSamples = 0, calibration = emptyList()) },
-        reviews = s.reviews.map { it.copy(imagePath = null) },
+        reviews = s.reviews.map { it.copy(imagePath = null, fingerprint = null) },
     )
 
     fun hash(r: Racer): String = json.encodeToString(Racer.serializer(), cloudRacer(r)).hashCode().toString(16)
