@@ -91,10 +91,6 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     os.environ.setdefault("MINIS_TEX", os.path.join(a.out, "_tex"))
     import minis10
-    for attr, wins in (("FONT_B", "arialbd.ttf"), ("FONT_C", "arialbd.ttf"), ("FONT_I", "arialbi.ttf")):
-        if not os.path.exists(getattr(minis10, attr)):
-            for cand in (os.path.join("C:/Windows/Fonts", wins), "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"):
-                if os.path.exists(cand): setattr(minis10, attr, cand); break
     elevations, samples = (ELEVATIONS, a.samples) if not a.quick else ([30, 60, 90], 8)
     az_for = azimuths_for if not a.quick else (lambda e: list(range(0, 360, 90)))
 

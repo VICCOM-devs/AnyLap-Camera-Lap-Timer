@@ -14,9 +14,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 TEX_DIR = os.environ.get("MINIS_TEX", "/home/claude/blend/minis_tex")
-FONT_B = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_C = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
-FONT_I = "/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf"
+def _font(*cands):
+    """First font file that exists: Linux (DejaVu), Windows (Arial), macOS – the liveries render anywhere."""
+    for c in cands:
+        if os.path.exists(c): return c
+    return cands[0]
+_WF = os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts")
+FONT_B = _font("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", os.path.join(_WF, "arialbd.ttf"), "/System/Library/Fonts/Supplemental/Arial Bold.ttf")
+FONT_C = _font("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf", os.path.join(_WF, "ARIALNB.TTF"), os.path.join(_WF, "arialbd.ttf"), "/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf")
+FONT_I = _font("/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf", os.path.join(_WF, "arialbi.ttf"), os.path.join(_WF, "arialbd.ttf"), "/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf")
 TEX = 2048
 
 # ---------------------------------------------------------------- specs
