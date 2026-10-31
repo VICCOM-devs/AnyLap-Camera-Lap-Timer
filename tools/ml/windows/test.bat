@@ -7,6 +7,7 @@ set ML=C:\anylap-ml
 set REPO=C:\AnyLap
 set BLENDER="C:\Program Files\Blender Foundation\Blender 4.5\blender.exe"
 cd /d %REPO%
+title AnyLap - starting
 git pull
 
 echo.

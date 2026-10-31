@@ -12,22 +12,25 @@ set STEPS=%2
 if "%STEPS%"=="" set STEPS=25000
 
 cd /d %REPO%
+title AnyLap - starting
 git pull
 powercfg /change standby-timeout-ac 0 >nul 2>nul
 
 echo.
-echo === 1/3  Rendering cars for %HOURS% hours (one line per finished car) ===
+echo === 1/3  Rendering cars for %HOURS% hours  (started %TIME:~0,5%) ===
+echo      live counter: car, picture X of 68, cars so far, time left. One permanent line per finished car.
 set PYTHONPATH=%ML%\blender-libs
 %BLENDER% -b --python-use-system-env -P %REPO%\tools\ml\sprites\render_sprites.py -- --out %ML%\sprites --cars 5000 --samples 12 --hours %HOURS%
 set PYTHONPATH=
 
 echo.
-echo === 2/3  Training (%STEPS% steps) - progress and time left on each line ===
+echo === 2/3  Training %STEPS% steps  (started %TIME:~0,5%) ===
+echo      live counter every 10 steps, a line every 100, a CHECK on unseen cars every 2000.
 %ML%\venv\Scripts\python %REPO%\tools\ml\train\train.py --sprites %ML%\sprites --photos %ML%\grounds --out %ML%\runs\v1 --steps %STEPS% --workers 6
 if errorlevel 1 ( echo Training stopped with an error - copy the lines above to Claude. & pause & exit /b 1 )
 
 echo.
-echo === 3/3  Results page ===
+echo === 3/3  Results page  (started %TIME:~0,5%) ===
 %ML%\venv\Scripts\python %REPO%\tools\ml\train\report.py %ML%\runs\v1 %ML%\sprites --photos %ML%\grounds
 start "" %ML%\runs\v1\report.html
 echo.

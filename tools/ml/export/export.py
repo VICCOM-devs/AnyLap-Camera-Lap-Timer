@@ -13,7 +13,7 @@ import torch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "train")); sys.path.insert(0, os.path.join(HERE, "..", "synth"))
-from model import CarNet
+from model import CarNet, from_checkpoint
 
 def sha256(p):
     h = hashlib.sha256(); h.update(open(p, "rb").read()); return h.hexdigest()
@@ -27,7 +27,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     ck = torch.load(a.checkpoint, map_location="cpu", weights_only=False)
     size = ck.get("size", 64)
-    net = CarNet(width=ck.get("width", 1.0)); net.load_state_dict(ck["model"]); net.eval()
+    net = from_checkpoint(ck); net.eval()
     x = torch.rand(1, 3, size, size)
     onnx_path = os.path.join(a.out, "carnet.onnx")
     torch.onnx.export(net, x, onnx_path, input_names=["image"], output_names=["signature", "count", "nose"], opset_version=17, dynamo=False)

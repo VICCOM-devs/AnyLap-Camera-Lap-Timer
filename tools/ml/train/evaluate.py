@@ -96,13 +96,13 @@ if __name__ == "__main__":
     import argparse, os, sys
     here = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, here); sys.path.insert(0, os.path.join(here, "..", "synth"))
     from compose import SpriteDataset
-    from model import CarNet
+    from model import CarNet, from_checkpoint
     ap = argparse.ArgumentParser()
     ap.add_argument("checkpoint"); ap.add_argument("sprites"); ap.add_argument("--ids", help="file with held-out car ids, one per line")
     ap.add_argument("--races", type=int, default=20); ap.add_argument("--lookalike", action="store_true"); ap.add_argument("--photos")
     a = ap.parse_args()
     ck = torch.load(a.checkpoint, map_location="cpu", weights_only=False)
-    net = CarNet(width=ck.get("width", 1.0)); net.load_state_dict(ck["model"])
+    net = from_checkpoint(ck)
     ids = [l.strip() for l in open(a.ids)] if a.ids else ck.get("held_out")
     ds = SpriteDataset(a.sprites, ids=ids, size=ck.get("size", 64), photo_dir=a.photos)
     dev = "cuda" if torch.cuda.is_available() else "cpu"; net.to(dev)

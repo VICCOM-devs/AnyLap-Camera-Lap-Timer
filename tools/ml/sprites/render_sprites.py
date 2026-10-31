@@ -215,6 +215,17 @@ class quiet:
         os.dup2(self.o1, 1); os.dup2(self.o2, 2); os.close(self.null); os.close(self.o1); os.close(self.o2)
         return False
 
+def set_title(text):
+    """Window title (Windows console; shows on the taskbar). No-op elsewhere."""
+    try:
+        import ctypes; ctypes.windll.kernel32.SetConsoleTitleW(text)
+    except Exception:
+        pass
+
+def live(text):
+    """Overwrite the current console line (the per-picture counter)."""
+    sys.stdout.write("\r" + text[:118].ljust(118)); sys.stdout.flush()
+
 def main():
     import bpy
     from mathutils import Vector
@@ -297,6 +308,15 @@ def main():
 
     log = open(os.path.join(a.out, "render.log"), "a")
     t_all = time.time(); done_n = 0
+    lib0 = sum(1 for d in os.listdir(a.out) if os.path.exists(os.path.join(a.out, d, "done")))
+    print(f"library: {lib0} cars already rendered in {a.out}" + (f"; rendering for {a.hours:g} h" if a.hours else ""), flush=True)
+    def status(cur=""):
+        el = time.time() - t_all
+        per = el / done_n if done_n else 0
+        left = (a.hours * 3600 - el) if a.hours else 0
+        est = f" · ~{done_n + int(left / per)} cars by the end" if a.hours and per else ""
+        tl = f" · {left / 3600:.1f} h left" if a.hours else ""
+        return f"{lib0 + done_n} cars in library · {done_n} this run · {per:.0f} s/car{tl}{est}{cur}"
     for i in range(a.first, a.first + a.cars):
         if a.hours and time.time() - t_all > a.hours * 3600:
             print(f"time limit {a.hours} h reached", file=log, flush=True); print(f"time limit {a.hours} h reached", flush=True); break
@@ -318,6 +338,8 @@ def main():
         parts = [ch for ch in root.children_recursive if ch.type == "MESH"]
         L = sp["L"] / 100
         t0 = time.time(); n = 0
+        n_views = sum(len(az_for(e)) for e in elevations)
+        set_title(f"AnyLap 1/3 rendering · {status()}")
         for elev in elevations:
             for az in az_for(elev):
                 view = f"e{elev:02d}_a{az:03d}"
@@ -348,12 +370,14 @@ def main():
                                px_per_cm=px_per_cm, sprite=SPRITE, cam_dist_m=CAM_DIST, lens_mm=cam.data.lens),
                           open(os.path.join(cdir, f"{view}.json"), "w"))
                 n += 1
+                live(f"  {sp['name']} {sp['cls']:<10} picture {n}/{n_views}   ·   " + status())
         open(done_flag, "w").write("ok")
         print(f"{time.strftime('%Y-%m-%d %H:%M')} {sp['name']} {sp['cls']} {n} views {time.time() - t0:.0f} s", file=log, flush=True)
         done_n += 1
         el = (time.time() - t_all) / 3600
-        print(f"{time.strftime('%H:%M')}  {sp['name']} {sp['cls']:<10} {n} views {time.time() - t0:.0f} s   ·  {done_n} cars this run, {el:.1f} h"
-              + (f", stops after {a.hours:g} h" if a.hours else ""), flush=True)
+        sys.stdout.write("\r" + " " * 118 + "\r")
+        print(f"{time.strftime('%H:%M')}  {sp['name']} {sp['cls']:<10} done in {time.time() - t0:.0f} s   ·  " + status(), flush=True)
+        set_title(f"AnyLap 1/3 rendering · {status()}")
     print(f"DONE {a.cars} cars in {(time.time() - t_all) / 60:.1f} min", file=log, flush=True)
 
 if __name__ == "__main__":

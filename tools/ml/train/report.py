@@ -14,7 +14,7 @@ from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, "..", "synth"))
-from model import CarNet
+from model import CarNet, from_checkpoint
 from compose import SpriteDataset, INTRUDERS
 from evaluate import evaluate, embed
 
@@ -81,10 +81,10 @@ def main():
     ck = torch.load(os.path.join(a.run, "best.pt"), map_location="cpu", weights_only=False)
     log = [json.loads(l) for l in open(os.path.join(a.run, "log.jsonl")) if l.strip()]
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    net = CarNet(width=ck.get("width", 1.0)); net.load_state_dict(ck["model"]); net.to(dev).eval()
+    net = from_checkpoint(ck); net.to(dev).eval()
     held = ck.get("held_out"); size = ck.get("size", 64)
     ds = SpriteDataset(a.sprites, ids=held, size=size, photo_dir=a.photos)
-    print("final evaluation on", len(held), "held-out cars …", flush=True)
+    print(f"final evaluation on {len(held)} held-out cars: {a.races} races + intruders (a few minutes) …", flush=True)
     m = evaluate(net, ds, dev, races=a.races, n_intruder=60)
     la = evaluate(net, ds, dev, races=max(8, a.races // 3), lookalike=True, n_intruder=0)["accuracy"]
     rng = np.random.default_rng(7)
@@ -104,11 +104,12 @@ def main():
 
     body = f"""
 <h1>AnyLap car recognition · {html.escape(os.path.basename(os.path.normpath(a.run)))}</h1>
+<p class=note>Network: <b>{html.escape(ck.get('backbone', 'carnet'))}</b>{' (pretrained on real photos, then trained on our cars)' if ck.get('backbone', 'carnet') != 'carnet' else ' (our own, trained from scratch)'} · input {size} px</p>
 <p class=note>Trained on {n_train} generated cars, tested on {len(held)} cars it has never seen – the way the app works:
 a few calibration pictures of each car in a race, then every crossing named by the nearest signature.
 Step {ck.get('step')} of training. Pictures are composed: random ground, light, angle, size, blur, touching cars, intruders.</p>
 <div class=tiles>
- <div class=tile><b>{m['accuracy']:.1f} %</b><span>crossings named right<br>(8-car races, unseen cars)</span></div>
+ <div class=tile><b>{m['accuracy']:.1f} %</b><span>crossings named right<br>(8-car races, unseen cars; guessing = 12.5 %)</span></div>
  <div class=tile><b>{la:.1f} %</b><span>look-alike races<br>(all cars one colour family)</span></div>
  <div class=tile><b>{m['intruder_called_car_mean']:.1f} %</b><span>intruders called a car<br>(cat, rat, shoe … – lower is better)</span></div>
  <div class=tile><b>{m['count_accuracy']:.1f} %</b><span>"one / two / no car" right</span></div>

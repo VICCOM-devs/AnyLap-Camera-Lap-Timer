@@ -32,8 +32,8 @@ if not exist %ML%\venv\Scripts\python.exe py -3.12 -m venv %ML%\venv
 %ML%\venv\Scripts\python -m pip install --upgrade pip
 %ML%\venv\Scripts\python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 if errorlevel 1 ( echo PyTorch did not install - copy the lines above to Claude. & exit /b 1 )
-%ML%\venv\Scripts\python -m pip install numpy pillow onnx
-if errorlevel 1 ( echo numpy/pillow/onnx did not install - copy the lines above to Claude. & exit /b 1 )
+%ML%\venv\Scripts\python -m pip install numpy pillow onnx timm
+if errorlevel 1 ( echo numpy/pillow/onnx/timm did not install - copy the lines above to Claude. & exit /b 1 )
 
 echo.
 echo === 4/4  Check ===

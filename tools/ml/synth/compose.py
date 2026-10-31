@@ -344,9 +344,10 @@ class SpriteDataset:
 
         comp = ground.copy(); shadows = np.zeros((canvas, canvas), np.float32); layers = []
         cars = []
-        empty = rng.random() < self.p_empty
+        # asked for a specific car (evaluation, calibration): that car is always there
+        empty = identity is None and force_intruder is None and rng.random() < self.p_empty
         intruder = None
-        if not empty and (force_intruder or rng.random() < self.p_intruder):
+        if not empty and (force_intruder or (identity is None and rng.random() < self.p_intruder)):
             intruder = force_intruder or INTRUDERS[rng.integers(len(INTRUDERS))]
             empty = True
         if not empty:
