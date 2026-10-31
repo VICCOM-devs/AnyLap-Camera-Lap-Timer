@@ -118,10 +118,16 @@ class Grounds:
             if p not in self._cache:
                 im = Image.open(p).convert("RGB"); im.thumbnail((1024, 1024)); self._cache[p] = im
             im = self._cache[p]
-            s = rng.uniform(0.15, 1.0); cw, ch = max(8, int(im.width * s)), max(8, int(im.height * s))
-            x0, y0 = rng.integers(0, im.width - cw + 1), rng.integers(0, im.height - ch + 1)
-            crop = im.crop((x0, y0, x0 + cw, y0 + ch)).rotate(rng.uniform(0, 360), resample=Image.BILINEAR, expand=False).resize((w, h), Image.BILINEAR)
-            return np.asarray(crop, np.float32) / 255
+            # a square crop, rotated, then the middle 1/sqrt(2) taken so no empty corners show
+            s = rng.uniform(0.2, 1.0); side = max(8, int(min(im.width, im.height) * s))
+            x0, y0 = rng.integers(0, im.width - side + 1), rng.integers(0, im.height - side + 1)
+            rot = im.crop((x0, y0, x0 + side, y0 + side)).rotate(float(rng.uniform(0, 360)), resample=Image.BILINEAR, expand=False)
+            k = int(side * (1 - 0.7071) / 2) + 1
+            crop = rot.crop((k, k, side - k, side - k)).resize((w, h), Image.BILINEAR)
+            arr = np.asarray(crop, np.float32) / 255
+            # photos and textures differ from a phone frame: random tint, brightness and a little contrast
+            arr = np.clip((arr - 0.5) * rng.uniform(0.8, 1.15) + 0.5, 0, 1) * rng.uniform(0.7, 1.2) * rng.uniform(0.92, 1.08, 3)[None, None]
+            return np.clip(arr, 0, 1).astype(np.float32)
         return procedural_ground(rng, h, w)
 
 
