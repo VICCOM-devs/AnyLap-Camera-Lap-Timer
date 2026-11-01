@@ -45,6 +45,7 @@ class FrameAnalyzer(
     }
 
     private fun effective(c: AnalyzerConfig): AnalyzerConfig {
+        accentsFor(c.racers)
         if (c === effSrc) return eff
         val z = zoom; val z2 = z * z
         eff = if (region == null) c else c.copy(
@@ -819,7 +820,8 @@ class FrameAnalyzer(
         val best = ArrayList<String?>()
         for (a in acc) {
             val fp = Fingerprint.normalize(a)
-            val top = cfg.racers.mapNotNull { r -> score(fp, r)?.let { r.id to it } }.maxByOrNull { it.second }
+            // no accents here: a cut can put one car's mark in the other car's half – the colours alone decide the cut
+            val top = cfg.racers.mapNotNull { r -> score(fp, r, accent = false)?.let { r.id to it } }.maxByOrNull { it.second }
             total += top?.second ?: 0f
             // a part that doesn't clearly look like any racer (shadow, legs) makes the cut invalid
             best += top?.takeIf { it.second >= SPLIT_PART_MATCH }?.first
@@ -1006,10 +1008,12 @@ class FrameAnalyzer(
         val rows = ArrayList<FloatArray>(1 + others.size)
         rows += fp
         for (o in others) rows += Fingerprint.normalize(o.track.hist)
+        // a piece of a cut blob is named on its colours only: its mark may belong to the neighbour it was cut from
+        val whole = listOf(!p.split) + others.map { !it.split }
         val n = rows.size
         // columns: free racers, then one "none" column per row (score 0)
         val m = free.size + n
-        val sc = Array(n) { r -> FloatArray(m) { c -> if (c < free.size) (score(rows[r], free[c]) ?: 0f) else 0f } }
+        val sc = Array(n) { r -> FloatArray(m) { c -> if (c < free.size) (score(rows[r], free[c], whole[r]) ?: 0f) else 0f } }
         val (total, assign) = maxAssignment(sc)
         val col = assign[0]
         if (col >= free.size) return null to 0f
@@ -1122,7 +1126,7 @@ class FrameAnalyzer(
         val t = p.track
         val fp = if (t.histFrames > 0) Fingerprint.normalize(t.hist) else null
         val candidates = if (fp != null) {
-            cfg.racers.mapNotNull { r -> score(fp, r)?.let { r.id to it } }.sortedByDescending { it.second }
+            cfg.racers.mapNotNull { r -> score(fp, r, accent = !p.split)?.let { r.id to it } }.sortedByDescending { it.second }
         } else emptyList()
 
         val markerEntry = t.markerVotes.maxByOrNull { it.value }
@@ -1253,13 +1257,76 @@ class FrameAnalyzer(
      * Colour match against a racer: the combined fingerprint, blended with the best single view
      * (left side, right side, a pass…) so a car that looks different from each side still matches.
      */
-    private fun score(fp: FloatArray, r: RacerRef): Float? {
+    private fun score(fp: FloatArray, r: RacerRef, accent: Boolean = true): Float? {
         val avg = r.fingerprint?.let { Fingerprint.similarity(fp, it) }
         val best = r.views.maxOfOrNull { Fingerprint.similarity(fp, it) }
-        return when {
+        val base = when {
             avg != null && best != null -> 0.5f * avg + 0.5f * max(avg, best)
             else -> avg ?: best
+        } ?: return null
+        return if (accent) base - accentPenalty(fp, r.id) else base
+    }
+
+    // ------------------------------------------------------------------ look-alikes with a small mark
+
+    /**
+     * A look-alike's accent: what sets it apart from the cars it looks like (a 1 × 1 cm patch, a coloured
+     * number). [mean] = the group's average fingerprint, [dir] = this racer's calibration minus [mean], unit
+     * length. Only kept when the racer's own calibration passes agree on it, so identical cars without a mark
+     * get none (their differences are noise).
+     */
+    private class Accent(val mean: FloatArray, val dir: FloatArray, val norm: Float)
+    private var accents: Map<String, Accent> = emptyMap()
+    private var accentSrc: List<RacerRef>? = null
+
+    private fun accentsFor(racers: List<RacerRef>) {
+        if (racers === accentSrc) return
+        accentSrc = racers
+        val fps = racers.filter { it.fingerprint != null && it.views.size >= 2 }
+        val out = HashMap<String, Accent>()
+        // groups: connected by overall similarity ≥ LOOKALIKE_SIM
+        val left = fps.toMutableList()
+        while (left.isNotEmpty()) {
+            val g = mutableListOf(left.removeAt(0)); var grew = true
+            while (grew) {
+                grew = false
+                val iter = left.iterator()
+                while (iter.hasNext()) {
+                    val r = iter.next()
+                    if (g.any { m -> Fingerprint.similarity(m.fingerprint!!, r.fingerprint!!) >= LOOKALIKE_SIM }) { g += r; iter.remove(); grew = true }
+                }
+            }
+            if (g.size < 2) continue
+            val mean = FloatArray(Fingerprint.SIZE); for (r in g) for (i in mean.indices) mean[i] += r.fingerprint!![i] / g.size
+            for (r in g) {
+                val d = FloatArray(mean.size) { r.fingerprint!![it] - mean[it] }; val n = norm(d)
+                if (n < 1e-6f) continue
+                // the racer's passes must point the same way (a real mark, not noise)
+                val agree = r.views.map { v -> cosine(FloatArray(mean.size) { v[it] - mean[it] }, d) }.average()
+                if (agree >= ACCENT_AGREE) out[r.id] = Accent(mean, FloatArray(d.size) { d[it] / n }, n)
+            }
         }
+        accents = out
+    }
+
+    /**
+     * How much less a crossing looks like [id] once the shared look of its look-alike group is taken away:
+     * 0 when the crossing shows the racer's accent, up to [ACCENT_W] when it shows another direction. Nothing
+     * when the crossing itself has no accent to speak of (a mark hidden or too small to see): no name from noise.
+     */
+    private fun accentPenalty(fp: FloatArray, id: String): Float {
+        val a = accents[id] ?: return 0f
+        val d = FloatArray(fp.size) { fp[it] - a.mean[it] }
+        if (norm(d) < ACCENT_SEEN * a.norm) return 0f
+        val c = cosine(d, a.dir)
+        return ACCENT_W * (1f - c.coerceIn(-1f, 1f)) / 2f
+    }
+
+    private fun norm(v: FloatArray): Float { var s = 0f; for (x in v) s += x * x; return sqrt(s) }
+    private fun cosine(a: FloatArray, b: FloatArray): Float {
+        var ab = 0f; var aa = 0f; var bb = 0f
+        for (i in a.indices) { ab += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i] }
+        return if (aa < 1e-12f || bb < 1e-12f) 0f else ab / sqrt(aa * bb)
     }
 
     /**
@@ -1381,6 +1448,14 @@ class FrameAnalyzer(
         const val PROC_W = 480
         const val MIN_SIMILARITY = 0.30f
         const val MIN_MARGIN = 0.06f
+        /** Racers this alike overall (calibration) form a look-alike group, where only their accents tell them apart. */
+        const val LOOKALIKE_SIM = 0.9f
+        /** Score lost by a crossing pointing the opposite way from a racer's accent (half when unrelated). */
+        const val ACCENT_W = 0.3f
+        /** A racer's calibration passes must agree on its accent this much (mean cosine) for it to count. */
+        const val ACCENT_AGREE = 0.5f
+        /** A crossing whose difference from the group's look is below this share of the racer's accent shows no accent. */
+        const val ACCENT_SEEN = 0.35f
 
         /**
          * Default [AnalyzerConfig.minMatch]. Two things of the same brightness already share the

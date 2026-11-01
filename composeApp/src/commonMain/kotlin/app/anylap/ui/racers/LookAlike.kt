@@ -47,7 +47,7 @@ fun LookAlikeWarning(racers: List<Racer>, modifier: Modifier = Modifier) {
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                tr("Put a strip of bright tape (pink, orange, yellow, green, cyan or blue – a different colour on each car) along the roof or side of one of them, then re-run its calibration passes. Otherwise the two may get each other's laps."),
+                tr("Put a small bright patch on one of them – tape or a sticker, 1 × 1 cm is enough, on the roof (pink, orange, yellow, green, cyan or blue – a different colour on each car) – then re-run its calibration passes. Otherwise the two may get each other's laps."),
                 style = MaterialTheme.typography.bodySmall, color = RT.TextDim,
             )
         }
