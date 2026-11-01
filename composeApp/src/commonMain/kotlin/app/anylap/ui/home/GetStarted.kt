@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import app.anylap.data.CalibrationPlan
 import app.anylap.data.Racer
 import app.anylap.data.Sport
+import app.anylap.data.count
 import app.anylap.i18n.tr
 import app.anylap.i18n.trn
 import app.anylap.ui.LocalApp
