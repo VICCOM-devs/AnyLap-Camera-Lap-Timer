@@ -21,8 +21,13 @@ import kotlin.math.max
  * whole frame is used (null) – exactly what the analyzer did before.
  */
 object Roi {
-    /** Room across the line on each side, in line lengths. */
-    const val ACROSS = 1.5f
+    /**
+     * Room across the line on each side, in line lengths. 0.75 (Nov 1 2026, real-video bench): 1.5 made a
+     * short, flat line on a wide view (Mini-Z HK touring clip) ask for most of the frame → no zoom; at 0.75
+     * that clip zooms 1.75× (found 97 → 99 %, named after the audit 69 → 78 %) and the Mini-Z Cup clip
+     * still passes at 100 % (zoom 2.7, ~4 frames of approach at 30 fps).
+     */
+    const val ACROSS = 0.75f
     /** Room beyond each end of the line, in line lengths. */
     const val ALONG = 0.3f
     /** A region at least this wide (share of the frame) is not worth it: use the whole frame. */

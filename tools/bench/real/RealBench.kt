@@ -38,9 +38,21 @@ class Clip(val file: File) {
     /** Lights out (s), or null = practice: the audit then has no start to measure lap 1 from. */
     val start = Regex("\"start\"\\s*:\\s*([-0-9.eE]+)").find(s)?.groupValues?.get(1)?.toDouble()
     val fps = num("fps"); val from = num("from"); val to = num("to"); val scoreUntil = num("scoreUntil")
+    /** Crossings before this (s) are not scored, e.g. the start wave when the grid stands just behind the line. */
+    val scoreFrom = Regex("\"scoreFrom\"\\s*:\\s*([-0-9.eE]+)").find(s)?.groupValues?.get(1)?.toDouble() ?: from
+    /**
+     * Cars that are identical in the clip (same body, same colour – nobody could tell them apart from the
+     * picture): a name inside the right group counts as right, and laps are compared per group. Which twin
+     * is which can only come from lap rhythm – the truth's and the audit's – so it isn't scored.
+     */
+    val twinGroups: List<List<String>> = Regex("\"twins\"\\s*:\\s*\\[(.*?)]\\s*]", RegexOption.DOT_MATCHES_ALL).find(s)?.groupValues?.get(1)
+        ?.let { body -> Regex("\\[([^\\]]*)").findAll(body + "]").map { g -> Regex("\"(\\w+)\"").findAll(g.groupValues[1]).map { it.groupValues[1] }.toList() }.filter { it.size >= 2 }.toList() } ?: emptyList()
+    fun group(car: String?) = car?.let { c -> twinGroups.firstOrNull { c in it }?.joinToString("/") ?: c }
     val line = nums("line").let { LineSpec(it[0].toFloat(), it[1].toFloat(), it[2].toFloat(), it[3].toFloat()) }
     val calPerCar = num("passesPerCar").toInt(); val calAfter = num("after"); val calAlone = num("aloneWithin")
     val expFound = num("found"); val expExtra = num("extra").toInt(); val expAudit = num("auditRight")
+    /** Most laps the audit may count for a crossing no car drove (default 0). */
+    val expNobody = Regex("\"nobody\"\\s*:\\s*([0-9]+)").find(s)?.groupValues?.get(1)?.toInt() ?: 0
     val expLaps = Regex("\"lapsExact\"\\s*:\\s*true").containsMatchIn(s)
     class Cross(val t: Double, val car: String, val along: Double)
     val crossings = Regex("\\[([-0-9.]+),\\s*\"(\\w+)\",\\s*([-0-9.]+)]").findAll(s).map { Cross(it.groupValues[1].toDouble(), it.groupValues[2], it.groupValues[3].toDouble()) }.toList()
@@ -108,7 +120,7 @@ fun main(args: Array<String>) {
     val clip = Clip(File(args[0])); val video = File(args[1])
     val whole = "--whole-frame" in args
     val out = args.indexOf("--out").takeIf { it >= 0 }?.let { File(args[it + 1]) }?.also { it.mkdirs() }
-    val truth = clip.crossings.filter { it.t < clip.scoreUntil }
+    val truth = clip.crossings.filter { it.t < clip.scoreUntil && it.t >= clip.scoreFrom }
     println("== ${clip.name}: ${truth.size} true crossings, ${clip.cars.size} cars, ${clip.fps.toInt()} fps, " + if (whole) "WHOLE FRAME (zoomToLine off)" else "zoomed to the line")
 
     // ---- 1. calibration
@@ -136,8 +148,9 @@ fun main(args: Array<String>) {
     System.err.println("race pass")
     val ev = runClip(clip, video, AnalyzerConfig(line = clip.line, racers = racers, sizeHints = hints, minMatch = FrameAnalyzer.MIN_MATCH, zoomToLine = !whole))
         .filter { it.timestampNs / 1e9 < clip.scoreUntil }
+    val evScored = ev.filter { it.timestampNs / 1e9 >= clip.scoreFrom - 0.2 }
     val scored = truth.indices.filter { it !in calUsed }
-    val acc = ev.filter { it.accepted && !it.rescue }
+    val acc = evScored.filter { it.accepted && !it.rescue }.filter { it.timestampNs / 1e9 >= clip.scoreFrom || truth.any { x -> abs(x.t - it.timestampNs / 1e9) < 0.2 } }
     val mp = pair(truth, acc, { it.timestampNs / 1e9 }, { it.along.toDouble() })
     val found = mp.size; val extra = acc.size - mp.size
     var right = 0; var wrong = 0; var unknown = 0; var missed = 0
@@ -146,7 +159,7 @@ fun main(args: Array<String>) {
         val x = truth[i]; val e = mp[i]?.let { acc[it] }
         when {
             e == null -> { missed++; notes += "MISSED   %7.2f s %s".format(x.t, x.car) }
-            e.racerId == x.car -> right++
+            clip.group(e.racerId) == clip.group(x.car) -> right++
             e.racerId == null -> { unknown++; notes += "UNKNOWN  %7.2f s %-14s best %s".format(x.t, x.car, e.candidates.take(2).joinToString { "%s %.2f".format(it.first, it.second) }) }
             else -> { wrong++; notes += "WRONG    %7.2f s %-14s named %s".format(x.t, x.car, e.racerId) }
         }
@@ -164,12 +177,13 @@ fun main(args: Array<String>) {
         val g = fps.filter { b -> b.id !in seen && (b.id == a.id || Fingerprint.similarity(a.fingerprint!!, b.fingerprint!!) >= 0.88f) }.map { it.id }
         if (g.size >= 2) { twins += g.take(3); seen += g.take(3) } }
     val outs = LapSolver.solve(ins, ids, clip.start?.let { (it * 1e9).toLong() }, 2_500_000_000L, (clip.scoreUntil * 1e9).toLong(), twins.filter { g -> ins.count { it.named in g } <= 40 })
-    val counted = outs.filter { it.racer != null }
+    val counted = outs.filter { it.racer != null && it.ns / 1e9 >= clip.scoreFrom - 0.2 }.filter { it.ns / 1e9 >= clip.scoreFrom || truth.any { x -> abs(x.t - it.ns / 1e9) < 0.2 } }
     val ma = pair(truth, counted, { it.ns / 1e9 }, { null })
     var aRight = 0; var aWrong = 0; var aNot = 0
-    for (i in scored) { val o = ma[i]?.let { counted[it] }; when { o == null -> aNot++; o.racer == truth[i].car -> aRight++; else -> { aWrong++; notes += "AUDIT    %7.2f s %-14s counted for %s".format(truth[i].t, truth[i].car, o.racer) } } }
+    for (i in scored) { val o = ma[i]?.let { counted[it] }; when { o == null -> aNot++; clip.group(o.racer) == clip.group(truth[i].car) -> aRight++; else -> { aWrong++; notes += "AUDIT    %7.2f s %-14s counted for %s".format(truth[i].t, truth[i].car, o.racer) } } }
     val aExtra = counted.size - ma.size
-    val lapsTrue = truth.groupingBy { it.car }.eachCount(); val lapsEng = counted.groupingBy { it.racer!! }.eachCount()
+    val lapsTrue = truth.groupingBy { clip.group(it.car) }.eachCount(); val lapsEng = counted.groupingBy { clip.group(it.racer)!! }.eachCount()
+    val groups = clip.cars.map { clip.group(it)!! }.distinct()
 
     val n = scored.size
     fun pc(k: Int, of: Int = n) = "%5.1f %%".format(100.0 * k / of)
@@ -177,7 +191,8 @@ fun main(args: Array<String>) {
     println("timing      vs truth: mean |err| %.1f ms, max %.1f ms (centroid truth at the clip frame rate, not an absolute check)".format(tErr.map { abs(it) }.average(), tErr.maxOf { abs(it) }))
     println("named live  right $right (${pc(right)}), wrong $wrong (${pc(wrong)}), unknown $unknown, missed $missed   [$n scored, calibration passes left out]")
     println("after audit right $aRight (${pc(aRight)}), wrong $aWrong, not counted $aNot, laps for nobody $aExtra")
-    println("laps        " + clip.cars.joinToString("  ") { "$it ${lapsEng[it] ?: 0}/${lapsTrue[it] ?: 0}" })
+    println("laps        " + groups.joinToString("  ") { "$it ${lapsEng[it] ?: 0}/${lapsTrue[it] ?: 0}" })
+    if (clip.twinGroups.isNotEmpty()) println("            (identical cars scored as a group: ${clip.twinGroups.joinToString { it.joinToString("/") }})")
     notes.sorted().take(40).forEach { println("  $it") }
     out?.let { d ->
         File(d, "${clip.name}${if (whole) "-whole" else ""}.csv").printWriter().use { w ->
@@ -189,7 +204,7 @@ fun main(args: Array<String>) {
     if (found < clip.expFound * truth.size - 1e-9) fails += "found ${found}/${truth.size}"
     if (extra > clip.expExtra) fails += "extra $extra"
     if (aRight < clip.expAudit * n - 1e-9) fails += "audit right $aRight/$n"
-    if (clip.expLaps && clip.cars.any { lapsEng[it] != lapsTrue[it] }) fails += "lap counts differ"
-    if (aExtra > 0) fails += "laps for nobody $aExtra"
+    if (clip.expLaps && groups.any { lapsEng[it] != lapsTrue[it] }) fails += "lap counts differ"
+    if (aExtra > clip.expNobody) fails += "laps for nobody $aExtra"
     if (fails.isEmpty()) println("PASS") else { println("FAIL: " + fails.joinToString("; ")); exitProcess(1) }
 }

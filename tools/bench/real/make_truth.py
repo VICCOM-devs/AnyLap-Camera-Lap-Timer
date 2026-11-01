@@ -27,6 +27,9 @@ from PIL import Image, ImageDraw
 ap = argparse.ArgumentParser()
 ap.add_argument('video'); ap.add_argument('--from', dest='t0', type=float, required=True); ap.add_argument('--to', dest='t1', type=float, required=True)
 ap.add_argument('--line', required=True); ap.add_argument('--fps', type=float, default=30); ap.add_argument('--band', type=float, default=70)
+ap.add_argument('--gate', type=float, default=30, help='max px a tracked blob may be from its predicted place')
+ap.add_argument('--newgate', type=float, default=75, help='max px for the second sighting of a new track')
+ap.add_argument('--minarea', type=int, default=60)
 ap.add_argument('--clusters', type=int, default=8); ap.add_argument('--out', default='work'); ap.add_argument('--finish', action='store_true')
 a = ap.parse_args()
 os.makedirs(a.out, exist_ok=True)
@@ -34,6 +37,8 @@ x1, y1, x2, y2 = map(float, a.line.split(','))
 L = np.hypot(x2 - x1, y2 - y1); pad = int(a.band + L * 0.6)
 X0 = int(max(0, min(x1, x2) - pad)); Y0 = int(max(0, min(y1, y2) - pad))
 W = int(max(x1, x2) + pad) - X0; H = int(max(y1, y2) + pad) - Y0
+vw, vh = map(int, subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', a.video], capture_output=True, text=True).stdout.strip().split(','))
+W = min(W, vw - X0); H = min(H, vh - Y0)
 X0 -= X0 % 2; Y0 -= Y0 % 2; W -= W % 2; H -= H % 2   # ffmpeg crops YUV video to even sizes
 A = np.array([x1 - X0, y1 - Y0]); B = np.array([x2 - X0, y2 - Y0]); u = (B - A) / L; nrm = np.array([u[1], -u[0]])
 
@@ -74,7 +79,7 @@ for f in frames():
     lab, n = ndi.label(m); out = []
     for i, sl in enumerate(ndi.find_objects(lab) if n else [], 1):
         mm = lab[sl] == i; ar = int(mm.sum())
-        if ar < 60: continue
+        if ar < a.minarea: continue
         cy, cx = ndi.center_of_mass(mm); cy += sl[0].start; cx += sl[1].start
         out.append([cx, cy, ar, float(S[int(cy), int(cx)]), float(T[int(cy), int(cx)])] + list(f[sl][mm].mean(0)))
     blobs.append(out)
@@ -88,7 +93,7 @@ for k, bl in enumerate(blobs):
         for i, (px, py) in enumerate(pred):
             for j, b in enumerate(bl):
                 d = np.hypot(px - b[0], py - b[1])
-                if d < (30 if 'v' in live[i] else 75): M[i, j] = d
+                if d < (a.gate if 'v' in live[i] else a.newgate): M[i, j] = d
         for i, j in zip(*linear_sum_assignment(M)):
             if M[i, j] < 1e6:
                 t = live[i]; b = bl[j]; p = t['p'][-1]
@@ -122,8 +127,9 @@ for k, f in enumerate(frames()):
     im = Image.fromarray(f)
     for i in need[k]:
         c = C[i]; cx, cy = map(int, c['xy'])
-        t = im.crop((cx - 55, cy - 42, cx + 55, cy + 42)).resize((176, 134), Image.LANCZOS); d = ImageDraw.Draw(t)
-        d.line([((A[0] - cx + 55) * 1.6, (A[1] - cy + 42) * 1.6), ((B[0] - cx + 55) * 1.6, (B[1] - cy + 42) * 1.6)], fill=(255, 0, 0))
+        hw = max(55, a.band * 0.6); hh = hw * 42 / 55; k = 88 / hw   # tile grows with the band (big cars, close cameras)
+        t = im.crop((int(cx - hw), int(cy - hh), int(cx + hw), int(cy + hh))).resize((176, 134), Image.LANCZOS); d = ImageDraw.Draw(t)
+        d.line([((A[0] - cx + hw) * k, (A[1] - cy + hh) * k), ((B[0] - cx + hw) * k, (B[1] - cy + hh) * k)], fill=(255, 0, 0))
         d.rectangle([0, 0, 176, 13], fill=(0, 0, 0)); d.text((2, 1), f"{i} {c['guess']} {c['t']:.2f}", fill=(255, 255, 0)); tiles[i] = t
 order = sorted(range(len(C)), key=lambda i: (C[i]['guess'], C[i]['t']))   # by colour group: odd ones stand out
 for s in range(0, len(order), 48):
