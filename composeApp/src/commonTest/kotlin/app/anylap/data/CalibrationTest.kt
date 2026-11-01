@@ -45,21 +45,43 @@ class CalibrationTest {
     fun legacyCalibrationIsRecognised() {
         val legacy = car.copy(fingerprint = fp(2), fingerprintSamples = 54)
         assertTrue(legacy.hasLegacyCalibration)
-        assertEquals(CalStep.Photo(0), firstOpenStep(legacy))
+        assertEquals(CalStep.Laps, firstOpenStep(legacy))
     }
 
     @Test
-    fun wizardStartsAtTheFirstMissingStep() {
+    fun wizardIsLapsFirstPhotosOptional() {
+        // photos alone are not a calibration any more
         val photos = listOf(sample("l", SampleKind.PHOTO, 0, "left"), sample("r", SampleKind.PHOTO, 1, "right"))
-        assertEquals(CalStep.Pass(SampleKind.PASS_SLOW), firstOpenStep(car.withCalibration(photos)))
-        val slow = (1..3).map { sample("s$it", SampleKind.PASS_SLOW, 3) }
-        assertEquals(CalStep.Pass(SampleKind.PASS_FAST), firstOpenStep(car.withCalibration(photos + slow)))
-        val fast = (1..3).map { sample("f$it", SampleKind.PASS_FAST, 4) }
-        assertEquals(CalStep.Review, firstOpenStep(car.withCalibration(photos + slow + fast)))
-        // optional photos (front/back) are not required
+        assertEquals(CalStep.Laps, firstOpenStep(car.withCalibration(photos)))
+        // three passes of any speed are
+        val two = listOf(sample("s1", SampleKind.PASS_SLOW, 3), sample("f1", SampleKind.PASS_FAST, 4))
+        assertEquals(CalStep.Laps, firstOpenStep(car.withCalibration(two)))
+        assertTrue(!car.withCalibration(two).hasEnoughPasses)
+        val three = two + sample("f2", SampleKind.PASS_FAST, 4)
+        assertEquals(CalStep.Review, firstOpenStep(car.withCalibration(three)))
+        assertTrue(car.withCalibration(three).hasEnoughPasses)
+        // old 3 + 3 calibrations still count
+        val old = photos + (1..3).map { sample("s$it", SampleKind.PASS_SLOW, 3) } + (1..3).map { sample("f$it", SampleKind.PASS_FAST, 4) }
+        assertEquals(CalStep.Review, firstOpenStep(car.withCalibration(old)))
+        // steps: laps → review; photos run through the sides and end at the review
+        assertEquals(CalStep.Review, nextStep(Sport.RC, CalStep.Laps))
         assertEquals(CalStep.Photo(2), nextStep(Sport.RC, CalStep.Photo(1)))
-        assertEquals(CalStep.Pass(SampleKind.PASS_SLOW), nextStep(Sport.RC, CalStep.Photo(3)))
-        assertEquals(CalStep.Review, nextStep(Sport.RC, CalStep.Pass(SampleKind.PASS_FAST)))
+        assertEquals(CalStep.Review, nextStep(Sport.RC, CalStep.Photo(3)))
+    }
+
+    @Test
+    fun passKindFollowsTheSpeed() {
+        // no speed known: the first pass is the slow one, the rest fast
+        assertEquals(SampleKind.PASS_SLOW, CalibrationPlan.passKind(Sport.RC, null, emptyList()))
+        assertEquals(SampleKind.PASS_FAST, CalibrationPlan.passKind(Sport.RC, null, listOf(sample("s", SampleKind.PASS_SLOW, 1))))
+        // below the sport's slow speed = slow
+        assertEquals(SampleKind.PASS_SLOW, CalibrationPlan.passKind(Sport.RC, 6f, emptyList()))
+        assertEquals(SampleKind.PASS_FAST, CalibrationPlan.passKind(Sport.RC, 18f, emptyList()))
+        // clearly slower than the fastest so far = slow (14 < 0.6 × 25)
+        val fast = listOf(sample("f", SampleKind.PASS_FAST, 1).copy(speedKmh = 25f))
+        assertEquals(SampleKind.PASS_SLOW, CalibrationPlan.passKind(Sport.RC, 14f, fast))
+        assertEquals(SampleKind.PASS_FAST, CalibrationPlan.passKind(Sport.RC, 16f, fast))
+        assertEquals(SampleKind.PASS_SLOW, CalibrationPlan.passKind(Sport.RUNNING, 5f, emptyList()))
     }
 
     @Test

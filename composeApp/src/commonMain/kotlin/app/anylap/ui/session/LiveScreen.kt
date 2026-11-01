@@ -3,6 +3,7 @@ package app.anylap.ui.session
 import app.anylap.learn.Learn
 import app.anylap.i18n.I18n
 import app.anylap.i18n.tr
+import app.anylap.learn.CarModel
 import app.anylap.util.fixed
 import app.anylap.ui.LocalApp
 import app.anylap.ui.Navigator
@@ -105,6 +106,8 @@ import app.anylap.cloud.LiveSnapshot
 import app.anylap.data.SessionConfig
 import app.anylap.pro.ProFeature
 import app.anylap.ui.pro.currentTier
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Composable
@@ -121,6 +124,8 @@ private fun LiveContent(nav: Navigator) {
     val racers = remember { config.racerIds.mapNotNull { app.repo.racer(it) } }
     val settings by app.repo.settings.collectAsState()
     val scope = rememberCoroutineScope()
+    // recognition model (shadow mode): prototypes from the calibration pictures, built before lights out
+    LaunchedEffect(racers) { withContext(Dispatchers.Default) { runCatching { CarModel.prepare(racers) } } }
     val session = rememberVisionSession()
 
     var line by remember { mutableStateOf(config.line) }

@@ -20,6 +20,7 @@ internal object I18nData {
 1 phone watching	1 mobil tittar
 7-day free trial · best value	7 dagar gratis · mest prisvärt
 A car finishes when	En bil går i mål när
+A name and a colour is enough.	Ett namn och en färg räcker.
 A second piece of {0}, cut out of the touching cars – {1} is already counted at {2}. Nothing to fix.	En andra bit av {0}, utskuren ur bilarna som nuddade varandra – {1} är redan räknad vid {2}. Inget att rätta.
 About	Om
 Account	Konto
@@ -37,11 +38,14 @@ Add runner	Lägg till löpare
 Add some cars under Racers first.	Lägg till några bilar under Förare först.
 Add some runners under Racers first.	Lägg till några löpare under Förare först.
 Add with code	Lägg till med kod
+Add your cars	Lägg till dina bilar
 Add your email to sign in on other phones – and to get everything back if you lose this one.	Lägg till din e-post för att logga in på andra mobiler – och få tillbaka allt om du tappar bort den här.
 Add your first car	Lägg till din första bil
 Add your first runner	Lägg till din första löpare
+Add your runners	Lägg till dina löpare
 Add {0}	Lägg till {0}
 All bibs	Alla nummerlappar
+All cars are calibrated. You can start the race.	Alla bilar är kalibrerade. Du kan starta loppet.
 All photos and passes for {0} are deleted. The avatar photo stays.	Alla foton och passeringar för {0} raderas. Profilbilden blir kvar.
 All-time ranking · best lap	Ranking genom tiderna · bästa varv
 All-time ranking · wins	Ranking genom tiderna · segrar
@@ -65,10 +69,11 @@ Bib not seen yet	Nummerlappen inte sedd än
 Bib read ✓	Nummerlapp läst ✓
 Bibs · Pro	Nummerlappar · Pro
 Both ways	Båda hållen
-Calibrate	Kalibrera
 Calibrate again	Kalibrera igen
+Calibrate {0} car · 3 laps|Calibrate {0} cars · 3 laps each	Kalibrera {0} bil · 3 varv|Kalibrera {0} bilar · 3 varv var
+Calibrate {0} runner · 3 passes|Calibrate {0} runners · 3 passes each	Kalibrera {0} löpare · 3 passager|Kalibrera {0} löpare · 3 passager var
+Calibrate · 3 laps	Kalibrera · 3 varv
 Calibrated with an older version of the app ({0} samples). The camera reads colours differently now, so calibrate again.	Kalibrerad med en äldre version av appen ({0} prov). Kameran läser färger annorlunda nu, så kalibrera igen.
-Calibrated · {0}	Kalibrerad · {0}
 Camera	Kamera
 Camera calibration	Kamerakalibrering
 Camera distance	Kameraavstånd
@@ -105,6 +110,7 @@ Crossings closer together are ignored (stops double counts).	Passeringar tätare
 Crossings from your races that the camera, the lap timing and you agreed on – extra views of the car under that day's light. Only the colours are used.	Passager från dina lopp som kameran, varvtiderna och du var överens om – extra vyer av bilen i den dagens ljus. Bara färgerna används.
 Crossings the camera wasn't sure about	Passeringar kameran var osäker på
 Crossings the camera, the lap timing and you agreed on become extra views of each car, on this phone. See them under the car's calibration.	Passager som kameran, varvtiderna och du var överens om blir extra vyer av varje bil, på den här telefonen. Du ser dem under bilens kalibrering.
+DRIVE {0} LAPS	KÖR {0} VARV
 Decrease	Minska
 Delete	Radera
 Delete car	Radera bil
@@ -123,15 +129,16 @@ Display name	Visningsnamn
 Distance timed	Tidtagen sträcka
 Distance to finish line	Avstånd till mållinjen
 Done	Klar
-Done – check them in Review.	Klart – kolla dem under Granska.
-Done – moving on to fast passes…	Klart – vidare till snabba passeringar…
+Done with photos	Klar med foton
+Done – {0} is ready	Klart – {0} är redo
+Downloading…	Laddar ner…
 Drag the ends onto the tape on the ground	Dra ändarna till tejpen på marken
-Drive past the line slowly	Kör långsamt förbi linjen
+Drive {0} laps with each car	Kör {0} varv med varje bil
 Duration	Längd
+Each lap is saved with a picture you can delete. Line not on your tape? Tap Line.	Varje varv sparas med en bild du kan ta bort. Ligger linjen inte på tejpen? Tryck på Linje.
 Each race	Varje race
 Each race to	Varje race till
 Each runner gets a printable bib with a marker the camera can read from metres away.	Varje löpare får en nummerlapp att skriva ut, med en markör som kameran läser på flera meters håll.
-Each {0} pass is saved with a picture you can delete.	Varje passering sparas med en bild som du kan radera.
 Email	E-post
 Email confirmed.	E-posten är bekräftad.
 End	Avsluta
@@ -146,7 +153,6 @@ Every lap	Varje varv
 Everything is unlocked. Thanks for supporting AnyLap.	Allt är upplåst. Tack för att du stöttar AnyLap.
 Everything stays on this phone. Turn on sync to back up your racers and sessions and use them on other phones.	Allt stannar i den här mobilen. Slå på synk för att säkerhetskopiera förare och sessioner och använda dem på andra mobiler.
 Export my data	Exportera mina data
-FAST PASSES	SNABBA PASSERINGAR
 FASTEST LAPS	SNABBASTE VARV
 FINAL LAP	SISTA VARVET
 Facing the camera, whole body in the box.	Vänd mot kameran, hela kroppen i rutan.
@@ -163,6 +169,7 @@ Finish a session and your numbers land here – best laps, consistency, speed an
 Finish later	Gör klart senare
 Finish · {0}	Mål · {0}
 Finished	Klar
+First time slowly, then at race pace	Första gången långsamt, sedan i tävlingsfart
 First to	Först till
 Follow the race	Följ racet
 Follow the timing from the camera phone	Följ tidtagningen från kameramobilen
@@ -187,12 +194,13 @@ Front touches the line	Fronten nuddar linjen
 Full grid	Fullt startfält
 GAP	DIFF
 GET READY	GÖR DIG REDO
+GET STARTED	KOM IGÅNG
 Gain to best	Kvar till bästa
 Get a code they enter under Racers → Add with code. Their phone learns this racer, and laps they time land in your history.	Få en kod som de skriver in under Förare → Lägg till med kod. Deras mobil lär sig föraren, och varv de tar tid på hamnar i din historik.
 Get ready…	Gör dig redo…
 Get share code	Hämta delningskod
 Get share code · Pro	Hämta delningskod · Pro
-Give it a name, snap a photo and do a few calibration passes so the camera learns what it looks like.	Ge den ett namn, ta ett foto och kör några kalibreringspasseringar så att kameran lär sig hur den ser ut.
+Give it a name, then drive three laps past the camera so it learns what the car looks like.	Ge den ett namn och kör sedan tre varv förbi kameran så att den lär sig hur bilen ser ut.
 Heat	Heat
 Heat {0}	Heat {0}
 Heats per racer	Heat per förare
@@ -219,6 +227,7 @@ LEADER	LEDARE
 LIGHTS OUT AND AWAY WE GO…	LAMPORNA SLOCKNAR – OCH IVÄG…
 LINE UP\nYOUR CARS	STÄLL UPP\nDINA BILAR
 LINE UP\nYOUR RUNNERS	STÄLL UPP\nDINA LÖPARE
+Lap 1 slowly, then at race pace	Varv 1 långsamt, sedan i tävlingsfart
 Lap added by lap timing	Varv tillagt av varvtidslogiken
 Lap added: after the race, lap timing found this car's lap overdue and this crossing near the expected time looks like it – so it was counted.	Varv tillagt: efter racet såg varvtidslogiken att bilens varv var försenat och att den här passeringen nära förväntad tid ser ut som bilen – så den räknades.
 Lap length	Varvlängd
@@ -226,6 +235,8 @@ Lap stats like speed and consistency are for Pro – yours and the cars' owners'
 Lap stats like speed and consistency need Pro on the camera phone.	Varvstatistik som fart och jämnhet kräver Pro i kameramobilen.
 Lap times	Varvtider
 Lap timing, speed, live leaderboard	Varvtider, fart, resultattavla live
+Lap {0} of {1} saved. Keep going.	Varv {0} av {1} sparat. Fortsätt.
+Lap {0} saved.	Varv {0} sparat.
 Lap {0} · {1}	Varv {0} · {1}
 Lap-time trends, consistency and speed charts across every session you've timed.	Trender för varvtider, jämnhet och fart över alla sessioner du tagit tid på.
 Laps	Varv
@@ -242,7 +253,6 @@ Learned from races	Lärt från lopp
 Left side	Vänster sida
 Lifetime	För alltid
 Line	Linje
-Line not on your tape? Tap Line.	Ligger linjen inte på tejpen? Tryck på Linje.
 Line up camera	Rikta kameran
 Live	Live
 Live timing screen	Live-tidtagning
@@ -270,6 +280,8 @@ Needs calibration	Behöver kalibreras
 New event	Ny tävling
 New race	Nytt race
 New session	Ny session
+Next car: {0}. Drive {1} laps, the first one slowly.	Nästa bil: {0}. Kör {1} varv, det första långsamt.
+Next: {0}	Nästa: {0}
 No cars yet.	Inga bilar än.
 No colour match	Ingen färgmatchning
 No connection – trying again…	Ingen anslutning – försöker igen…
@@ -293,21 +305,27 @@ Not a car	Inte en bil
 Not a racer	Inte en förare
 Not a racer?	Inte en förare?
 Not a racer?: it didn't look enough like any car (a shadow, a hand…), so it wasn't counted.	Inte en förare?: den liknade inte någon bil tillräckligt (en skugga, en hand…), så den räknades inte.
+Not available: {0}	Inte tillgänglig: {0}
 Not calibrated	Inte kalibrerad
 Not counted	Inte räknad
 Not counted: it was named after a car that had just crossed, and no other car fitted – so nobody got the lap.	Inte räknad: den fick namnet på en bil som just hade passerat, och ingen annan bil passade – så ingen fick varvet.
+Not downloaded yet – it arrives automatically when the next version is published.	Inte nedladdad än – den kommer automatiskt när nästa version publiceras.
 Not enough data yet	Inte tillräckligt med data än
 Not included	Ingår inte
 Not synced yet	Inte synkad än
-Now at race pace	Nu i tävlingstempo
-Now at race speed	Nu i tävlingsfart
 Number	Nummer
 Off – everything stays on this phone	Av – allt stannar i den här mobilen
 Off: AnyLap is an RC lap timer. On: pick the sport for each session, racers and stats.	Av: AnyLap tar varvtider för RC. På: välj sport för varje session, förare och statistik.
 Offline – will sync when you're back online.	Offline – synkar när du är online igen.
+On a stand or a shelf, 1–2 m up, looking straight down at a straight. Tape on the ground marks the line.	På ett stativ eller en hylla, 1–2 m upp, rakt ner mot en raksträcka. Tejp på marken markerar linjen.
+On a tripod, as high as you can, looking across the finish line.	På ett stativ, så högt du kan, tvärs över mållinjen.
 On the camera phone: tap Sync. Then scan the QR it shows.	På kameramobilen: tryck på Synk. Skanna sedan QR-koden som visas.
 One way	Ett håll
+Only this car on the track, nothing else moving. The phone tells you when each lap is saved.	Bara den här bilen på banan, inget annat som rör sig. Telefonen säger till när varje varv är sparat.
+Only this runner near the line. The phone says when each pass is saved.	Bara den här löparen vid linjen. Telefonen säger till när varje passage är sparad.
 Only {0} fps: fast cars may be missed. Close other apps, lower the resolution in your phone's camera settings, or get more light.	Bara {0} fps: snabba bilar kan missas. Stäng andra appar, sänk upplösningen i telefonens kamerainställningar eller ordna mer ljus.
+Open beta – every feature is free while we test (until {0}). Thank you for helping!	Öppen beta – alla funktioner är gratis medan vi testar (till {0}). Tack för hjälpen!
+Open beta – every feature is free while we test. Thank you for helping!	Öppen beta – alla funktioner är gratis medan vi testar. Tack för hjälpen!
 Open practice. Each racer's clock starts at their first crossing; every pass after that is a lap. Ranked by best lap.	Fri träning. Varje förares klocka startar vid första passeringen; varje passering efter det är ett varv. Rankas efter bästa varv.
 Other phones	Andra mobiler
 Other phones can join	Andra mobiler kan ansluta
@@ -316,6 +334,8 @@ PHOTO {0}/{1}	FOTO {0}/{1}
 POS	POS
 PRACTICE	TRÄNING
 PRO	PRO
+Pass the line {0} times each	Passera linjen {0} gånger var
+Passes	Passager
 Past sessions keep their results.	Tidigare sessioner behåller sina resultat.
 Pause	Pausa
 Pay once, keep it forever	Betala en gång, behåll för alltid
@@ -345,6 +365,7 @@ Profiles, calibration and bibs	Profiler, kalibrering och nummerlappar
 Purchase restored.	Köpet är återställt.
 Purchases open when AnyLap is in the stores.	Köp öppnar när AnyLap finns i butikerna.
 Put a strip of bright tape (pink, orange, yellow, green, cyan or blue – a different colour on each car) along the roof or side of one of them, then re-run its calibration passes. Otherwise the two may get each other's laps.	Sätt en remsa klar tejp (rosa, orange, gul, grön, cyan eller blå – olika färg på varje bil) längs taket eller sidan på en av dem och kör om dess kalibreringspass. Annars kan de två få varandras varv.
+Put the phone above the finish line	Sätt telefonen ovanför mållinjen
 P{0} {1} – {2} pts ({3} wins)	P{0} {1} – {2} p ({3} segrar)
 P{0} {1}: {2} laps, best {3}, avg {4}	P{0} {1}: {2} varv, bästa {3}, snitt {4}
 RACER · LAST LAP	FÖRARE · SENASTE VARV
@@ -369,8 +390,10 @@ Racers per session	Förare per session
 Re-named by lap timing	Omdöpt efter varvtider
 Re-named: it was named after a car that had just crossed, so lap timing gave it to the runner-up that was due.	Omdöpt: den fick namnet på en bil som just hade passerat, så varvtiderna gav den till tvåan som stod på tur.
 Ready	Klar
+Ready · {0}	Redo · {0}
 Rear towards the camera.	Bakänden mot kameran.
 Recent sessions	Senaste sessionerna
+Recognition model	Igenkänningsmodell
 Record	Spela in
 Remove last lap	Ta bort senaste varvet
 Removes your racers, sessions and profile from AnyLap's servers and signs you out. Everything on this phone stays.	Tar bort dina förare, sessioner och din profil från AnyLaps servrar och loggar ut dig. Allt i den här mobilen blir kvar.
@@ -393,7 +416,6 @@ Runner {0}	Löpare {0}
 Runners	Löpare
 Running	Löpning
 Running and other sports	Löpning och andra sporter
-SLOW PASSES	LÅNGSAMMA PASSERINGAR
 Save name	Spara namn
 Saved	Sparad
 Saved sessions	Sparade sessioner
@@ -427,6 +449,7 @@ Shares small pictures of the cars at the line, with which car it was, to train t
 Shortest possible lap	Kortast möjliga varv
 Shown to friends when you share a racer or time their laps.	Visas för vänner när du delar en förare eller tar tid på deras varv.
 Side	Sida
+Side photos are optional – they help when two cars look alike.	Sidofoton är frivilliga – de hjälper när två bilar ser likadana ut.
 Side-on, as they run past.	Från sidan, när de springer förbi.
 Side-on, the way it passes the camera one way.	Från sidan, som den passerar kameran åt ena hållet.
 Sign in to back up every session, time on a friend's phone and have the laps land in your own history.	Logga in för att säkerhetskopiera varje session, ta tid med en väns mobil och få varven i din egen historik.
@@ -436,7 +459,6 @@ Signed in	Inloggad
 Signed in as {0}	Inloggad som {0}
 Signed out. Your data is still on this phone.	Utloggad. Dina data finns kvar i den här mobilen.
 Skip this side	Hoppa över den här sidan
-Skip to passes	Hoppa till passeringar
 Slow	Långsam
 Slow passes	Långsamma passeringar
 Slow-mo replay	Repris i slow motion
@@ -449,9 +471,11 @@ Start	Start
 Start free trial	Starta gratis provperiod
 Start practice	Starta träning
 Start race	Starta race
+Start your first race	Starta ditt första lopp
+Start your first session	Starta ditt första pass
 Starting	Startar
 Stats	Statistik
-Still not recognising {0} ({1}). If that was {0}, retake the photos with it filling the box, in this light.	Känner fortfarande inte igen {0} ({1}). Om det var {0}, ta om fotona så att den fyller rutan, i det här ljuset.
+Still not recognising {0} ({1}). If that was {0}, delete the saved laps in Review and drive them again in this light.	Känner fortfarande inte igen {0} ({1}). Om det var {0}: ta bort de sparade varven under Granska och kör dem igen i det här ljuset.
 Stop	Stoppa
 Store opens at launch	Butiken öppnar vid lansering
 Stored in the EU (Stockholm). We keep your racers' names, numbers, colours and appearance data, and your lap times – no video, no location, no contacts.	Lagras i EU (Stockholm). Vi sparar förarnas namn, nummer, färger och utseendedata samt dina varvtider – ingen video, ingen plats, inga kontakter.
@@ -476,17 +500,22 @@ Tap a picture to look closer. Delete anything that isn't the {0} on its own.	Try
 Tap any time in the Laps tab to replay that crossing in slow motion.	Tryck på en tid under Varv för att se passeringen i slow motion.
 Teach the camera what this car looks like: a photo of each side, then a few slow and a few fast passes over the finish line – ideally where you'll race, in the same light.	Lär kameran hur bilen ser ut: ett foto av varje sida, sedan några långsamma och några snabba passeringar över mållinjen – helst där du ska köra, i samma ljus.
 Testers only. Goes away when store purchases are live.	Bara för testare. Försvinner när köp i butiken öppnar.
+That didn't look like the same car – ignored.	Det såg inte ut som samma bil – ignorerat.
 That isn't an AnyLap race code.	Det är inte en racekod från AnyLap.
 That's plenty – delete one in Review to record more.	Det räcker – radera en under Granska för att spela in fler.
 The bib marker identifies this runner. Calibrating their clothing as well helps when the bib is hidden (arms, other runners).	Markören på nummerlappen identifierar löparen. Att även kalibrera kläderna hjälper när nummerlappen skyms (armar, andra löpare).
 The camera couldn't be started on this device.	Kameran kunde inte startas på den här enheten.
 The car didn't look like any calibrated car.	Bilen liknade ingen kalibrerad bil.
+The phone counts the laps out loud and learns what each car looks like.	Telefonen räknar varven högt och lär sig hur varje bil ser ut.
 The sessions stay in your history; only the event and its points table go.	Sessionerna finns kvar i historiken; bara tävlingen och dess poängtabell försvinner.
 The top of the points table after the heats, best qualifier listed first.	Toppen av poängtabellen efter heaten, bäst kvalificerade först.
+Then: {0}	Sedan: {0}
 This phone only	Bara den här mobilen
 This race already has a viewer: the camera phone runs AnyLap Free (one viewer at a time). With Pro on the camera, everyone can follow.	Racet har redan en tittare: kameramobilen kör AnyLap Gratis (en tittare i taget). Med Pro i kameran kan alla följa med.
 This race has ended, or the code is wrong.	Racet är slut, eller så är koden fel.
 This racer was deleted.	Föraren har raderats.
+Three steps to your first timed laps	Tre steg till dina första tagna varv
+Three steps, no helper needed	Tre steg, ingen hjälp behövs
 Time like a pro	Ta tid som ett proffs
 Timed	Tid
 Timed by {0}	Tidtagen av {0}
@@ -521,6 +550,7 @@ Up next – tap to run	Nästa – tryck för att köra
 Use another email	Använd en annan e-post
 Valid for 24 hours.	Giltig i 24 timmar.
 Verify	Bekräfta
+Version {0} · learning mode: it watches every crossing and only breaks ties; the colour match and the lap timing decide.	Version {0} · inlärningsläge: den tittar på varje passage och avgör bara oklara fall; färgmatchningen och varvtiderna bestämmer.
 Video	Video
 Voice announcements & slow-mo replays	Uppläsning och repriser i slow motion
 Voice off	Röst av
@@ -528,7 +558,6 @@ Voice on	Röst på
 WINNER	VINNARE
 Waiting for first pass	Väntar på första passeringen
 Waiting for the start	Väntar på starten
-Walk or jog past the line	Gå eller jogga förbi linjen
 We sent a 6-digit code to {0}.	Vi skickade en sexsiffrig kod till {0}.
 Who crossed at {0}?	Vem passerade {0}?
 Who is this?	Vem är det här?
@@ -558,9 +587,11 @@ by VICCOM · viccom.se	av VICCOM · viccom.se
 camera {0} m	kamera {0} m
 car	bil
 max {0}	max {0}
+optional	frivilligt
 runner	löpare
 spread ±{0} s	spridning ±{0} s
 the back of the car (the edge opposite the white one) clears the finish line	bilens bakända (kanten mitt emot den vita) har passerat mållinjen
+the camera can't tell whose lap it is.	kameran kan inte se vems varvet är.
 the car's front (the white edge of its outline) touches the finish line	bilens front (den vita kanten på konturen) nuddar mållinjen
 the middle of the car is on the finish line	mitten av bilen är på mållinjen
 their crossings will ask you who it was.	när de passerar får du frågan vem det var.
@@ -575,14 +606,19 @@ top {0} {1}	topp {0} {1}
 {0} ahead of {1} by {2} ms	{0} före {1} med {2} ms
 {0} and {1} look the same to the camera ({2} % alike).	{0} och {1} ser likadana ut för kameran ({2} % lika).
 {0} and {1}: dead heat	{0} och {1}: dött lopp
+{0} car to go – the phone talks you through it.|{0} cars to go – the phone talks you through it.	{0} bil kvar – telefonen guidar dig.|{0} bilar kvar – telefonen guidar dig.
 {0} car|{0} cars	{0} bil|{0} bilar
+{0} crossings scored since launch.	{0} passager bedömda sedan appen startades.
 {0} event in progress|{0} events in progress	{0} tävling pågår|{0} tävlingar pågår
 {0} fps	{0} fps
 {0} heat of up to {1} · then an optional final.|{0} heats of up to {1} · then an optional final.	{0} heat med upp till {1} · sedan en valfri final.|{0} heat med upp till {1} · sedan en valfri final.
+{0} is done.	{0} är klar.
+{0} is ready	{0} är redo
 {0} km	{0} km
 {0} lap {1} {2}	{0} varv {1} {2}
 {0} laps	{0} varv
 {0} lap|{0} laps	{0} varv|{0} varv
+{0} more – keep going	{0} till – fortsätt
 {0} older session saved|{0} older sessions saved	{0} äldre session sparad|{0} äldre sessioner sparade
 {0} phones watching	{0} mobiler tittar
 {0} podiums	{0} pallplatser
@@ -594,7 +630,6 @@ top {0} {1}	topp {0} {1}
 {0} runner|{0} runners	{0} löpare|{0} löpare
 {0} saved · {1} per race	{0} sparade · {1} per race
 {0} shared	{0} delade
-{0} times, the way you'll race, with nothing else moving. 	{0} gånger, som du ska köra, utan att något annat rör sig. 
 {0} waiting	{0} väntar
 {0} watching	{0} tittar
 {0} · all time	{0} · genom tiderna
@@ -606,7 +641,10 @@ top {0} {1}	topp {0} {1}
 {0}-lap races	Race på {0} varv
 {0}-min race	Race {0} min
 {0}-min races	Race på {0} min
+{0}/{1} laps	{0}/{1} varv
 {0}/{1} rounds	{0}/{1} omgångar
+{0}: drive {1} laps past the line. The first one slowly.	{0}: kör {1} varv förbi linjen. Det första långsamt.
+{0}: pass the line {1} times. The first time slowly.	{0}: passera linjen {1} gånger. Första gången långsamt.
 {1} isn't calibrated – |{1} aren't calibrated – 	{1} är inte kalibrerad – |{1} är inte kalibrerade – 
 ×{0} points	×{0} poäng
 …or type the code under the QR	…eller skriv koden under QR-koden

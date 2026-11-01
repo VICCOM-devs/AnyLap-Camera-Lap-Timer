@@ -1,6 +1,8 @@
 package app.anylap.ui.racers
 
 import app.anylap.i18n.tr
+import androidx.compose.material.icons.rounded.CameraAlt
+import app.anylap.i18n.trn
 import app.anylap.ui.LocalApp
 import app.anylap.ui.Navigator
 import app.anylap.ui.Screen
@@ -32,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.anylap.bib.BibPdf
+import app.anylap.data.CalibrationPlan
 import app.anylap.data.Racer
 import app.anylap.data.Sport
 import app.anylap.ui.components.EmptyState
@@ -115,12 +118,22 @@ fun RacersScreen(nav: Navigator) {
                 EmptyState(
                     Icons.Rounded.Groups,
                     if (sport == Sport.RC) tr("Add your first car") else tr("Add your first runner"),
-                    if (sport == Sport.RC) tr("Give it a name, snap a photo and do a few calibration passes so the camera learns what it looks like.")
+                    if (sport == Sport.RC) tr("Give it a name, then drive three laps past the camera so it learns what the car looks like.")
                     else tr("Each runner gets a printable bib with a marker the camera can read from metres away."),
                 )
             }
         }
         if (sport == Sport.RC) item { LookAlikeWarning(list) }
+        val uncalibrated = list.filter { !it.hasEnoughPasses && it.markerId == null }
+        if (uncalibrated.isNotEmpty()) item {
+            PrimaryButton(
+                if (sport == Sport.RC) trn(uncalibrated.size, "Calibrate {0} car · 3 laps", "Calibrate {0} cars · 3 laps each", uncalibrated.size)
+                else trn(uncalibrated.size, "Calibrate {0} runner · 3 passes", "Calibrate {0} runners · 3 passes each", uncalibrated.size),
+                { nav.push(Screen.Calibrate(uncalibrated.first().id, uncalibrated.drop(1).map { it.id })) },
+                Modifier.fillMaxWidth(),
+                icon = Icons.Rounded.CameraAlt,
+            )
+        }
         items(list, key = { it.id }) { r -> RacerRow(r) { nav.push(Screen.RacerEdit(r.id)) } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -166,7 +179,8 @@ private fun RacerRow(r: Racer, onClick: () -> Unit) {
                     Tag("#${r.number}", RT.TextDim)
                     if (r.ownerUserId != null) Tag(r.ownerName?.let { tr("From {0}", it) } ?: tr("Shared"), RT.Purple)
                     when {
-                        r.isCalibrated -> Tag(tr("Calibrated · {0}", r.fingerprintSamples), RT.Green)
+                        r.hasEnoughPasses -> Tag(tr("Ready · {0}", r.fingerprintSamples), RT.Green)
+                        r.isCalibrated -> Tag(tr("{0}/{1} laps", r.passes.size, CalibrationPlan.PASSES_TOTAL), RT.Amber)
                         r.sport == Sport.RC -> Tag(tr("Needs calibration"), RT.Amber)
                         else -> {}
                     }

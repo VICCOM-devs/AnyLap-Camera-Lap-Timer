@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import app.anylap.bib.BibPdf
 import app.anylap.vision.Markers
+import app.anylap.data.CalibrationPlan
 import app.anylap.data.RacerPalette
 import app.anylap.data.Sport
 import app.anylap.ui.components.KeyValue
@@ -153,7 +154,11 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
 
         item {
             SectionLabel(tr("Camera calibration"), Icons.Rounded.Tune, trailing = {
-                if (racer.isCalibrated) Tag(tr("Ready"), RT.Green) else Tag(tr("Not calibrated"), RT.Amber)
+                when {
+                    racer.hasEnoughPasses -> Tag(tr("Ready"), RT.Green)
+                    racer.passes.isNotEmpty() -> Tag(tr("{0}/{1} laps", racer.passes.size, CalibrationPlan.PASSES_TOTAL), RT.Amber)
+                    else -> Tag(tr("Not calibrated"), RT.Amber)
+                }
             })
         }
         item {
@@ -189,7 +194,7 @@ fun RacerEditScreen(nav: Navigator, racerId: String) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PrimaryButton(
                         when {
-                            !racer.isCalibrated -> tr("Calibrate")
+                            !racer.hasEnoughPasses -> tr("Calibrate · 3 laps")
                             racer.hasLegacyCalibration -> tr("Calibrate again")
                             else -> tr("Review & add")
                         },

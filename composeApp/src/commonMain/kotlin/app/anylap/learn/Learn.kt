@@ -66,7 +66,7 @@ object Learn {
                 val card = onCard.entries.firstOrNull { kotlin.math.abs(it.key - at) <= 1 }?.value
                 val kind = card?.let { "card:${it.kind.name}" } ?: learnedAt[at]?.by?.key ?: "auto"
                 val stored = Crops.store(snap.width, snap.height, snap.argb) ?: continue
-                items += CropItem(Uuid.random().toString(), session.id, at, owner, kind, stored.first, stored.second, meta(e, snap, card, session, camera), now)
+                items += CropItem(Uuid.random().toString(), session.id, at, owner, kind, stored.first, stored.second, meta(e, snap, card, session, camera, engine.mlFor(e)), now)
             }
             Crops.add(items, cloud.takeIf { settings.cropsNoticeSeen })
         }
@@ -150,8 +150,15 @@ object Learn {
     }
 
     /** Camera facts + what was in the picture, for the training set. Nothing personal: ids are random UUIDs. */
-    private fun meta(e: CrossingEvent, snap: Snapshot, card: ReviewItem?, session: Session, camera: Camera): JsonObject = buildJsonObject {
+    private fun meta(e: CrossingEvent, snap: Snapshot, card: ReviewItem?, session: Session, camera: Camera, ml: MlVerdict? = null): JsonObject = buildJsonObject {
         put("w", snap.width); put("h", snap.height)
+        // shadow-mode verdict of the recognition model, so training can compare it with the truth
+        ml?.let { m ->
+            put("ml", buildJsonObject {
+                put("model", m.modelVersion); put("carP", m.carProbability)
+                put("ranked", buildJsonArray { m.ranked.take(5).forEach { add(buildJsonObject { put("racer", it.first); put("score", it.second) }) } })
+            })
+        }
         put("x0", snap.x0); put("y0", snap.y0); put("frameW", snap.frameW); put("frameH", snap.frameH); put("zoom", snap.zoom)
         put("lumaRef", snap.lumaRef)
         snap.line?.let { l -> put("line", buildJsonArray { l.forEach { add(it) } }) }

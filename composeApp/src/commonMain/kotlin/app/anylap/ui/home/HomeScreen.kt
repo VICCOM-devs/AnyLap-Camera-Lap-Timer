@@ -113,12 +113,16 @@ fun HomeScreen() {
         item {
             if (settings.otherSports) PillTabs(listOf(tr("RC cars"), tr("Running")), sportIdx, { sportIdx = it }, Modifier.fillMaxWidth())
         }
+        val todo = sportRacers.filter { !it.hasEnoughPasses && it.markerId == null }
+        if (sportRacers.isEmpty() || todo.isNotEmpty()) {
+            item { GetStartedCard(sport, sportRacers) }
+        }
         item {
             HeroCard(
                 sport = sport,
                 racerCount = sportRacers.size,
                 maxRacers = Limits.maxRacers(sport, tier),
-                calibrated = sportRacers.count { it.isCalibrated || it.markerId != null },
+                calibrated = sportRacers.count { it.hasEnoughPasses || it.markerId != null },
                 onStart = {
                     app.repo.updateSettings { s -> s.copy(lastConfig = s.lastConfig.copy(sport = sport)) }
                     nav.tab(Screen.Race)

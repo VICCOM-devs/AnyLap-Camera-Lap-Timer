@@ -35,7 +35,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.QrCode2
-import androidx.compose.material.icons.rounded.SlowMotionVideo
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -73,6 +72,7 @@ import app.anylap.data.Sport
 import app.anylap.data.matchViews
 import app.anylap.platform.Platform
 import app.anylap.platform.PlatformBackHandler
+import app.anylap.platform.Speaker
 import app.anylap.platform.joinPath
 import app.anylap.ui.LocalApp
 import app.anylap.ui.Navigator
@@ -107,53 +107,61 @@ internal fun photoBox(sport: Sport): FloatArray = when (sport) {
     Sport.RUNNING -> floatArrayOf(0.36f, 0.06f, 0.64f, 0.96f)
 }
 
-/** Where the assisted calibration is. */
+/**
+ * Where the assisted calibration is. Since 0.5.0 the required part is [Laps] alone (drive three laps past
+ * the camera, one person); [Photo]s are an optional extra reachable from the rail and the review.
+ */
 sealed interface CalStep {
+    data object Laps : CalStep
     data class Photo(val index: Int) : CalStep
-    data class Pass(val kind: SampleKind) : CalStep
     data object Review : CalStep
 }
 
-/** The order of the wizard for this racer. */
-fun calSteps(sport: Sport): List<CalStep> =
-    CalibrationPlan.photoViews(sport).indices.map { CalStep.Photo(it) } +
-        CalStep.Pass(SampleKind.PASS_SLOW) + CalStep.Pass(SampleKind.PASS_FAST) + CalStep.Review
-
 /** First thing still missing; the review when everything is there. */
-fun firstOpenStep(racer: Racer): CalStep {
-    val views = CalibrationPlan.photoViews(racer.sport)
-    views.forEachIndexed { i, v ->
-        if (v.required && racer.calibration.none { it.kind == SampleKind.PHOTO && it.view == v.key }) return CalStep.Photo(i)
-    }
-    for (k in listOf(SampleKind.PASS_SLOW, SampleKind.PASS_FAST)) {
-        if (racer.samplesOf(k).size < CalibrationPlan.PASSES_PER_SPEED) return CalStep.Pass(k)
-    }
-    return CalStep.Review
+fun firstOpenStep(racer: Racer): CalStep = if (racer.hasEnoughPasses) CalStep.Review else CalStep.Laps
+
+fun nextStep(sport: Sport, s: CalStep): CalStep = when (s) {
+    CalStep.Laps -> CalStep.Review
+    is CalStep.Photo -> if (s.index + 1 < CalibrationPlan.photoViews(sport).size) CalStep.Photo(s.index + 1) else CalStep.Review
+    CalStep.Review -> CalStep.Review
 }
 
-fun nextStep(sport: Sport, s: CalStep): CalStep {
-    val all = calSteps(sport)
-    return all.getOrElse(all.indexOf(s) + 1) { CalStep.Review }
+/** What the phone says out loud, so one person can calibrate from the transmitter. */
+internal object CalVoice {
+    fun start(name: String, sport: Sport, laps: Int): String =
+        if (sport == Sport.RC) tr("{0}: drive {1} laps past the line. The first one slowly.", name, laps)
+        else tr("{0}: pass the line {1} times. The first time slowly.", name, laps)
+    fun lap(n: Int, of: Int): String = if (n < of) tr("Lap {0} of {1} saved. Keep going.", n, of) else tr("Lap {0} saved.", n)
+    fun done(name: String): String = tr("{0} is done.", name)
+    fun next(name: String): String = tr("Next car: {0}. Drive {1} laps, the first one slowly.", name, CalibrationPlan.PASSES_TOTAL)
+    fun allDone(): String = tr("All cars are calibrated. You can start the race.")
+    fun ignored(): String = tr("That didn't look like the same car – ignored.")
 }
 
 @Composable
-fun CalibrateScreen(nav: Navigator, racerId: String) {
+fun CalibrateScreen(nav: Navigator, racerId: String, queue: List<String> = emptyList()) {
     CameraScreenMode()
     androidx.compose.runtime.DisposableEffect(Unit) { app.anylap.update.Updates.hold(true); onDispose { app.anylap.update.Updates.hold(false) } }
     CameraPermissionGate(onBack = { nav.pop() }) {
-        CalibrateContent(nav, racerId)
+        CalibrateContent(nav, racerId, queue)
     }
 }
 
 @OptIn(ExperimentalUuidApi::class)
 @Composable
-private fun CalibrateContent(nav: Navigator, racerId: String) {
+private fun CalibrateContent(nav: Navigator, firstRacerId: String, initialQueue: List<String>) {
     val app = LocalApp.current
     val racers by app.repo.racers.collectAsState()
+    // One camera session for a whole grid: when this racer's laps are in, the next car in the queue takes over.
+    var racerId by remember { mutableStateOf(firstRacerId) }
+    var queue by remember { mutableStateOf(initialQueue.filter { it != firstRacerId }) }
     val racer = racers.firstOrNull { it.id == racerId } ?: return
     val settings by app.repo.settings.collectAsState()
     val session = rememberVisionSession()
     val scope = rememberCoroutineScope()
+    val speaker = remember { Speaker() }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
+    fun say(text: String) { if (settings.announceLaps) speaker.say(text) }
 
     var step by remember { mutableStateOf(firstOpenStep(racer)) }
     var line by remember { mutableStateOf(settings.lastConfig.line) }
@@ -204,18 +212,23 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
         )
     }
     // Same as in a race: fixed exposure while recording passes, so brightness drift isn't "motion".
-    LaunchedEffect(step) {
-        session.camera.setExposureLock(step is CalStep.Pass)
-        if (step is CalStep.Pass) session.analyzer.resetBackground()
+    LaunchedEffect(step, racerId) {
+        session.camera.setExposureLock(step is CalStep.Laps)
+        if (step is CalStep.Laps) {
+            session.analyzer.resetBackground()
+            val r = app.repo.racer(racerId)
+            if (r != null && !r.hasEnoughPasses) say(CalVoice.start(r.name, r.sport, CalibrationPlan.PASSES_TOTAL))
+        }
     }
     var rejectedInARow by remember { mutableStateOf(0) }
     LaunchedEffect(session) {
         session.rejected.collect { e ->
-            if (currentStep !is CalStep.Pass || currentEditing) return@collect
+            if (currentStep !is CalStep.Laps || currentEditing) return@collect
             rejectedInARow++
+            if (rejectedInARow == 1) say(CalVoice.ignored())
             val pct = tr("{0}% match", (e.match * 100).fixed(0))
             notice = if (rejectedInARow < 3) tr("Ignored: something crossed that didn't look like {0} ({1}).", racer.name, pct)
-            else tr("Still not recognising {0} ({1}). If that was {0}, retake the photos with it filling the box, in this light.", racer.name, pct)
+            else tr("Still not recognising {0} ({1}). If that was {0}, delete the saved laps in Review and drive them again in this light.", racer.name, pct)
             val shown = notice
             scope.launch {
                 delay(5_000)
@@ -226,23 +239,24 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
     LaunchedEffect(session) {
         session.crossings.collect { e ->
             val st = currentStep
-            if (st !is CalStep.Pass || currentEditing) return@collect
+            if (st !is CalStep.Laps || currentEditing) return@collect
             val fp = e.fingerprint ?: return@collect
-            val current = app.repo.racer(racerId) ?: return@collect
-            val before = current.samplesOf(st.kind).size
-            if (before >= CalibrationPlan.MAX_PASSES_PER_SPEED) {
+            val id = racerId
+            val current = app.repo.racer(id) ?: return@collect
+            val before = current.passes.size
+            if (before >= CalibrationPlan.MAX_PASSES) {
                 notice = tr("That's plenty – delete one in Review to record more.")
                 return@collect
             }
             val now = Platform.nowMillis()
             val img = e.snapshot?.let { snap ->
-                val path = joinPath(Platform.dataDir, "cal_${racerId}_$now.bmp")
+                val path = joinPath(Platform.dataDir, "cal_${id}_$now.bmp")
                 Platform.writeBytes(path, Bmp.encode(snap.width, snap.height, snap.argb))
                 path
             }
             val sample = CalibrationSample(
                 id = Uuid.random().toString(),
-                kind = st.kind,
+                kind = CalibrationPlan.passKind(current.sport, e.speedKmh, current.calibration),
                 fingerprint = fp.toList(),
                 imagePath = img,
                 createdAt = now,
@@ -253,15 +267,33 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
                 along = e.along.takeIf { e.area > 0 && !e.split },
                 topPicture = e.template?.takeIf { !e.split }?.encode()?.toList(),
             )
-            app.repo.addCalibrationSample(racerId, sample)
+            app.repo.addCalibrationSample(id, sample)
             lastPass = sample
             rejectedInARow = 0
             notice = null
             if (e.markerSeen != null) markerSeen = e.markerSeen
-            if (before + 1 == CalibrationPlan.PASSES_PER_SPEED) {
+            val count = before + 1
+            if (count < CalibrationPlan.PASSES_TOTAL) {
+                say(CalVoice.lap(count, CalibrationPlan.PASSES_TOTAL))
+            } else if (count == CalibrationPlan.PASSES_TOTAL) {
+                say(CalVoice.done(current.name))
                 scope.launch {
                     delay(1_400)
-                    if (currentStep == st) step = nextStep(racer.sport, st)
+                    if (currentStep != st || racerId != id) return@launch
+                    val nextId = queue.firstOrNull { qid -> app.repo.racer(qid)?.let { !it.hasEnoughPasses } == true }
+                    if (nextId != null) {
+                        // next car: same camera, same line, same light – only the racer changes
+                        queue = queue.filter { it != nextId }
+                        lastPass = null
+                        markerSeen = null
+                        rejectedInARow = 0
+                        racerId = nextId
+                        step = CalStep.Laps
+                        app.repo.racer(nextId)?.let { say(CalVoice.next(it.name)) }
+                    } else {
+                        if (initialQueue.isNotEmpty()) say(CalVoice.allDone())
+                        step = CalStep.Review
+                    }
                 }
             }
         }
@@ -330,6 +362,7 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
         markerSeen = markerSeen,
         notice = notice,
         kmh = settings.speedUnitKmh,
+        upNext = queue.mapNotNull { qid -> racers.firstOrNull { it.id == qid }?.takeIf { !it.hasEnoughPasses }?.name },
         actions = CalibrateActions(
             onBack = { exit() },
             onStep = { editingLine = false; notice = null; step = it },
@@ -350,10 +383,19 @@ private fun CalibrateContent(nav: Navigator, racerId: String) {
                 if (lastPass?.id == s.id) lastPass = null
             },
             onDone = { exit() },
+            onNextCar = {
+                val nextId = queue.firstOrNull()
+                if (nextId != null) {
+                    queue = queue.drop(1)
+                    lastPass = null; markerSeen = null; rejectedInARow = 0; notice = null; editingLine = false
+                    racerId = nextId
+                    step = firstOpenStep(app.repo.racer(nextId) ?: racer)
+                }
+            },
         ),
     ) {
         CameraPreview(session.camera, Modifier.fillMaxSize())
-        if (step is CalStep.Pass) TrackBoxesOverlay(boxes)
+        if (step is CalStep.Laps) TrackBoxesOverlay(boxes)
     }
     open?.let { s ->
         SampleDialog(
@@ -375,10 +417,12 @@ class CalibrateActions(
     val onOpenSample: (CalibrationSample) -> Unit,
     val onDeleteSample: (CalibrationSample) -> Unit,
     val onDone: () -> Unit,
+    /** Skip to the next car in the queue (null = no queue). */
+    val onNextCar: (() -> Unit)? = null,
 )
 
 /**
- * Full-screen camera with a slim rail on the right (back, racer, photos, slow, fast, review, line)
+ * Full-screen camera with a slim rail on the right (back, racer, laps, line, photos, review)
  * and one small instruction card. Stateless so it can be screenshot-tested.
  */
 @Composable
@@ -397,14 +441,13 @@ fun CalibrateLayout(
     notice: String?,
     kmh: Boolean,
     actions: CalibrateActions,
+    upNext: List<String> = emptyList(),
     camera: @Composable BoxScope.() -> Unit,
 ) {
     val views = CalibrationPlan.photoViews(racer.sport)
     val photos = racer.samplesOf(SampleKind.PHOTO)
-    val slow = racer.samplesOf(SampleKind.PASS_SLOW).size
-    val fast = racer.samplesOf(SampleKind.PASS_FAST).size
-    val target = CalibrationPlan.PASSES_PER_SPEED
-    val requiredPhotosDone = views.filter { it.required }.all { v -> photos.any { it.view == v.key } }
+    val laps = racer.passes.size
+    val target = CalibrationPlan.PASSES_TOTAL
 
     Row(Modifier.fillMaxSize().background(Color.Black)) {
         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
@@ -412,13 +455,13 @@ fun CalibrateLayout(
                 camera()
                 when (step) {
                     is CalStep.Photo -> PhotoGuide(photoBox(racer.sport))
-                    is CalStep.Pass -> FinishLineOverlay(line, direction, editable = editingLine, onChange = actions.onLineChange)
+                    CalStep.Laps -> FinishLineOverlay(line, direction, editable = editingLine, onChange = actions.onLineChange)
                     CalStep.Review -> {}
                 }
 
                 CameraHint(tr("{0} fps", fps.fixed(0)), Modifier.align(Alignment.TopEnd).padding(10.dp))
 
-                if (step is CalStep.Pass && editingLine) {
+                if (step is CalStep.Laps && editingLine) {
                     LineTools(
                         direction = direction,
                         onDirection = actions.onDirection,
@@ -429,14 +472,14 @@ fun CalibrateLayout(
                     )
                     CameraHint(tr("Drag the ends onto the tape on the ground"), Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
                 } else if (step != CalStep.Review) {
-                    StepCard(racer, step, views, slow, fast, markerSeen, notice, actions, Modifier.align(Alignment.BottomStart).padding(10.dp))
+                    StepCard(racer, step, views, laps, markerSeen, notice, upNext, actions, Modifier.align(Alignment.BottomStart).padding(10.dp))
                 }
 
                 if (step is CalStep.Photo) {
                     Shutter(busy, actions.onCapture, Modifier.align(Alignment.CenterEnd).padding(end = 14.dp))
                 }
 
-                if (step is CalStep.Pass && !editingLine) {
+                if (step is CalStep.Laps && !editingLine) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = lastPass != null,
                         enter = fadeIn(),
@@ -454,7 +497,7 @@ fun CalibrateLayout(
                 }
 
                 if (step == CalStep.Review) {
-                    ReviewPanel(racer, kmh, actions, requiredPhotosDone && slow + fast > 0)
+                    ReviewPanel(racer, kmh, actions, racer.hasEnoughPasses, upNext)
                 }
 
                 if (error != null) {
@@ -472,6 +515,19 @@ fun CalibrateLayout(
             RailButton(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back"), actions.onBack)
             Box(Modifier.padding(vertical = 2.dp)) { RacerAvatar(racer, 40.dp) }
             RailButton(
+                Icons.Rounded.Speed, tr("Laps"), { actions.onStep(CalStep.Laps) },
+                selected = step == CalStep.Laps && !editingLine,
+                badge = "$laps/$target", done = laps >= target,
+            )
+            RailButton(
+                Icons.Rounded.Flag, tr("Line"),
+                {
+                    if (step !is CalStep.Laps) actions.onStep(CalStep.Laps)
+                    actions.onEditLine(!(editingLine && step is CalStep.Laps))
+                },
+                selected = editingLine && step is CalStep.Laps,
+            )
+            RailButton(
                 Icons.Rounded.CameraAlt, tr("Photos"),
                 {
                     val missing = views.indexOfFirst { v -> photos.none { it.view == v.key } }
@@ -479,25 +535,7 @@ fun CalibrateLayout(
                 },
                 selected = step is CalStep.Photo,
                 badge = "${photos.size}/${views.size}",
-                done = requiredPhotosDone,
-            )
-            RailButton(
-                Icons.Rounded.SlowMotionVideo, tr("Slow"), { actions.onStep(CalStep.Pass(SampleKind.PASS_SLOW)) },
-                selected = step == CalStep.Pass(SampleKind.PASS_SLOW) && !editingLine,
-                badge = "$slow/$target", done = slow >= target,
-            )
-            RailButton(
-                Icons.Rounded.Speed, tr("Fast"), { actions.onStep(CalStep.Pass(SampleKind.PASS_FAST)) },
-                selected = step == CalStep.Pass(SampleKind.PASS_FAST) && !editingLine,
-                badge = "$fast/$target", done = fast >= target,
-            )
-            RailButton(
-                Icons.Rounded.Flag, tr("Line"),
-                {
-                    if (step !is CalStep.Pass) actions.onStep(CalStep.Pass(if (slow < target) SampleKind.PASS_SLOW else SampleKind.PASS_FAST))
-                    actions.onEditLine(!(editingLine && step is CalStep.Pass))
-                },
-                selected = editingLine && step is CalStep.Pass,
+                done = photos.isNotEmpty(),
             )
             RailButton(
                 Icons.Rounded.GridView, tr("Review"), { actions.onStep(CalStep.Review) },
@@ -514,15 +552,14 @@ private fun StepCard(
     racer: Racer,
     step: CalStep,
     views: List<CalibrationPlan.PhotoView>,
-    slow: Int,
-    fast: Int,
+    laps: Int,
     markerSeen: Int?,
     notice: String?,
+    upNext: List<String>,
     actions: CalibrateActions,
     modifier: Modifier,
 ) {
     val rc = racer.sport == Sport.RC
-    val unit = racer.sport.unitName
     Column(
         modifier
             .widthIn(max = 300.dp)
@@ -535,7 +572,7 @@ private fun StepCard(
             is CalStep.Photo -> {
                 val v = views[step.index]
                 Text(
-                    tr("PHOTO {0}/{1}", step.index + 1, views.size) + (if (v.required) "" else tr(" · OPTIONAL")),
+                    tr("PHOTO {0}/{1}", step.index + 1, views.size) + tr(" · OPTIONAL"),
                     style = MaterialTheme.typography.labelSmall, color = RT.Accent,
                 )
                 Text(v.title, style = MaterialTheme.typography.titleSmall.copy(color = Color.White))
@@ -545,7 +582,7 @@ private fun StepCard(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (step.index + 1 < views.size) tr("Skip this side") else tr("Skip to passes"),
+                        if (step.index + 1 < views.size) tr("Skip this side") else tr("Done with photos"),
                         style = MaterialTheme.typography.labelMedium, color = RT.TextDim,
                         modifier = Modifier
                             .heightIn(min = 36.dp)
@@ -556,25 +593,22 @@ private fun StepCard(
                     )
                 }
             }
-            is CalStep.Pass -> {
-                val isSlow = step.kind == SampleKind.PASS_SLOW
-                val count = if (isSlow) slow else fast
-                Text(
-                    if (isSlow) tr("SLOW PASSES") else tr("FAST PASSES"),
-                    style = MaterialTheme.typography.labelSmall, color = RT.Accent,
-                )
+            CalStep.Laps -> {
+                val count = laps
+                val total = CalibrationPlan.PASSES_TOTAL
+                Text(tr("DRIVE {0} LAPS", total), style = MaterialTheme.typography.labelSmall, color = RT.Accent)
                 Text(
                     when {
-                        rc && isSlow -> tr("Drive past the line slowly")
-                        rc -> tr("Now at race speed")
-                        isSlow -> tr("Walk or jog past the line")
-                        else -> tr("Now at race pace")
+                        count == 0 && rc -> tr("Lap 1 slowly, then at race pace")
+                        count == 0 -> tr("First time slowly, then at race pace")
+                        count < total -> tr("{0} more – keep going", total - count)
+                        else -> tr("Done – {0} is ready", racer.name)
                     },
                     style = MaterialTheme.typography.titleSmall.copy(color = Color.White),
                 )
                 Text(
-                    tr("{0} times, the way you'll race, with nothing else moving. ", CalibrationPlan.PASSES_PER_SPEED) +
-                        tr("Line not on your tape? Tap Line."),
+                    if (rc) tr("Only this car on the track, nothing else moving. The phone tells you when each lap is saved.")
+                    else tr("Only this runner near the line. The phone says when each pass is saved."),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(2.dp))
@@ -594,18 +628,18 @@ private fun StepCard(
                         )
                     }
                 }
-                if (count >= CalibrationPlan.PASSES_PER_SPEED) {
+                if (upNext.isNotEmpty()) {
                     Text(
-                        if (isSlow) tr("Done – moving on to fast passes…") else tr("Done – check them in Review."),
-                        style = MaterialTheme.typography.labelMedium, color = RT.Green,
+                        tr("Then: {0}", upNext.joinToString(", ")),
+                        style = MaterialTheme.typography.labelSmall, color = RT.TextDim,
                     )
                 }
             }
             CalStep.Review -> {}
         }
         notice?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = RT.Amber) }
-        if (step is CalStep.Pass) {
-            Text(tr("Each {0} pass is saved with a picture you can delete.", unit), style = MaterialTheme.typography.labelSmall, color = RT.TextFaint)
+        if (step is CalStep.Laps) {
+            Text(tr("Each lap is saved with a picture you can delete. Line not on your tape? Tap Line."), style = MaterialTheme.typography.labelSmall, color = RT.TextFaint)
         }
     }
 }
@@ -613,7 +647,7 @@ private fun StepCard(
 @Composable
 private fun PassDots(count: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        repeat(CalibrationPlan.PASSES_PER_SPEED) { i ->
+        repeat(CalibrationPlan.PASSES_TOTAL) { i ->
             val done = i < count
             Box(
                 Modifier.size(22.dp).clip(CircleShape)
@@ -625,8 +659,8 @@ private fun PassDots(count: Int) {
                 else Text("${i + 1}", style = MaterialTheme.typography.labelSmall, color = RT.TextDim, fontWeight = FontWeight.Bold)
             }
         }
-        if (count > CalibrationPlan.PASSES_PER_SPEED) {
-            Text("+${count - CalibrationPlan.PASSES_PER_SPEED}", style = MaterialTheme.typography.labelSmall, color = RT.Green)
+        if (count > CalibrationPlan.PASSES_TOTAL) {
+            Text("+${count - CalibrationPlan.PASSES_TOTAL}", style = MaterialTheme.typography.labelSmall, color = RT.Green)
         }
     }
 }
@@ -652,7 +686,7 @@ private fun Shutter(busy: Boolean, onClick: () -> Unit, modifier: Modifier) {
 
 /** Everything captured, with delete buttons; covers the camera while open. */
 @Composable
-private fun BoxScope.ReviewPanel(racer: Racer, kmh: Boolean, actions: CalibrateActions, ready: Boolean) {
+private fun BoxScope.ReviewPanel(racer: Racer, kmh: Boolean, actions: CalibrateActions, ready: Boolean, upNext: List<String>) {
     val views = CalibrationPlan.photoViews(racer.sport)
     Column(
         Modifier
@@ -662,13 +696,19 @@ private fun BoxScope.ReviewPanel(racer: Racer, kmh: Boolean, actions: CalibrateA
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(tr("Review {0}", racer.name), style = MaterialTheme.typography.titleMedium)
+                Text(if (ready) tr("{0} is ready", racer.name) else tr("Review {0}", racer.name), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    tr("Tap a picture to look closer. Delete anything that isn't the {0} on its own.", racer.sport.unitName),
+                    tr("Tap a picture to look closer. Delete anything that isn't the {0} on its own.", racer.sport.unitName) +
+                        if (ready) " " + tr("Side photos are optional – they help when two cars look alike.") else "",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
             Spacer(Modifier.width(12.dp))
+            val next = actions.onNextCar
+            if (next != null && upNext.isNotEmpty()) {
+                PrimaryButton(tr("Next: {0}", upNext.first()), next, icon = Icons.Rounded.Speed)
+                Spacer(Modifier.width(8.dp))
+            }
             PrimaryButton(
                 if (ready) tr("Done") else tr("Finish later"),
                 actions.onDone,
@@ -683,7 +723,7 @@ private fun BoxScope.ReviewPanel(racer: Racer, kmh: Boolean, actions: CalibrateA
                 onOpen = actions.onOpenSample,
                 onDelete = actions.onDeleteSample,
                 onAddPhoto = { key -> actions.onStep(CalStep.Photo(views.indexOfFirst { it.key == key }.coerceAtLeast(0))) },
-                onAddPass = { kind -> actions.onStep(CalStep.Pass(kind)) },
+                onAddPass = { _ -> actions.onStep(CalStep.Laps) },
                 kmh = kmh,
                 tile = 76.dp,
             )

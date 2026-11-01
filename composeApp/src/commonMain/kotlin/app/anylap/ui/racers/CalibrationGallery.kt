@@ -1,6 +1,7 @@
 package app.anylap.ui.racers
 
 import app.anylap.i18n.tr
+import app.anylap.data.Sport
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -191,7 +192,7 @@ fun CalibrationGallery(
     val top = remember(racer.calibration) { racer.topTemplate() }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // the picture the app fits on the car at the line (outline, nose time, which car it is)
-        if (racer.samplesOf(SampleKind.PASS_SLOW).isNotEmpty() || racer.samplesOf(SampleKind.PASS_FAST).isNotEmpty()) {
+        if (racer.passes.isNotEmpty()) {
             Text(tr("TOP-DOWN PICTURE"), style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(tile * 1.4f, tile).clip(RoundedCornerShape(12.dp)).background(RT.Surface3), contentAlignment = Alignment.Center) {
@@ -206,20 +207,32 @@ fun CalibrationGallery(
                 )
             }
         }
-        for (kind in SampleKind.entries) {
-            val items = racer.samplesOf(kind)
+        // Rows: laps (slow + fast passes together – the required part), photos (optional), learned views.
+        data class GalleryRow(val key: SampleKind, val title: String, val icon: ImageVector, val items: List<CalibrationSample>, val target: Int, val required: Boolean)
+        val rows = listOf(
+            GalleryRow(SampleKind.PASS_FAST, if (racer.sport == Sport.RC) tr("Laps") else tr("Passes"), Icons.Rounded.Speed, racer.passes, CalibrationPlan.PASSES_TOTAL, true),
+            GalleryRow(SampleKind.PHOTO, tr("Photos"), Icons.Rounded.CameraAlt, racer.samplesOf(SampleKind.PHOTO), views.size, false),
+            GalleryRow(SampleKind.LEARNED, SampleKind.LEARNED.title(), SampleKind.LEARNED.icon(), racer.samplesOf(SampleKind.LEARNED), 0, false),
+        )
+        for (row in rows) {
+            val kind = row.key
+            val items = row.items
             // learned views have no target – the row only shows once a race has taught something
             if (kind == SampleKind.LEARNED && items.isEmpty()) continue
-            val target = if (kind == SampleKind.PHOTO) views.size else CalibrationPlan.PASSES_PER_SPEED
+            val target = row.target
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(kind.icon(), null, tint = RT.TextDim, modifier = Modifier.size(14.dp))
+                Icon(row.icon, null, tint = RT.TextDim, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(kind.title().uppercase(), style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
+                Text(row.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = RT.TextDim)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    if (kind == SampleKind.LEARNED) "${items.size}" else "${items.size}/$target",
+                    when (kind) {
+                        SampleKind.LEARNED -> "${items.size}"
+                        SampleKind.PHOTO -> "${items.size}/$target · " + tr("optional")
+                        else -> "${items.size}/$target"
+                    },
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (kind != SampleKind.LEARNED && items.size >= target) RT.Green else RT.TextFaint,
+                    color = if (row.required && items.size >= target) RT.Green else RT.TextFaint,
                 )
             }
             if (kind == SampleKind.LEARNED) {
@@ -234,11 +247,11 @@ fun CalibrationGallery(
                     for (v in views) {
                         val s = items.firstOrNull { it.view == v.key }
                         if (s != null) SampleTile(s, s.caption(racer, kmh), { onOpen(s) }, { onDelete(s) }, tile)
-                        else if (onAddPhoto != null) AddSampleTile(v.title, { onAddPhoto(v.key) }, tile, v.required)
+                        else if (onAddPhoto != null) AddSampleTile(v.title, { onAddPhoto(v.key) }, tile, false)
                     }
                 } else {
                     items.forEach { s -> SampleTile(s, s.caption(racer, kmh), { onOpen(s) }, { onDelete(s) }, tile) }
-                    if (kind != SampleKind.LEARNED && onAddPass != null && items.size < CalibrationPlan.MAX_PASSES_PER_SPEED) {
+                    if (kind != SampleKind.LEARNED && onAddPass != null && items.size < CalibrationPlan.MAX_PASSES) {
                         AddSampleTile(if (items.size < target) tr("Record") else tr("More"), { onAddPass(kind) }, tile, items.size < target)
                     }
                 }
