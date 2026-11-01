@@ -4,6 +4,7 @@ import app.anylap.i18n.tr
 import app.anylap.data.Repository
 import app.anylap.data.Session
 import app.anylap.data.Sport
+import app.anylap.platform.Platform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -104,10 +105,12 @@ class LocalBilling(
 ) : Billing {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private fun tierOf(testing: Boolean, server: Boolean) = if (testing || server) Tier.PRO else Tier.FREE
+    private fun tierOf(testing: Boolean, server: Boolean, betaUntil: Long) =
+        if (testing || server || betaUntil > Platform.nowMillis()) Tier.PRO else Tier.FREE
 
-    override val tier: StateFlow<Tier> = combine(repo.settings, serverPro) { s, p -> tierOf(s.testingProUnlocked, p) }
-        .stateIn(scope, SharingStarted.Eagerly, tierOf(repo.settings.value.testingProUnlocked, serverPro.value))
+    /** Open beta ([Beta]) counts as Pro for everyone, on top of a purchase / grant and the testing switch. */
+    override val tier: StateFlow<Tier> = combine(repo.settings, serverPro, Beta.until) { s, p, b -> tierOf(s.testingProUnlocked, p, b) }
+        .stateIn(scope, SharingStarted.Eagerly, tierOf(repo.settings.value.testingProUnlocked, serverPro.value, Beta.until.value))
 
     override val storeAvailable: Boolean = false
 

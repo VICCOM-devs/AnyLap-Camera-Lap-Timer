@@ -22,7 +22,8 @@ sealed interface Screen {
     data object Settings : Screen
     data object Live : Screen
     data class RacerEdit(val id: String) : Screen
-    data class Calibrate(val id: String) : Screen
+    /** Calibrate one racer; [queue] = more racers to do in the same camera session, in order. */
+    data class Calibrate(val id: String, val queue: List<String> = emptyList()) : Screen
     data class Results(val id: String) : Screen
     data class Replay(val sessionId: String, val racerId: String, val lap: Int) : Screen
     data class Paywall(val feature: ProFeature? = null) : Screen

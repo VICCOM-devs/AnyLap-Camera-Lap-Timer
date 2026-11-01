@@ -21,3 +21,6 @@
 -keep,includedescriptorclasses class app.anylap.**$$serializer { *; }
 # Play In-App Updates + code scanner ship their own rules; keep the update entry points readable in crashes.
 -keepattributes SourceFile,LineNumberTable
+# LiteRT (TensorFlow Lite) – JNI entry points must keep their names.
+-keep class org.tensorflow.lite.** { *; }
+-dontwarn org.tensorflow.lite.**

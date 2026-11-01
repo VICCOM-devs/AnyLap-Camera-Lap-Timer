@@ -14,8 +14,33 @@ private fun SampleKind.weight(): Float = when (this) {
 
 /** Assisted-calibration plan: what to capture, in order. */
 object CalibrationPlan {
+    /**
+     * Laps the racer drives past the camera to be calibrated – the whole required calibration since 0.5.0
+     * (one person: phone on the stand, drive three laps, done). The first lap is asked for slowly, the
+     * rest at race pace; each pass is filed as slow or fast by its speed ([passKind]). Photos are optional.
+     */
+    const val PASSES_TOTAL = 3
+    const val MAX_PASSES = 16
+    /** Legacy per-kind target, still shown in the gallery rows. */
     const val PASSES_PER_SPEED = 3
     const val MAX_PASSES_PER_SPEED = 8
+
+    /** Below this a pass is a "slow" one (sharpest top-down picture); km/h, by sport. */
+    fun slowKmh(sport: Sport): Float = when (sport) { Sport.RC -> 10f; Sport.RUNNING -> 7f }
+
+    /**
+     * Slow or fast, from the measured speed: below [slowKmh] or clearly slower than the fastest pass so far
+     * = slow. Without a speed (no camera distance) the first pass counts as the slow one.
+     */
+    fun passKind(sport: Sport, speedKmh: Float?, existing: List<CalibrationSample>): SampleKind {
+        val passes = existing.filter { it.kind.isPass }
+        if (speedKmh == null || speedKmh <= 0f) {
+            return if (passes.none { it.kind == SampleKind.PASS_SLOW }) SampleKind.PASS_SLOW else SampleKind.PASS_FAST
+        }
+        val fastest = passes.mapNotNull { it.speedKmh }.maxOrNull() ?: 0f
+        val threshold = maxOf(slowKmh(sport), 0.6f * fastest)
+        return if (speedKmh < threshold) SampleKind.PASS_SLOW else SampleKind.PASS_FAST
+    }
 
     data class PhotoView(val key: String, val title: String, val hint: String, val required: Boolean)
 

@@ -1,5 +1,7 @@
 package app.anylap.engine
 
+import app.anylap.learn.CarModel
+import app.anylap.learn.MlVerdict
 import app.anylap.i18n.tr
 import app.anylap.i18n.trn
 import app.anylap.platform.Platform
@@ -101,8 +103,13 @@ class RaceEngine(
      * Every crossing event of the race (counted or not) with the human's verdict, if any – the end-of-race
      * audit ([audit]) re-decides all of them at once with each car's lap rhythm in mind.
      */
-    private class Logged(val event: CrossingEvent?, val ns: Long, var locked: String? = null, val manual: Cross? = null)
+    private class Logged(val event: CrossingEvent?, val ns: Long, var locked: String? = null, val manual: Cross? = null, val ml: MlVerdict? = null)
     private val log = ArrayList<Logged>()
+    /** The recognition model's opinion per crossing (by [CrossingEvent.timestampNs]) – shadow mode, see [CarModel]. */
+    private val mlByNs = HashMap<Long, MlVerdict>()
+    /** Crossings where the model overruled or named what the colour match couldn't (kept for the crop meta / stats). */
+    var mlDecided = 0
+        private set
     private var audited = false
     private val unassigned = ArrayList<Unassigned>()
     private var nextUnassignedId = 1L
@@ -175,8 +182,26 @@ class RaceEngine(
         if (_state.value.phase != Phase.RUNNING) return
         if (e.timestampNs < startNs) return
         trackCross[e.trackId] = e.timestampNs
-        log += Logged(e, e.timestampNs, locked = if (e.source == IdSource.MARKER && e.racerId != null) e.racerId else null)
-        val id = e.racerId
+        // Shadow mode: the recognition model scores every crossing with a picture; its answer is logged and
+        // only breaks ties below. Never for bib-read crossings (those are certain).
+        val ml = if (e.source != IdSource.MARKER) try { CarModel.verdict(e, racers.map { it.id }) } catch (t: Throwable) { null } else null
+        if (ml != null) mlByNs[e.timestampNs] = ml
+        log += Logged(e, e.timestampNs, locked = if (e.source == IdSource.MARKER && e.racerId != null) e.racerId else null, ml = ml)
+        var id = e.racerId
+        val best = e.candidates.firstOrNull()?.second ?: 0f
+        val runnerUp = e.candidates.getOrNull(1)?.first
+        var mlNamed = false
+        if (ml != null && ml.best != null && ml.margin >= CarModel.MIN_MARGIN && ml.best!!.second >= CarModel.MIN_SCORE) {
+            val pick = ml.best!!.first
+            when {
+                // colour had nobody: the model's clear favourite is taken, but a human still glances at it
+                (id == null || racers.none { it.id == id }) && racers.any { it.id == pick } -> { id = pick; mlNamed = true }
+                // a close call between two colours, and the model clearly says the runner-up
+                e.source == IdSource.APPEARANCE && e.confidence < LOW_MARGIN && best < CLEAR_MATCH &&
+                    pick == runnerUp && ml.margin >= CarModel.SWITCH_MARGIN -> { id = pick; mlNamed = true }
+            }
+        }
+        if (mlNamed) mlDecided++
         if (id == null || racers.none { it.id == id }) {
             if (racers.isEmpty()) return
             park(e, ReviewKind.UNKNOWN)
@@ -189,14 +214,18 @@ class RaceEngine(
         }
         // Things a human should glance at afterwards: a split pair, or a name that only just won
         // *and* isn't a convincing match on its own (a look-alike pair is always close, so a fixed
-        // margin alone would flag every lap of a clearly seen car).
-        val best = e.candidates.firstOrNull()?.second ?: 0f
+        // margin alone would flag every lap of a clearly seen car), or a name the model broke the tie on.
         when {
             e.split -> review(e, ReviewKind.SPLIT, decided = id)
+            mlNamed -> review(e, ReviewKind.LOW_MARGIN, decided = id)
             e.source == IdSource.APPEARANCE && e.confidence < LOW_MARGIN && best < CLEAR_MATCH -> review(e, ReviewKind.LOW_MARGIN, decided = id)
         }
-        add(id, Cross(e.timestampNs, e.speedKmh, source, e.confidence, e), e.candidates, locked = source == LapSource.MARKER)
+        val candidates = if (mlNamed) listOf(id to (ml?.best?.second ?: e.confidence)) + e.candidates.filter { it.first != id } else e.candidates
+        add(id, Cross(e.timestampNs, e.speedKmh, source, if (mlNamed) ml!!.margin else e.confidence, e), candidates, locked = source == LapSource.MARKER)
     }
+
+    /** What the model said about a crossing (shadow mode), if anything. */
+    fun mlFor(e: CrossingEvent): MlVerdict? = mlByNs[e.timestampNs]
 
     /** Not counted for anyone: offered for a live "assign" and filed in the tray. */
     private fun park(e: CrossingEvent, kind: ReviewKind) {

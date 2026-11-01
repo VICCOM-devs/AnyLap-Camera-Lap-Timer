@@ -69,6 +69,12 @@ data class Racer(
 
     fun samplesOf(kind: SampleKind): List<CalibrationSample> = calibration.filter { it.kind == kind }
 
+    /** Calibration passes of either speed, oldest first. */
+    val passes: List<CalibrationSample> get() = calibration.filter { it.kind.isPass }
+
+    /** Enough passes to race with (photos are optional). */
+    val hasEnoughPasses: Boolean get() = passes.size >= CalibrationPlan.PASSES_TOTAL
+
     /**
      * The racer's top-down picture for the fit: the picture of a slow pass (least motion blur), with the
      * true size averaged over every pass that has one. Null until a pass has been recorded.

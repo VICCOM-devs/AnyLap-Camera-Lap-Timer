@@ -39,6 +39,8 @@ import app.anylap.pro.Limits
 import app.anylap.cloud.Account
 import app.anylap.ui.Screen
 import app.anylap.ui.pro.ProBadge
+import app.anylap.pro.Beta
+import app.anylap.learn.CarModel
 import app.anylap.ui.pro.currentTier
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.rounded.WorkspacePremium
@@ -52,19 +54,22 @@ fun SettingsScreen(nav: Navigator) {
     val report = remember { try { cameraReport() } catch (e: Throwable) { tr("Camera information unavailable.") } }
 
     ScreenScaffold(tr("Settings"), onBack = { nav.pop() }, bottomPadding = 40.dp) {
-        item { SectionLabel(tr("AnyLap Pro"), Icons.Rounded.WorkspacePremium) }
-        item {
-            RtCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Paywall()) }, highlight = if (tier.isPro) RT.Gold.copy(alpha = 0.4f) else null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(if (tier.isPro) tr("Pro is active") else tr("Free plan"), style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            if (tier.isPro) tr("Unlimited history, full grid, charts and bibs.")
-                            else tr("{0} racers per session · last {1} sessions. Tap to see Pro.", Limits.FREE_RACERS, Limits.FREE_HISTORY),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+        // Open beta: no plan, no price, no paywall anywhere in the app. The Pro card returns when the beta ends.
+        if (!Beta.active) {
+            item { SectionLabel(tr("AnyLap Pro"), Icons.Rounded.WorkspacePremium) }
+            item {
+                RtCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Paywall()) }, highlight = if (tier.isPro) RT.Gold.copy(alpha = 0.4f) else null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (tier.isPro) tr("Pro is active") else tr("Free plan"), style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                if (tier.isPro) tr("Unlimited history, full grid, charts and bibs.")
+                                else tr("{0} racers per session · last {1} sessions. Tap to see Pro.", Limits.FREE_RACERS, Limits.FREE_HISTORY),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        ProBadge()
                     }
-                    ProBadge()
                 }
             }
         }
@@ -180,6 +185,19 @@ fun SettingsScreen(nav: Navigator) {
                         colors = SwitchDefaults.colors(checkedTrackColor = RT.Accent),
                     )
                 }
+                Spacer(Modifier.height(12.dp))
+                val model by CarModel.state.collectAsState()
+                Text(tr("Recognition model"), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    when {
+                        model.downloading -> tr("Downloading…")
+                        model.ready -> tr("Version {0} · learning mode: it watches every crossing and only breaks ties; the colour match and the lap timing decide.", model.version) +
+                            (if (model.scored > 0) " " + tr("{0} crossings scored since launch.", model.scored) else "")
+                        model.error != null -> tr("Not available: {0}", model.error ?: "")
+                        else -> tr("Not downloaded yet – it arrives automatically when the next version is published.")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
 
@@ -198,6 +216,11 @@ fun SettingsScreen(nav: Navigator) {
         item {
             RtCard(Modifier.fillMaxWidth()) {
                 Text("AnyLap ${BuildInfo.label} · ${Platform.name}", style = MaterialTheme.typography.titleSmall)
+                if (Beta.active) Text(
+                    if (Beta.untilLabel.isEmpty()) tr("Open beta – every feature is free while we test. Thank you for helping!")
+                    else tr("Open beta – every feature is free while we test (until {0}). Thank you for helping!", Beta.untilLabel),
+                    style = MaterialTheme.typography.bodySmall, color = RT.Green,
+                )
                 Text(
                     tr("Camera lap timing for RC cars and runners. Video is processed on this phone and never uploaded. Lap data leaves the phone only if you turn on sync. ") +
                         tr("Timing is for practice and fun, not official results."),

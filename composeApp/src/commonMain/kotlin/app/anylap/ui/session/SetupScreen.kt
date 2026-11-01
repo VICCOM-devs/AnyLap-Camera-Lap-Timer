@@ -168,12 +168,23 @@ fun SetupScreen(nav: Navigator) {
                         LookAlikeWarning(sportRacers.filter { it.id in selected })
                         Spacer(Modifier.height(10.dp))
                     }
-                    val uncalibrated = sportRacers.filter { it.id in selected && !it.isCalibrated && it.markerId == null }
-                    if (selected.size > 1 && uncalibrated.isNotEmpty()) {
+                    val uncalibrated = sportRacers.filter { it.id in selected && !it.hasEnoughPasses && it.markerId == null }
+                    if (uncalibrated.isNotEmpty()) {
                         Text(
                             trn(uncalibrated.size, "{1} isn't calibrated – ", "{1} aren't calibrated – ", uncalibrated.joinToString { it.name }) +
-                                tr("their crossings will ask you who it was."),
+                                (if (selected.size > 1) tr("their crossings will ask you who it was.") else tr("the camera can't tell whose lap it is.")),
                             style = MaterialTheme.typography.bodySmall, color = RT.Amber,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        // One camera session for all of them: three laps each, the phone talks you through it.
+                        PrimaryButton(
+                            trn(uncalibrated.size, "Calibrate {0} car · 3 laps", "Calibrate {0} cars · 3 laps each", uncalibrated.size),
+                            {
+                                app.repo.updateSettings { it.copy(lastConfig = cfg) }
+                                nav.push(Screen.Calibrate(uncalibrated.first().id, uncalibrated.drop(1).map { it.id }))
+                            },
+                            Modifier.fillMaxWidth(),
+                            icon = Icons.Rounded.CameraAlt,
                         )
                         Spacer(Modifier.height(10.dp))
                     }

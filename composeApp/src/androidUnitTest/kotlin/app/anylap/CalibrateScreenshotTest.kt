@@ -78,7 +78,7 @@ class CalibrateScreenshotTest {
     }
 
     @Test fun photo() = shot("20_calibrate_photo", CalStep.Photo(2))
-    @Test fun pass() = shot("21_calibrate_fast_pass", CalStep.Pass(SampleKind.PASS_FAST), withPass = true)
-    @Test fun line() = shot("22_calibrate_line", CalStep.Pass(SampleKind.PASS_FAST), editingLine = true)
+    @Test fun pass() = shot("21_calibrate_laps", CalStep.Laps, withPass = true)
+    @Test fun line() = shot("22_calibrate_line", CalStep.Laps, editingLine = true)
     @Test fun review() = shot("23_calibrate_review", CalStep.Review)
 }

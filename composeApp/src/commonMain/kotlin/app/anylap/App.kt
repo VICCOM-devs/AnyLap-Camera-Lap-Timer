@@ -73,6 +73,8 @@ fun App() {
     val nav = remember { Navigator() }
     LaunchedEffect(Unit) { AppGraph.state.cloud.start() }
     LaunchedEffect(Unit) { app.anylap.update.Updates.onResume() } // launch (Android also checks on every resume)
+    LaunchedEffect(Unit) { app.anylap.pro.Beta.refreshInBackground() }
+    LaunchedEffect(Unit) { app.anylap.learn.CarModel.refreshInBackground() }
     LaunchedEffect(Unit) { if (AppGraph.state.repo.settings.value.let { it.shareCrops && it.cropsNoticeSeen }) app.anylap.learn.Crops.flushSoon(AppGraph.state.cloud) }
     LaunchedEffect(Unit) {
         AppGraph.state.pendingJoin.collect { c -> if (c != null) { AppGraph.state.pendingJoin.value = null; nav.push(Screen.Watch(c)) } }
@@ -94,7 +96,7 @@ fun App() {
                         Screen.Settings -> SettingsScreen(nav)
                         Screen.Live -> LiveScreen(nav)
                         is Screen.RacerEdit -> RacerEditScreen(nav, screen.id)
-                        is Screen.Calibrate -> CalibrateScreen(nav, screen.id)
+                        is Screen.Calibrate -> CalibrateScreen(nav, screen.id, screen.queue)
                         is Screen.Results -> ResultsScreen(nav, screen.id)
                         is Screen.Replay -> ReplayScreen(nav, screen.sessionId, screen.racerId, screen.lap)
                         is Screen.Paywall -> PaywallScreen(nav, screen.feature)

@@ -2,6 +2,7 @@ package app.anylap.ui.session
 
 import app.anylap.learn.Learn
 import app.anylap.i18n.tr
+import app.anylap.pro.Beta
 import app.anylap.platform.Platform
 import app.anylap.util.fixed
 import app.anylap.ui.LocalApp
@@ -125,7 +126,7 @@ fun ResultsScreen(nav: Navigator, sessionId: String) {
             if (app.repo.events.value.any { ev -> ev.rounds.any { it.sessionId == s.id } }) nav.pop() else nav.tab(Screen.Home)
         },
         actions = {
-            CircleIconButton(Icons.Rounded.Share, { shareResults(s, branded = !tier.isPro) })
+            CircleIconButton(Icons.Rounded.Share, { shareResults(s, branded = !tier.isPro || Beta.active) })
         },
         bottomPadding = 40.dp,
     ) {

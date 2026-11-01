@@ -51,6 +51,8 @@ kotlin {
             implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
             // Auto-update (VICCOM rule): Play In-App Updates for store builds
             implementation("com.google.android.play:app-update-ktx:2.1.0")
+            // Car-recognition model (tools/ml → carnet.tflite), run on the crop at the line – LiteRT 1.x keeps the Interpreter API
+            implementation("com.google.ai.edge.litert:litert:1.4.0")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
