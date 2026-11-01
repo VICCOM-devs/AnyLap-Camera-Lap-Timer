@@ -20,6 +20,13 @@ class AnalysisFrame(
     val v: ByteArray,
     val fullWidth: Int,
     val fullHeight: Int,
+    /**
+     * Part of the camera frame that [y], [u], [v] cover: l, t, r, b in 0..1 of the whole frame (same
+     * aspect as the frame), or null = the whole frame. The camera fills it from [FrameAnalyzer.regionFor]:
+     * the finish line's surroundings at up to full resolution instead of the whole frame squeezed to
+     * 480 px ([Roi]). [lumaCrop] still takes whole-frame pixel coordinates.
+     */
+    val region: FloatArray? = null,
     val lumaCrop: (x0: Int, y0: Int, w: Int, h: Int) -> ByteArray?,
 )
 
@@ -68,6 +75,12 @@ data class AnalyzerConfig(
     val finishEdge: FinishEdge = FinishEdge.CENTRE,
     /** Capture a top-down picture of the racer on each crossing (calibration passes). */
     val captureTemplates: Boolean = false,
+    /**
+     * Ask the camera for the finish line's surroundings at up to full resolution ([Roi]) instead of the
+     * whole frame at 480 px. Lines, speeds, sizes and pictures going in and out of the analyzer stay in
+     * whole-frame units either way.
+     */
+    val zoomToLine: Boolean = true,
 )
 
 enum class IdSource { MARKER, APPEARANCE, ONLY_RACER, NONE }
@@ -153,6 +166,8 @@ class Snapshot(
     val y0: Int = 0,
     val frameW: Int = 0,
     val frameH: Int = 0,
+    /** Analysis pixels per whole-frame analysis pixel (1 = whole frame at 480 px; >1 = zoomed to the line). [x0], [y0], [frameW], [frameH] are in these zoomed pixels. */
+    val zoom: Float = 1f,
 )
 
 /**

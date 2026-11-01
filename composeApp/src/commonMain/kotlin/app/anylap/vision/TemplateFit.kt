@@ -13,8 +13,8 @@ import kotlin.math.sqrt
 
 /**
  * A racer's top-down picture from a calibration pass, in its own frame: nose pointing +x, one
- * template pixel = one analysis pixel. [mask] = 1 where the racer is. [lengthPx] / [widthPx] are its
- * real size (the motion-blur streak taken off the length).
+ * template pixel = one analysis pixel at [zoom] (see [Roi.zoom]; 1 = whole frame at 480 px). [mask] = 1
+ * where the racer is. [lengthPx] / [widthPx] are its real size (the motion-blur streak taken off the length).
  */
 class CarTemplate(
     val w: Int,
@@ -27,14 +27,36 @@ class CarTemplate(
     val widthPx: Float,
     /** Median luma of the frame it was taken from (exposure reference). */
     val lumaRef: Float,
+    /** Analysis pixels per whole-frame analysis pixel when it was taken (pictures from before Nov 2026: 1). */
+    val zoom: Float = 1f,
 ) {
-    fun encode(): FloatArray = floatArrayOf(w.toFloat(), h.toFloat(), lengthPx, widthPx, lumaRef) + y + u + v + mask
+    /** Zoom is appended last, so pictures saved before it existed still decode (as zoom 1). */
+    fun encode(): FloatArray = floatArrayOf(w.toFloat(), h.toFloat(), lengthPx, widthPx, lumaRef) + y + u + v + mask + floatArrayOf(zoom)
+
+    /** The same picture for an analysis at [target] zoom (resampled when it differs by more than 5 %). */
+    fun atZoom(target: Float): CarTemplate {
+        val k = target / zoom
+        if (abs(k - 1f) < 0.05f) return this
+        val nw = max(3, (w * k).roundToInt()); val nh = max(3, (h * k).roundToInt())
+        fun res(src: FloatArray): FloatArray = FloatArray(nw * nh) { i ->
+            // bilinear, pixel centres aligned
+            val x = ((i % nw) + 0.5f) * w / nw - 0.5f; val yy = ((i / nw) + 0.5f) * h / nh - 0.5f
+            val x0 = x.toInt().coerceIn(0, w - 1); val y0 = yy.toInt().coerceIn(0, h - 1)
+            val x1 = min(w - 1, x0 + 1); val y1 = min(h - 1, y0 + 1)
+            val fx = (x - x0).coerceIn(0f, 1f); val fy = (yy - y0).coerceIn(0f, 1f)
+            (src[y0 * w + x0] * (1 - fx) + src[y0 * w + x1] * fx) * (1 - fy) + (src[y1 * w + x0] * (1 - fx) + src[y1 * w + x1] * fx) * fy
+        }
+        return CarTemplate(nw, nh, res(y), res(u), res(v), res(mask).also { m -> for (i in m.indices) m[i] = if (m[i] >= 0.5f) 1f else 0f },
+            lengthPx * k, widthPx * k, lumaRef, target)
+    }
+
     companion object {
         fun decode(a: FloatArray): CarTemplate? {
             if (a.size < 5) return null
             val w = a[0].toInt(); val h = a[1].toInt(); val n = w * h
-            if (a.size != 5 + 4 * n) return null
-            return CarTemplate(w, h, a.copyOfRange(5, 5 + n), a.copyOfRange(5 + n, 5 + 2 * n), a.copyOfRange(5 + 2 * n, 5 + 3 * n), a.copyOfRange(5 + 3 * n, 5 + 4 * n), a[2], a[3], a[4])
+            if (a.size != 5 + 4 * n && a.size != 6 + 4 * n) return null
+            val zoom = if (a.size == 6 + 4 * n) a[5 + 4 * n].takeIf { it > 0f } ?: 1f else 1f
+            return CarTemplate(w, h, a.copyOfRange(5, 5 + n), a.copyOfRange(5 + n, 5 + 2 * n), a.copyOfRange(5 + 2 * n, 5 + 3 * n), a.copyOfRange(5 + 3 * n, 5 + 4 * n), a[2], a[3], a[4], zoom)
         }
     }
 }
@@ -90,7 +112,7 @@ object TemplateFit {
     private val ANGLES = floatArrayOf(-0.14f, -0.07f, 0f, 0.07f, 0.14f)
 
     /** Captures a racer's picture from a crossing of it alone (calibration). */
-    fun capture(c: FitCrop, exposureS: Float, blurSeen: Float): CarTemplate? {
+    fun capture(c: FitCrop, exposureS: Float, blurSeen: Float, zoom: Float = 1f): CarTemplate? {
         // centroid and extents of the foreground in the racer's own axes
         val cs = cos(c.heading); val sn = sin(c.heading)
         var n = 0; var sx = 0f; var sy = 0f
@@ -117,7 +139,7 @@ object TemplateFit {
             tm[t] = if (c.fg[q].toInt() != 0) 1f else 0f
         }
         val blur = blurSeen * c.speedPx * exposureS
-        return CarTemplate(tw, th, ty, tu, tv, tm, max(4f, (u1 - u0) - blur), max(3f, v1 - v0), c.lumaRef)
+        return CarTemplate(tw, th, ty, tu, tv, tm, max(4f, (u1 - u0) - blur), max(3f, v1 - v0), c.lumaRef, zoom)
     }
 
     private class Rot(val dx: FloatArray, val dy: FloatArray, val y: FloatArray, val u: FloatArray, val v: FloatArray)

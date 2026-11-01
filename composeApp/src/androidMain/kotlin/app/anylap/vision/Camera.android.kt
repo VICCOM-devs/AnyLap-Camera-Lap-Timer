@@ -269,6 +269,12 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
         this.listener = listener
     }
 
+    @Volatile private var regionProvider: ((Int, Int) -> FloatArray?)? = null
+
+    override fun setAnalysisRegion(provider: ((fullW: Int, fullH: Int) -> FloatArray?)?) {
+        regionProvider = provider
+    }
+
     private fun toMonotonic(sensorTs: Long): Long {
         if (timestampIsRealtime) return sensorTs
         val off = SystemClock.elapsedRealtimeNanos() - sensorTs
@@ -294,6 +300,12 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
             procH = ph
             yS = ByteArray(procW * procH); uS = ByteArray(procW * procH); vS = ByteArray(procW * procH)
         }
+        // The analyzer's region (screen coordinates) → image coordinates (upside-down sensors are flipped back below).
+        val region = regionProvider?.invoke(w, h)
+        val sr = region?.let { if (rotate180) floatArrayOf(1f - it[2], 1f - it[3], 1f - it[0], 1f - it[1]) else it }
+        val rx = ((sr?.get(0) ?: 0f) * w).toInt().coerceIn(0, w - 1); val ry = ((sr?.get(1) ?: 0f) * h).toInt().coerceIn(0, h - 1)
+        val rw = (((sr?.get(2) ?: 1f) - (sr?.get(0) ?: 0f)) * w).toInt().coerceIn(1, w - rx)
+        val rh = (((sr?.get(3) ?: 1f) - (sr?.get(1) ?: 0f)) * h).toInt().coerceIn(1, h - ry)
         val planes = img.planes
         val yBuf = planes[0].buffer
         val yRow = planes[0].rowStride
@@ -307,12 +319,12 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
         val n = procW * procH
         var i = 0
         for (py in 0 until procH) {
-            val sy = py * h / procH
+            val sy = ry + py * rh / procH
             val yBase = sy * yRow
             val uBase = (sy / 2) * uRow
             val vBase = (sy / 2) * vRow
             for (px in 0 until procW) {
-                val sx = px * w / procW
+                val sx = rx + px * rw / procW
                 val o = if (rotate180) n - 1 - i else i
                 yS[o] = yBuf.get(yBase + sx * yPix)
                 uS[o] = uBuf.get(uBase + (sx / 2) * uPix)
@@ -329,6 +341,7 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
             fullWidth = w,
             fullHeight = h,
             lumaCrop = { x0, y0, cw, ch -> cropLuma(yPlane, w, h, x0, y0, cw, ch) },
+            region = region,
         )
     }
 
