@@ -22,6 +22,42 @@ class FrameAnalyzer(
     @kotlin.concurrent.Volatile
     var config = AnalyzerConfig()
 
+    /**
+     * The config as the analyzer uses it for the current frame's [AnalysisFrame.region]: line in region
+     * coordinates, metres per pixel, size hints and calibration pictures at the region's zoom. Everything
+     * the analyzer reports is converted back to whole-frame units ([Roi]).
+     */
+    private var eff = AnalyzerConfig()
+    private var effSrc: AnalyzerConfig? = null
+    private var region: FloatArray? = null
+    private var zoom = 1f
+    /** Whole-frame camera pixels per analysis pixel, and the region's offset in camera pixels (for [AnalysisFrame.lumaCrop]). */
+    private var fsx = 1f; private var fsy = 1f; private var fox = 0f; private var foy = 0f
+
+    /**
+     * The part of the camera frame ([fullW] × [fullH]) the analyzer wants next: the finish line's
+     * surroundings ([Roi.forLine]), or null = the whole frame. Called by the camera for every frame.
+     */
+    fun regionFor(fullW: Int, fullH: Int): FloatArray? {
+        val c = config
+        if (!c.zoomToLine || regionRequest != null) return null   // a calibration photo needs the whole frame
+        return Roi.forLine(c.line, fullW, fullH)
+    }
+
+    private fun effective(c: AnalyzerConfig): AnalyzerConfig {
+        accentsFor(c.racers)
+        if (c === effSrc) return eff
+        val z = zoom; val z2 = z * z
+        eff = if (region == null) c else c.copy(
+            line = Roi.lineIn(c.line, region),
+            metersPerProcPx = c.metersPerProcPx?.let { it / z },
+            sizeHints = c.sizeHints.map { floatArrayOf(it[0], it[1] * z2) },
+            racers = c.racers.map { r -> r.template?.let { t -> r.copy(template = t.atZoom(z)) } ?: r },
+        )
+        effSrc = c
+        return eff
+    }
+
     private var w = 0
     private var h = 0
     private var model: BackgroundModel? = null
@@ -67,16 +103,28 @@ class FrameAnalyzer(
     }
 
     fun process(f: AnalysisFrame) {
-        val cfg = config
         ensureSize(f.width, f.height)
         val m = model ?: return
+        if (!Roi.same(f.region, region)) {
+            // the camera now shows another part of the frame (line moved, photo step): start over there
+            if (pending.isNotEmpty()) finalizePending(f.timestampNs, eff, force = true)
+            region = f.region?.copyOf(); zoom = Roi.zoom(region); effSrc = null
+            m.reset(); tracks.clear(); pending.clear(); claims.clear(); sizeSamples.clear()
+        }
+        val rw = region?.let { it[2] - it[0] } ?: 1f; val rh = region?.let { it[3] - it[1] } ?: 1f
+        fsx = rw * f.fullWidth / f.width; fsy = rh * f.fullHeight / f.height
+        fox = (region?.get(0) ?: 0f) * f.fullWidth; foy = (region?.get(1) ?: 0f) * f.fullHeight
+        val cfg = effective(config)
         if (resetRequested) {
             resetRequested = false
             m.reset(); tracks.clear(); pending.clear(); claims.clear()
         }
         regionRequest?.let { (rect, cb) ->
-            regionRequest = null
-            cb(regionFingerprint(f, rect))
+            if (Roi.contains(region, rect)) {
+                regionRequest = null
+                cb(regionFingerprint(f, rect.let { r -> region?.let { g -> val gw = g[2] - g[0]; val gh = g[3] - g[1]
+                    floatArrayOf((r[0] - g[0]) / gw, (r[1] - g[1]) / gh, (r[2] - g[0]) / gw, (r[3] - g[1]) / gh) } ?: r }))
+            }
         }
 
         val frac = m.apply(f.y, f.u, f.v, mask)
@@ -118,11 +166,11 @@ class FrameAnalyzer(
 
         if (frameCount % 3 == 0L) {
             onOverlay(tracks.filter { it.missed == 0 }.map { t ->
-                OverlayBox(
+                Roi.boxOut(OverlayBox(
                     t.bx.toFloat() / w, t.by.toFloat() / h,
                     (t.bx + t.bw).toFloat() / w, (t.by + t.bh).toFloat() / h,
                     abs(t.side) < 0.1f * w,
-                )
+                ), region)
             })
         }
     }
@@ -140,7 +188,7 @@ class FrameAnalyzer(
     }
 
     /** Emits crossings that are still waiting for more evidence (call when a session ends). */
-    fun flush(nowNs: Long) = finalizePending(nowNs, config, force = true)
+    fun flush(nowNs: Long) = finalizePending(nowNs, effective(config), force = true)
 
     private fun ensureSize(fw: Int, fh: Int) {
         if (fw == w && fh == h && model != null) return
@@ -527,19 +575,21 @@ class FrameAnalyzer(
      * analysis pixel underneath). Null when the camera gives no full-resolution frame.
      */
     private fun coreSeedsFull(b: Blob, exp: Float, f: AnalysisFrame): List<Pair<Float, Float>>? {
-        if (f.fullWidth <= w) return null
+        if (fsx <= 1.01f) return null   // the analysis already has every camera pixel
         val m = model ?: return null
         val bf = blobFinder!!
-        val sx = f.fullWidth.toFloat() / w; val sy = f.fullHeight.toFloat() / h
-        val X0 = (b.x * sx).toInt().coerceIn(0, f.fullWidth - 2); val Y0 = (b.y * sy).toInt().coerceIn(0, f.fullHeight - 2)
-        val X1 = ((b.x + b.w) * sx).toInt().coerceIn(X0 + 2, f.fullWidth); val Y1 = ((b.y + b.h) * sy).toInt().coerceIn(Y0 + 2, f.fullHeight)
+        val sx = fsx; val sy = fsy
+        // camera pixels of the blob; ox/oy shift them back into analysis coordinates
+        val X0 = (fox + b.x * sx).toInt().coerceIn(0, f.fullWidth - 2); val Y0 = (foy + b.y * sy).toInt().coerceIn(0, f.fullHeight - 2)
+        val X1 = (fox + (b.x + b.w) * sx).toInt().coerceIn(X0 + 2, f.fullWidth); val Y1 = (foy + (b.y + b.h) * sy).toInt().coerceIn(Y0 + 2, f.fullHeight)
+        val ox = fox; val oy = foy
         val cw = X1 - X0; val ch = Y1 - Y0
         val luma = f.lumaCrop(X0, Y0, cw, ch) ?: return null
         val n = cw * ch
         if (fullStrength.size < n) { fullStrength = FloatArray(n); fullLabels = IntArray(n); fullStack = IntArray(n) }
         // strength vs the background underneath; only inside this blob's (dilated) mask
         for (yy in 0 until ch) for (xx in 0 until cw) {
-            val ax = ((X0 + xx) / sx).toInt().coerceIn(0, w - 1); val ay = ((Y0 + yy) / sy).toInt().coerceIn(0, h - 1)
+            val ax = ((X0 + xx - ox) / sx).toInt().coerceIn(0, w - 1); val ay = ((Y0 + yy - oy) / sy).toInt().coerceIn(0, h - 1)
             val ai = ay * w + ax
             val j = yy * cw + xx
             fullLabels[j] = 0
@@ -555,7 +605,7 @@ class FrameAnalyzer(
             if (fullStrength[j] < minS) return false
             val x = j % cw; val y = j / cw
             val l = lumaAt(j)
-            val ax = ((X0 + x) / sx).toInt().coerceIn(0, w - 1); val ay = ((Y0 + y) / sy).toInt().coerceIn(0, h - 1)
+            val ax = ((X0 + x - ox) / sx).toInt().coerceIn(0, w - 1); val ay = ((Y0 + y - oy) / sy).toInt().coerceIn(0, h - 1)
             if (l >= m.meanAt(ay * w + ax) - GAP_BELOW_GROUND) return true   // not darker than the ground: not a slot
             val v = l * GAP_RATIO
             if (x >= d && x + d < cw && v < lumaAt(j - d) && v < lumaAt(j + d)) return false
@@ -581,7 +631,7 @@ class FrameAnalyzer(
                 }
             }
             next++
-            if (cnt >= CORE_MIN_FRAC * exp * scale2) found += Triple(cnt, (X0 + ax.toFloat() / cnt) / sx, (Y0 + ay.toFloat() / cnt) / sy)
+            if (cnt >= CORE_MIN_FRAC * exp * scale2) found += Triple(cnt, (X0 + ax.toFloat() / cnt - ox) / sx, (Y0 + ay.toFloat() / cnt - oy) / sy)
         }
         if (found.size < 2) return null
         return found.sortedByDescending { it.first }.take(6).map { it.second to it.third }
@@ -770,7 +820,8 @@ class FrameAnalyzer(
         val best = ArrayList<String?>()
         for (a in acc) {
             val fp = Fingerprint.normalize(a)
-            val top = cfg.racers.mapNotNull { r -> score(fp, r)?.let { r.id to it } }.maxByOrNull { it.second }
+            // no accents here: a cut can put one car's mark in the other car's half – the colours alone decide the cut
+            val top = cfg.racers.mapNotNull { r -> score(fp, r, accent = false)?.let { r.id to it } }.maxByOrNull { it.second }
             total += top?.second ?: 0f
             // a part that doesn't clearly look like any racer (shadow, legs) makes the cut invalid
             best += top?.takeIf { it.second >= SPLIT_PART_MATCH }?.first
@@ -957,10 +1008,12 @@ class FrameAnalyzer(
         val rows = ArrayList<FloatArray>(1 + others.size)
         rows += fp
         for (o in others) rows += Fingerprint.normalize(o.track.hist)
+        // a piece of a cut blob is named on its colours only: its mark may belong to the neighbour it was cut from
+        val whole = listOf(!p.split) + others.map { !it.split }
         val n = rows.size
         // columns: free racers, then one "none" column per row (score 0)
         val m = free.size + n
-        val sc = Array(n) { r -> FloatArray(m) { c -> if (c < free.size) (score(rows[r], free[c]) ?: 0f) else 0f } }
+        val sc = Array(n) { r -> FloatArray(m) { c -> if (c < free.size) (score(rows[r], free[c], whole[r]) ?: 0f) else 0f } }
         val (total, assign) = maxAssignment(sc)
         val col = assign[0]
         if (col >= free.size) return null to 0f
@@ -1063,11 +1116,17 @@ class FrameAnalyzer(
             pending.any { it !== p && abs(it.crossNs - p.crossNs) < 150_000_000L } ||
             recentFits.any { abs(it[1] - p.crossNs / 1e9f) < 0.15f }
 
+    /** Region-relative speeds (region widths / heights per second) → frame widths / heights per second. */
+    private val rwOut get() = region?.let { it[2] - it[0] } ?: 1f
+    private val rhOut get() = region?.let { it[3] - it[1] } ?: 1f
+    /** Blob area in this frame's pixels → whole-frame analysis pixels (zoom 1), as calibration stores it. */
+    private fun areaOut(a: Int): Int = if (a <= 0 || zoom == 1f) a else max(1, (a / (zoom * zoom)).roundToInt())
+
     private fun emit(p: Pending, cfg: AnalyzerConfig) {
         val t = p.track
         val fp = if (t.histFrames > 0) Fingerprint.normalize(t.hist) else null
         val candidates = if (fp != null) {
-            cfg.racers.mapNotNull { r -> score(fp, r)?.let { r.id to it } }.sortedByDescending { it.second }
+            cfg.racers.mapNotNull { r -> score(fp, r, accent = !p.split)?.let { r.id to it } }.sortedByDescending { it.second }
         } else emptyList()
 
         val markerEntry = t.markerVotes.maxByOrNull { it.value }
@@ -1154,7 +1213,7 @@ class FrameAnalyzer(
                     extras += CrossingEvent(timestampNs = tt, direction = p.direction, racerId = o.racerId, source = IdSource.APPEARANCE, confidence = 0.12f,
                         speedKmh = speedAt(t, p.crossNs, cfg), fingerprint = null, candidates = listOf(o.racerId to o.score) + firstScores.filter { it.first != o.racerId }, markerSeen = null, snapshot = p.snapshot,
                         match = o.score, accepted = true, area = 0, along = p.along, split = true, trackId = t.id, centreNs = tt, sizeRatio = sizeRatio,
-                        box = p.box, vx = p.vel.first, vy = p.vel.second, quad = quadOf(o), fit = FitInfo(firstScores, pls.size, true))
+                        box = Roi.boxOut(p.box, region), vx = p.vel.first * rwOut, vy = p.vel.second * rhOut, quad = Roi.pointsOut(quadOf(o), region), fit = FitInfo(firstScores, pls.size, true))
                 }
             }
         }
@@ -1173,17 +1232,17 @@ class FrameAnalyzer(
                 snapshot = p.snapshot,
                 match = best,
                 accepted = acceptedNow,
-                area = p.area,
+                area = areaOut(p.area),
                 along = p.along,
                 split = p.split,
                 rescue = p.rescue,
                 trackId = t.id,
                 centreNs = p.centreNs,
                 sizeRatio = sizeRatio,
-                box = p.box.let { b -> val k = (p.crossNs - p.boxTs) / 1e9f; OverlayBox(b.l + p.vel.first * k, b.t + p.vel.second * k, b.r + p.vel.first * k, b.b + p.vel.second * k, true) },
-                vx = p.vel.first, vy = p.vel.second,
-                quad = quad, fit = fitInfo,
-                template = if (cfg.captureTemplates && crop != null) TemplateFit.capture(crop, cfg.exposureS, BLUR_SEEN) else null,
+                box = Roi.boxOut(p.box.let { b -> val k = (p.crossNs - p.boxTs) / 1e9f; OverlayBox(b.l + p.vel.first * k, b.t + p.vel.second * k, b.r + p.vel.first * k, b.b + p.vel.second * k, true) }, region),
+                vx = p.vel.first * rwOut, vy = p.vel.second * rhOut,
+                quad = Roi.pointsOut(quad, region), fit = fitInfo,
+                template = if (cfg.captureTemplates && crop != null) TemplateFit.capture(crop, cfg.exposureS, BLUR_SEEN, zoom) else null,
             ),
         )
         for (x in extras) onCrossing(x)
@@ -1198,13 +1257,76 @@ class FrameAnalyzer(
      * Colour match against a racer: the combined fingerprint, blended with the best single view
      * (left side, right side, a pass…) so a car that looks different from each side still matches.
      */
-    private fun score(fp: FloatArray, r: RacerRef): Float? {
+    private fun score(fp: FloatArray, r: RacerRef, accent: Boolean = true): Float? {
         val avg = r.fingerprint?.let { Fingerprint.similarity(fp, it) }
         val best = r.views.maxOfOrNull { Fingerprint.similarity(fp, it) }
-        return when {
+        val base = when {
             avg != null && best != null -> 0.5f * avg + 0.5f * max(avg, best)
             else -> avg ?: best
+        } ?: return null
+        return if (accent) base - accentPenalty(fp, r.id) else base
+    }
+
+    // ------------------------------------------------------------------ look-alikes with a small mark
+
+    /**
+     * A look-alike's accent: what sets it apart from the cars it looks like (a 1 × 1 cm patch, a coloured
+     * number). [mean] = the group's average fingerprint, [dir] = this racer's calibration minus [mean], unit
+     * length. Only kept when the racer's own calibration passes agree on it, so identical cars without a mark
+     * get none (their differences are noise).
+     */
+    private class Accent(val mean: FloatArray, val dir: FloatArray, val norm: Float)
+    private var accents: Map<String, Accent> = emptyMap()
+    private var accentSrc: List<RacerRef>? = null
+
+    private fun accentsFor(racers: List<RacerRef>) {
+        if (racers === accentSrc) return
+        accentSrc = racers
+        val fps = racers.filter { it.fingerprint != null && it.views.size >= 2 }
+        val out = HashMap<String, Accent>()
+        // groups: connected by overall similarity ≥ LOOKALIKE_SIM
+        val left = fps.toMutableList()
+        while (left.isNotEmpty()) {
+            val g = mutableListOf(left.removeAt(0)); var grew = true
+            while (grew) {
+                grew = false
+                val iter = left.iterator()
+                while (iter.hasNext()) {
+                    val r = iter.next()
+                    if (g.any { m -> Fingerprint.similarity(m.fingerprint!!, r.fingerprint!!) >= LOOKALIKE_SIM }) { g += r; iter.remove(); grew = true }
+                }
+            }
+            if (g.size < 2) continue
+            val mean = FloatArray(Fingerprint.SIZE); for (r in g) for (i in mean.indices) mean[i] += r.fingerprint!![i] / g.size
+            for (r in g) {
+                val d = FloatArray(mean.size) { r.fingerprint!![it] - mean[it] }; val n = norm(d)
+                if (n < 1e-6f) continue
+                // the racer's passes must point the same way (a real mark, not noise)
+                val agree = r.views.map { v -> cosine(FloatArray(mean.size) { v[it] - mean[it] }, d) }.average()
+                if (agree >= ACCENT_AGREE) out[r.id] = Accent(mean, FloatArray(d.size) { d[it] / n }, n)
+            }
         }
+        accents = out
+    }
+
+    /**
+     * How much less a crossing looks like [id] once the shared look of its look-alike group is taken away:
+     * 0 when the crossing shows the racer's accent, up to [ACCENT_W] when it shows another direction. Nothing
+     * when the crossing itself has no accent to speak of (a mark hidden or too small to see): no name from noise.
+     */
+    private fun accentPenalty(fp: FloatArray, id: String): Float {
+        val a = accents[id] ?: return 0f
+        val d = FloatArray(fp.size) { fp[it] - a.mean[it] }
+        if (norm(d) < ACCENT_SEEN * a.norm) return 0f
+        val c = cosine(d, a.dir)
+        return ACCENT_W * (1f - c.coerceIn(-1f, 1f)) / 2f
+    }
+
+    private fun norm(v: FloatArray): Float { var s = 0f; for (x in v) s += x * x; return sqrt(s) }
+    private fun cosine(a: FloatArray, b: FloatArray): Float {
+        var ab = 0f; var aa = 0f; var bb = 0f
+        for (i in a.indices) { ab += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i] }
+        return if (aa < 1e-12f || bb < 1e-12f) 0f else ab / sqrt(aa * bb)
     }
 
     /**
@@ -1256,11 +1378,14 @@ class FrameAnalyzer(
                 vx, vy,
             )
         }
-        val l = config.line
+        val l = eff.line
         val line = floatArrayOf((l.x1 * w - x0) / sw, (l.y1 * h - y0) / sh, (l.x2 * w - x0) / sw, (l.y2 * h - y0) / sh)
         val n = t.pts.size
         val frameNs = if (n >= 2) t.pts[n - 1].ts - t.pts[n - 2].ts else 0L
-        return Snapshot(sw, sh, out, boxes, line, f.timestampNs, frameNs, yuv, fgc, lastMedian, x0, y0, w, h)
+        // crop origin and frame size in "whole frame at this zoom" pixels, so whole-frame boxes map onto the picture
+        val fw = (w / ((region?.let { it[2] - it[0] }) ?: 1f)).roundToInt(); val fh = (h / ((region?.let { it[3] - it[1] }) ?: 1f)).roundToInt()
+        val gx = ((region?.get(0) ?: 0f) * fw).roundToInt(); val gy = ((region?.get(1) ?: 0f) * fh).roundToInt()
+        return Snapshot(sw, sh, out, boxes, line, f.timestampNs, frameNs, yuv, fgc, lastMedian, gx + x0, gy + y0, fw, fh, zoom)
     }
 
     private fun yuvToArgb(y: Int, u: Int, v: Int): Int {
@@ -1294,14 +1419,14 @@ class FrameAnalyzer(
     // ------------------------------------------------------------------ markers
 
     private fun readMarker(t: Track, f: AnalysisFrame) {
-        val sx = f.fullWidth.toFloat() / w
-        val sy = f.fullHeight.toFloat() / h
+        val sx = fsx
+        val sy = fsy
         val padX = t.bw * 0.15f
         val padY = t.bh * 0.15f
-        val x0 = ((t.bx - padX) * sx).roundToInt().coerceIn(0, f.fullWidth - 2)
-        val y0 = ((t.by - padY) * sy).roundToInt().coerceIn(0, f.fullHeight - 2)
-        val x1 = ((t.bx + t.bw + padX) * sx).roundToInt().coerceIn(x0 + 2, f.fullWidth)
-        val y1 = ((t.by + t.bh + padY) * sy).roundToInt().coerceIn(y0 + 2, f.fullHeight)
+        val x0 = (fox + (t.bx - padX) * sx).roundToInt().coerceIn(0, f.fullWidth - 2)
+        val y0 = (foy + (t.by - padY) * sy).roundToInt().coerceIn(0, f.fullHeight - 2)
+        val x1 = (fox + (t.bx + t.bw + padX) * sx).roundToInt().coerceIn(x0 + 2, f.fullWidth)
+        val y1 = (foy + (t.by + t.bh + padY) * sy).roundToInt().coerceIn(y0 + 2, f.fullHeight)
         var cw = x1 - x0
         var ch = y1 - y0
         if (cw < 24 || ch < 24) return
@@ -1323,6 +1448,14 @@ class FrameAnalyzer(
         const val PROC_W = 480
         const val MIN_SIMILARITY = 0.30f
         const val MIN_MARGIN = 0.06f
+        /** Racers this alike overall (calibration) form a look-alike group, where only their accents tell them apart. */
+        const val LOOKALIKE_SIM = 0.9f
+        /** Score lost by a crossing pointing the opposite way from a racer's accent (half when unrelated). */
+        const val ACCENT_W = 0.3f
+        /** A racer's calibration passes must agree on its accent this much (mean cosine) for it to count. */
+        const val ACCENT_AGREE = 0.5f
+        /** A crossing whose difference from the group's look is below this share of the racer's accent shows no accent. */
+        const val ACCENT_SEEN = 0.35f
 
         /**
          * Default [AnalyzerConfig.minMatch]. Two things of the same brightness already share the

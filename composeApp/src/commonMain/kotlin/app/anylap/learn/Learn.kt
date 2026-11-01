@@ -152,7 +152,7 @@ object Learn {
     /** Camera facts + what was in the picture, for the training set. Nothing personal: ids are random UUIDs. */
     private fun meta(e: CrossingEvent, snap: Snapshot, card: ReviewItem?, session: Session, camera: Camera): JsonObject = buildJsonObject {
         put("w", snap.width); put("h", snap.height)
-        put("x0", snap.x0); put("y0", snap.y0); put("frameW", snap.frameW); put("frameH", snap.frameH)
+        put("x0", snap.x0); put("y0", snap.y0); put("frameW", snap.frameW); put("frameH", snap.frameH); put("zoom", snap.zoom)
         put("lumaRef", snap.lumaRef)
         snap.line?.let { l -> put("line", buildJsonArray { l.forEach { add(it) } }) }
         put("boxes", buildJsonArray {

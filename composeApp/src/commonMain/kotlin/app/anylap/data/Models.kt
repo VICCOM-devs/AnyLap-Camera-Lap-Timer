@@ -77,7 +77,8 @@ data class Racer(
         val all = calibration.filter { it.kind.isPass }.mapNotNull { s -> s.topPicture?.let { app.anylap.vision.CarTemplate.decode(it.toFloatArray()) }?.let { s.kind to it } }
         if (all.isEmpty()) return null
         val p = (all.firstOrNull { it.first == SampleKind.PASS_SLOW } ?: all.first()).second
-        return app.anylap.vision.CarTemplate(p.w, p.h, p.y, p.u, p.v, p.mask, all.map { it.second.lengthPx }.average().toFloat(), all.map { it.second.widthPx }.average().toFloat(), p.lumaRef)
+        // sizes from passes taken at another zoom ([app.anylap.vision.Roi]) are brought to this picture's zoom
+        return app.anylap.vision.CarTemplate(p.w, p.h, p.y, p.u, p.v, p.mask, all.map { it.second.lengthPx / it.second.zoom * p.zoom }.average().toFloat(), all.map { it.second.widthPx / it.second.zoom * p.zoom }.average().toFloat(), p.lumaRef, p.zoom)
     }
 }
 
@@ -110,7 +111,7 @@ data class CalibrationSample(
     val direction: Int = 0,
     /** Passes: how much the crossing looked like the racer's other samples (0..1), for tuning. */
     val match: Float? = null,
-    /** Passes: blob area (analysis px) and position along the line (0..1) – how big one racer looks there. */
+    /** Passes: blob area (whole-frame analysis px, i.e. at zoom 1 – see [app.anylap.vision.Roi]) and position along the line (0..1) – how big one racer looks there. */
     val area: Int? = null,
     val along: Float? = null,
     /** Passes: top-down picture of the racer + its true size ([app.anylap.vision.CarTemplate.encode]), for the fit of touching or doubtful crossings. Local only. */

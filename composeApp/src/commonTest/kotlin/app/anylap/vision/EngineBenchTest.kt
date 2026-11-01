@@ -99,4 +99,30 @@ class EngineBenchTest {
         scenario("E worst (1/120 s), 10 identical white cars with tags, 3 laps", WORST, tenWhite, 3, false)
         scenario("F worst (1/120 s), white+silver+red+blue, no tags", WORST, listOf(white, silver, red, blue), 4, true)
     }
+
+    /**
+     * Four identical white cars told apart by a 1 × 1 cm patch each (pink, lime, orange, cyan) on the roof,
+     * bright light, with the close calls (overtake 2 frames apart, side by side touching, nose to tail).
+     * Before Nov 2026 every crossing came out "unknown": the white bodies made the cars 0.96–0.97 alike and
+     * the margin never reached MIN_MARGIN. Look-alike accents compare only what differs (18 of 22 named,
+     * 0 wrong). The same grid without patches must stay unnamed – never a name from noise.
+     */
+    @Test
+    fun oneCentimetrePatchesTellIdenticalCarsApart() {
+        fun grid(patch: Boolean) = listOf(pink, lime, orange, cyan).mapIndexed { i, t ->
+            Car("w${i + 1}", white.body, if (patch) listOf(t) else emptyList(), tagCm = 1f to 1f)
+        }
+        for (patch in listOf(true, false)) {
+            val cars = grid(patch)
+            val r = Renderer(cond = GOOD, seed = 22, subSamples = 4)
+            val hints = ArrayList<FloatArray>()
+            val racers = cars.mapIndexed { i, c -> calibrate(c, r, lane(i % 5), 100.0 * (i + 1), listOf(1.2, 1.5, 4.0, 5.0), margin = 1.0, sizeHints = hints) }
+            val s = race(r, racers, passesFor(cars, laps = 3, closeCalls = true), hints)
+            println("4 identical white cars, ${if (patch) "patches" else "no patches"}: $s\n  " + s.notes.joinToString("\n  "))
+            assertTrue(s.idWrong == 0, "wrong identities: ${s.idWrong}")
+            // the four close calls where two cars touch or overlap stay "unknown" (Check tray, lap timing): a cut
+            // can put one car's mark in the other's half, so pieces are named on colour only
+            if (patch) assertTrue(s.idCorrect >= s.passes - 4, "correct identities: ${s.idCorrect} of ${s.passes}")
+        }
+    }
 }

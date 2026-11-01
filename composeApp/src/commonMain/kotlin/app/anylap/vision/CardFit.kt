@@ -364,6 +364,8 @@ object CardFit {
         snap: Snapshot, ownersOf: (trackId: Int) -> List<String>, pool: List<Pair<String, CarTemplate>>, exposureS: Float,
         others: List<Seen> = emptyList(),
     ): List<Fit> {
+        // calibration pictures at the zoom this picture was taken at ([Roi])
+        val pool = pool.map { (id, t) -> id to t.atZoom(snap.zoom) }
         val byId = pool.toMap()
         val specs = ArrayList<Spec>()
         for (b in snap.boxes) {

@@ -16,6 +16,13 @@ interface CameraController {
     fun setFrameListener(listener: ((AnalysisFrame) -> Unit)?)
 
     /**
+     * Which part of the frame to analyse: called per frame with the camera's analysis-stream size, returns
+     * l, t, r, b (0..1, landscape screen coordinates) or null for the whole frame ([Roi]). Cameras that
+     * don't support it keep sending the whole frame (iOS for now).
+     */
+    fun setAnalysisRegion(provider: ((fullW: Int, fullH: Int) -> FloatArray?)?) {}
+
+    /**
      * Locks exposure and white balance (during a session) so brightness changes don't look like
      * motion. Android also shortens the shutter to ≤ 1/500 s where the sensor allows (ISO up, same
      * brightness) so racers stay sharp; iOS keeps the plain lock for now.
@@ -63,11 +70,13 @@ class VisionSession(val camera: CameraController) {
     )
 
     init {
+        camera.setAnalysisRegion { w, h -> analyzer.regionFor(w, h) }
         camera.setFrameListener { analyzer.process(it) }
     }
 
     fun close() {
         camera.setFrameListener(null)
+        camera.setAnalysisRegion(null)
     }
 }
 
