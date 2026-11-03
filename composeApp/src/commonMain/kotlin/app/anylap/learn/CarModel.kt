@@ -8,6 +8,7 @@ import app.anylap.platform.Platform
 import app.anylap.platform.joinPath
 import app.anylap.util.Bmp
 import app.anylap.util.Sha256
+import app.anylap.vision.CarPicture
 import app.anylap.vision.CrossingEvent
 import app.anylap.platform.SignatureRunner
 import app.anylap.vision.Snapshot
@@ -172,24 +173,38 @@ object CarModel {
 
     // ------------------------------------------------------------------ signatures
 
-    /** Signature of the subject's crop in a snapshot (the box with [trackId], else the whole picture). */
+    /**
+     * Signature of the subject in a snapshot: its full-resolution [CarPicture] when the camera gave one
+     * (Android), else its box in the analysis picture (else the whole picture).
+     */
     fun signature(snap: Snapshot, trackId: Int): Pair<FloatArray, Float>? {
         val r = runner ?: return null
+        val car = snap.car?.takeIf { it.trackId == trackId }
         val box = snap.boxes.firstOrNull { it.trackId == trackId }
-        val crop = if (box != null) cropForSignature(snap.argb, snap.width, snap.height, box.l, box.t, box.r, box.b, r.inputSize)
-        else cropForSignature(snap.argb, snap.width, snap.height, 0f, 0f, 1f, 1f, r.inputSize)
+        val m = CarPicture.MODEL_BOX
+        val crop = when {
+            car != null -> cropForSignature(car.argb, car.width, car.height, m[0], m[1], m[2], m[3], r.inputSize)
+            box != null -> cropForSignature(snap.argb, snap.width, snap.height, box.l, box.t, box.r, box.b, r.inputSize)
+            else -> cropForSignature(snap.argb, snap.width, snap.height, 0f, 0f, 1f, 1f, r.inputSize)
+        }
         val out = r.run(crop) ?: return null
         return out.signature to out.carProbability
     }
 
-    /** Signature of a calibration picture (a BMP crop of the whole car), cached by sample id. */
-    private fun sampleSignature(id: String, imagePath: String?): FloatArray? {
+    /**
+     * Signature of a calibration / learned picture, cached by sample id: the full-resolution car picture
+     * ([CalibrationSample.carImagePath], read like a crossing's) when there is one, else the older picture
+     * (the whole BMP as the car's box).
+     */
+    private fun sampleSignature(id: String, carPath: String?, imagePath: String?): FloatArray? {
         if (runner == null) return null
         sampleSignatures[id]?.let { return it }
         if (sampleSignatures.containsKey(id)) return null
-        val sig = imagePath?.let { p -> Platform.readBytes(p) }?.let { Bmp.decode(it) }?.let { (w, h, argb) ->
+        val m = CarPicture.MODEL_BOX
+        val box = if (carPath != null) m else floatArrayOf(0f, 0f, 1f, 1f)
+        val sig = (carPath ?: imagePath)?.let { p -> Platform.readBytes(p) }?.let { Bmp.decode(it) }?.let { (w, h, argb) ->
             val r = runner ?: return null
-            r.run(cropForSignature(argb, w, h, 0f, 0f, 1f, 1f, r.inputSize))?.signature
+            r.run(cropForSignature(argb, w, h, box[0], box[1], box[2], box[3], r.inputSize))?.signature
         }
         sampleSignatures[id] = sig
         return sig
@@ -206,7 +221,7 @@ object CarModel {
         for (racer in racers) {
             val sigs = racer.calibration
                 .filter { it.kind.isPass || it.kind == SampleKind.LEARNED }
-                .mapNotNull { s -> sampleSignature(s.id, s.imagePath) }
+                .mapNotNull { s -> sampleSignature(s.id, s.carImagePath, s.imagePath) }
             if (sigs.isEmpty()) { prototypes.remove(racer.id); continue }
             val dim = sigs.first().size
             val mean = FloatArray(dim)

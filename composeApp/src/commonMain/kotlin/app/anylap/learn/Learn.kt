@@ -121,7 +121,7 @@ object Learn {
         if (samples.isEmpty()) return
         val racer = repo.racer(racerId) ?: return
         val (updated, dropped) = Learning.merge(racer, samples)
-        dropped.forEach { d -> d.imagePath?.let { Platform.delete(it) } }
+        dropped.forEach { d -> d.imagePath?.let { Platform.delete(it) }; d.carImagePath?.let { Platform.delete(it) } }
         if (updated !== racer) repo.upsertRacer(updated)
     }
 
@@ -135,8 +135,11 @@ object Learn {
                 try { joinPath(Platform.dataDir, "learn_${e.racerId}_${e.timestampNs / 1_000_000}.bmp").also { Platform.writeBytes(it, Bmp.encode(w, h, px)) } } catch (t: Throwable) { null }
             }
         } else null
+        val carPath = snap?.car?.takeIf { it.trackId == e.trackId && !e.split }?.let { c ->
+            try { joinPath(Platform.dataDir, "learn_${e.racerId}_${e.timestampNs / 1_000_000}_car.bmp").also { Platform.writeBytes(it, Bmp.encode(c.width, c.height, c.argb)) } } catch (t: Throwable) { null }
+        }
         return CalibrationSample(
-            id = Uuid.random().toString(), kind = SampleKind.LEARNED, fingerprint = fp.toList(), imagePath = path, createdAt = Platform.nowMillis(),
+            id = Uuid.random().toString(), kind = SampleKind.LEARNED, fingerprint = fp.toList(), imagePath = path, carImagePath = carPath, createdAt = Platform.nowMillis(),
             speedKmh = e.speedKmh, direction = e.direction, match = e.match.takeIf { it > 0f }, sessionId = sessionId, learnedBy = by.key,
         )
     }

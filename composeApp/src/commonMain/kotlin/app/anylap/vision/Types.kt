@@ -27,8 +27,27 @@ class AnalysisFrame(
      * 480 px ([Roi]). [lumaCrop] still takes whole-frame pixel coordinates.
      */
     val region: FloatArray? = null,
+    /**
+     * Full-resolution colour of a rectangle of the camera frame (whole-frame pixel coordinates, like
+     * [lumaCrop]) as ARGB, row by row – for the recognition model's car picture ([CarPicture]). Null =
+     * the camera can't (iOS for now): the model then uses the analysis snapshot.
+     */
+    val colorCrop: ((x0: Int, y0: Int, w: Int, h: Int) -> IntArray?)? = null,
     val lumaCrop: (x0: Int, y0: Int, w: Int, h: Int) -> ByteArray?,
 )
+
+/**
+ * The crossing car at the camera's full resolution, cut exactly the way the recognition model wants it
+ * (`tools/ml/train/real_crops.py`): a square of 1.6 × the car's longer side, centred on the car, at most
+ * [MAX_SIDE] px (area-averaged down). [trackId] = the car it shows. The model reads it with [MODEL_BOX].
+ */
+class CarPicture(val width: Int, val height: Int, val argb: IntArray, val trackId: Int) {
+    companion object {
+        const val MAX_SIDE = 128
+        /** The car's box inside a [CarPicture] (l, t, r, b): the middle 1 / 1.6 of the square. */
+        val MODEL_BOX = floatArrayOf(0.5f - 0.3125f, 0.5f - 0.3125f, 0.5f + 0.3125f, 0.5f + 0.3125f)
+    }
+}
 
 data class RacerRef(
     val id: String,
@@ -168,6 +187,8 @@ class Snapshot(
     val frameH: Int = 0,
     /** Analysis pixels per whole-frame analysis pixel (1 = whole frame at 480 px; >1 = zoomed to the line). [x0], [y0], [frameW], [frameH] are in these zoomed pixels. */
     val zoom: Float = 1f,
+    /** The subject car at the camera's full resolution, for the recognition model (null = camera can't). */
+    val car: CarPicture? = null,
 )
 
 /**

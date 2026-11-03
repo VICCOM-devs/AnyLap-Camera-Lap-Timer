@@ -125,6 +125,8 @@ data class CalibrationSample(
     /** Learned samples: the session the crossing was learned from, and how it was confirmed ("auto", "verdict"). */
     val sessionId: String? = null,
     val learnedBy: String? = null,
+    /** The car at the camera's full resolution as the recognition model reads it ([app.anylap.vision.CarPicture], BMP); local only. Null = older sample: the model uses [imagePath]. */
+    val carImagePath: String? = null,
 )
 
 @Serializable

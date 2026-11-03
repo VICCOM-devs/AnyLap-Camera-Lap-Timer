@@ -342,7 +342,36 @@ class AndroidCameraController(private val context: Context, val choice: AndroidC
             fullHeight = h,
             lumaCrop = { x0, y0, cw, ch -> cropLuma(yPlane, w, h, x0, y0, cw, ch) },
             region = region,
+            colorCrop = { x0, y0, cw, ch -> cropColor(planes, w, h, x0, y0, cw, ch) },
         )
+    }
+
+    /** Full-resolution ARGB of a screen-coordinate rectangle (YUV_420_888 → RGB, full range) – the model's car picture. */
+    private fun cropColor(planes: Array<Image.Plane>, w: Int, h: Int, x0: Int, y0: Int, cw: Int, ch: Int): IntArray? {
+        if (cw <= 0 || ch <= 0 || cw * ch > 512 * 512) return null
+        val ix0 = if (rotate180) w - x0 - cw else x0
+        val iy0 = if (rotate180) h - y0 - ch else y0
+        if (ix0 < 0 || iy0 < 0 || ix0 + cw > w || iy0 + ch > h) return null
+        val yb = planes[0].buffer; val yRow = planes[0].rowStride; val yPix = planes[0].pixelStride
+        val ub = planes[1].buffer; val uRow = planes[1].rowStride; val uPix = planes[1].pixelStride
+        val vb = planes[2].buffer; val vRow = planes[2].rowStride; val vPix = planes[2].pixelStride
+        val out = IntArray(cw * ch)
+        var k = 0
+        for (r in 0 until ch) {
+            val sy = iy0 + r
+            for (c in 0 until cw) {
+                val sx = ix0 + c
+                val yv = yb.get(sy * yRow + sx * yPix).toInt() and 0xFF
+                val d = (ub.get((sy / 2) * uRow + (sx / 2) * uPix).toInt() and 0xFF) - 128
+                val e = (vb.get((sy / 2) * vRow + (sx / 2) * vPix).toInt() and 0xFF) - 128
+                val rr = (yv + 1.402f * e).toInt().coerceIn(0, 255)
+                val gg = (yv - 0.344f * d - 0.714f * e).toInt().coerceIn(0, 255)
+                val bb = (yv + 1.772f * d).toInt().coerceIn(0, 255)
+                out[k++] = (0xFF shl 24) or (rr shl 16) or (gg shl 8) or bb
+            }
+        }
+        if (rotate180) out.reverse()
+        return out
     }
 
     private fun cropLuma(plane: Image.Plane, w: Int, h: Int, x0: Int, y0: Int, cw: Int, ch: Int): ByteArray? {
