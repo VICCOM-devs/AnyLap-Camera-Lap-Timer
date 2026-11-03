@@ -254,11 +254,16 @@ private fun CalibrateContent(nav: Navigator, firstRacerId: String, initialQueue:
                 Platform.writeBytes(path, Bmp.encode(snap.width, snap.height, snap.argb))
                 path
             }
+            // the car at full resolution, the way the recognition model reads crossings (prototype source)
+            val carImg = e.snapshot?.car?.takeIf { it.trackId == e.trackId && !e.split }?.let { c ->
+                runCatching { joinPath(Platform.dataDir, "cal_${id}_${now}_car.bmp").also { Platform.writeBytes(it, Bmp.encode(c.width, c.height, c.argb)) } }.getOrNull()
+            }
             val sample = CalibrationSample(
                 id = Uuid.random().toString(),
                 kind = CalibrationPlan.passKind(current.sport, e.speedKmh, current.calibration),
                 fingerprint = fp.toList(),
                 imagePath = img,
+                carImagePath = carImg,
                 createdAt = now,
                 speedKmh = e.speedKmh,
                 direction = e.direction,

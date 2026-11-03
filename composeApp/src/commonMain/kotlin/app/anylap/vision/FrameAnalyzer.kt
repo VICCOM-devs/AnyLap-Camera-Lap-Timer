@@ -1318,7 +1318,55 @@ class FrameAnalyzer(
         // crop origin and frame size in "whole frame at this zoom" pixels, so whole-frame boxes map onto the picture
         val fw = (w / ((region?.let { it[2] - it[0] }) ?: 1f)).roundToInt(); val fh = (h / ((region?.let { it[3] - it[1] }) ?: 1f)).roundToInt()
         val gx = ((region?.get(0) ?: 0f) * fw).roundToInt(); val gy = ((region?.get(1) ?: 0f) * fh).roundToInt()
-        return Snapshot(sw, sh, out, boxes, line, f.timestampNs, frameNs, yuv, fgc, lastMedian, gx + x0, gy + y0, fw, fh, zoom)
+        return Snapshot(sw, sh, out, boxes, line, f.timestampNs, frameNs, yuv, fgc, lastMedian, gx + x0, gy + y0, fw, fh, zoom, carPicture(t, f))
+    }
+
+    /**
+     * The track's car at the camera's full resolution for the recognition model: the square of 1.6 × the box's
+     * longer side round the box centre ([CarPicture]), area-averaged down to at most [CarPicture.MAX_SIDE].
+     * From the camera's colour crop when it has more detail than the analysis image, else from the analysis
+     * image itself – so crossings and calibration pictures always have the same framing.
+     */
+    private fun carPicture(t: Track, f: AnalysisFrame): CarPicture? {
+        val crop = f.colorCrop
+        if (crop != null && fsx > 1.01f) {
+            // camera pixels: more detail than the analysis image
+            val cx = fox + (t.bx + t.bw / 2f) * fsx; val cy = foy + (t.by + t.bh / 2f) * fsy
+            val side = (max(t.bw * fsx, t.bh * fsy) * 1.6f).roundToInt().coerceAtLeast(8)
+            if (side <= min(f.fullWidth, f.fullHeight)) {
+                val x0 = (cx - side / 2f).roundToInt().coerceIn(0, f.fullWidth - side)
+                val y0 = (cy - side / 2f).roundToInt().coerceIn(0, f.fullHeight - side)
+                val px = try { crop(x0, y0, side, side) } catch (e: Throwable) { null }
+                if (px != null && px.size == side * side) return square(px, side, t.id)
+            }
+        }
+        // the analysis image already has every camera pixel (zoomed 1:1), or no colour crop (iOS): same square from it
+        val side = (max(t.bw, t.bh) * 1.6f).roundToInt().coerceAtLeast(8)
+        if (side > min(w, h)) return null
+        val cx = t.bx + t.bw / 2f; val cy = t.by + t.bh / 2f
+        val x0 = (cx - side / 2f).roundToInt().coerceIn(0, w - side)
+        val y0 = (cy - side / 2f).roundToInt().coerceIn(0, h - side)
+        val px = IntArray(side * side) { k -> val i = (y0 + k / side) * w + x0 + k % side; yuvToArgb(f.y[i].toInt() and 0xFF, f.u[i].toInt() and 0xFF, f.v[i].toInt() and 0xFF) }
+        return square(px, side, t.id)
+    }
+
+    private fun square(px: IntArray, side: Int, trackId: Int): CarPicture =
+        if (side <= CarPicture.MAX_SIDE) CarPicture(side, side, px, trackId)
+        else CarPicture(CarPicture.MAX_SIDE, CarPicture.MAX_SIDE, downscale(px, side, CarPicture.MAX_SIDE), trackId)
+
+    /** Square ARGB picture [src] × [src] → [dst] × [dst] by averaging the source pixels under each target pixel. */
+    private fun downscale(px: IntArray, src: Int, dst: Int): IntArray {
+        val out = IntArray(dst * dst)
+        for (y in 0 until dst) {
+            val ya = y * src / dst; val yb = max(ya + 1, (y + 1) * src / dst)
+            for (x in 0 until dst) {
+                val xa = x * src / dst; val xb = max(xa + 1, (x + 1) * src / dst)
+                var r = 0; var g = 0; var b = 0; var n = 0
+                for (yy in ya until yb) for (xx in xa until xb) { val c = px[yy * src + xx]; r += (c shr 16) and 0xFF; g += (c shr 8) and 0xFF; b += c and 0xFF; n++ }
+                out[y * dst + x] = (0xFF shl 24) or ((r / n) shl 16) or ((g / n) shl 8) or (b / n)
+            }
+        }
+        return out
     }
 
     private fun yuvToArgb(y: Int, u: Int, v: Int): Int {
