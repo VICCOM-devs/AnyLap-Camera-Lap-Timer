@@ -1,0 +1,29 @@
+# Publishes a car-recognition model as GitHub release model-v<N> from models/v<N>/ on a model/v<N> branch.
+# The app downloads carnet.tflite from the release URL stored in anylap_models (sha256-checked).
+name: model-release
+on:
+  push:
+    branches: ["model/**"]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${GITHUB_REF_NAME#model/}"            # v1
+          dir="models/$v"
+          sha256sum "$dir"/carnet.tflite
+          tag="model-$v"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$dir"/carnet.tflite "$dir"/carnet.onnx "$dir"/carnet.json --clobber
+          else
+            gh release create "$tag" "$dir"/carnet.tflite "$dir"/carnet.onnx "$dir"/carnet.json \
+              --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title "Car recognition model ${v#v}" --notes-file "$dir"/notes.md
+          fi
+          echo "::notice title=Model release::$tag $(sha256sum "$dir"/carnet.tflite | cut -c1-64)"
