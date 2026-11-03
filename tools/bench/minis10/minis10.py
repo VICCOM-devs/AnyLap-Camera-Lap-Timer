@@ -14,9 +14,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 TEX_DIR = os.environ.get("MINIS_TEX", "/home/claude/blend/minis_tex")
-FONT_B = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_C = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
-FONT_I = "/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf"
+def _font(*cands):
+    """First font file that exists: Linux (DejaVu), Windows (Arial), macOS – the liveries render anywhere."""
+    for c in cands:
+        if os.path.exists(c): return c
+    return cands[0]
+_WF = os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts")
+FONT_B = _font("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", os.path.join(_WF, "arialbd.ttf"), "/System/Library/Fonts/Supplemental/Arial Bold.ttf")
+FONT_C = _font("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf", os.path.join(_WF, "ARIALNB.TTF"), os.path.join(_WF, "arialbd.ttf"), "/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf")
+FONT_I = _font("/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf", os.path.join(_WF, "arialbi.ttf"), os.path.join(_WF, "arialbd.ttf"), "/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf")
 TEX = 2048
 
 # ---------------------------------------------------------------- specs
@@ -124,6 +130,39 @@ SHAPES = {
                     nose=.09, tail=.03, wing="swan"),
 }
 
+# RC classes (tools/ml sprite library). cab=None: no glass cabin (windows painted on the shell).
+# Builder flags come from the spec: lift (cm, body raised on its shocks), body_frac (body width / overall
+# width), open (wheels outside the body, no arch cut-outs), ww (tyre width cm), rc (list of hardware).
+SHAPES.update({
+    "buggy":   dict(top=[(0, .28), (.12, .34), (.40, .42), (.58, .75), (.72, .80), (.86, .50), (1, .28)],
+                    hw=[(0, .55), (.25, .62), (.5, .70), (.75, .62), (1, .35)], n=3.0, tumble=.25, fender=0.0, flare=0.0,
+                    cab=None, nose=.12, tail=.02, wing="buggy", clearance=.008),
+    "truggy":  dict(top=[(0, .32), (.15, .40), (.45, .48), (.60, .78), (.75, .80), (.88, .52), (1, .32)],
+                    hw=[(0, .60), (.3, .70), (.55, .75), (.8, .66), (1, .40)], n=3.4, tumble=.22, fender=0.0, flare=0.0,
+                    cab=None, nose=.12, tail=.03, wing="buggy", clearance=.008),
+    "monster": dict(top=[(0, .42), (.30, .45), (.55, .48), (.85, .45), (1, .38)],
+                    hw=[(0, .90), (.5, .95), (1, .88)], n=6.0, tumble=.05, fender=.04, flare=.03, cabn=6.0, cabt=.08,
+                    cab=(.36, .62, .86, [(.36, .50), (.43, .96), (.57, 1.0), (.62, .50)]), nose=.04, tail=.02, wing=None),
+    "sct":     dict(top=[(0, .52), (.12, .60), (.65, .60), (.88, .55), (1, .45)],
+                    hw=[(0, .92), (.5, .96), (1, .90)], n=6.0, tumble=.08, fender=.06, flare=.05, cabn=5.5, cabt=.12,
+                    cab=(.28, .62, .86, [(.28, .58), (.36, .95), (.52, 1.0), (.62, .58)]), nose=.05, tail=.03, wing=None),
+    "crawler": dict(top=[(0, .50), (.2, .52), (.6, .55), (.8, .55), (1, .50)],
+                    hw=[(0, .86), (.5, .88), (1, .84)], n=9.0, tumble=.02, fender=.02, flare=.02, cabn=8.0, cabt=.05,
+                    cab=(.35, .68, .88, [(.35, .60), (.40, .98), (.62, 1.0), (.68, .60)]), nose=.02, tail=.01, wing=None),
+    "trophy":  dict(top=[(0, .38), (.25, .40), (.40, .46), (.75, .50), (1, .42)],
+                    hw=[(0, .80), (.5, .90), (1, .86)], n=5.0, tumble=.06, fender=.05, flare=.08, cabn=5.0, cabt=.10,
+                    cab=(.30, .55, .80, [(.30, .48), (.36, .95), (.50, 1.0), (.55, .50)]), nose=.06, tail=.01, wing=None),
+    "drag":    dict(top=[(0, .35), (.10, .45), (.30, .48), (.55, .42), (.80, .30), (1, .18)],
+                    hw=[(0, .85), (.30, .90), (.70, .75), (1, .55)], n=3.5, tumble=.10, fender=.10, flare=.03,
+                    cab=(.22, .45, .60, [(.22, .46), (.28, .92), (.38, 1.0), (.45, .44)]), nose=.15, tail=.02, wing="drift", clearance=.004),
+    "kei":     dict(top=[(0, .55), (.10, .58), (.85, .58), (1, .50)],
+                    hw=[(0, .90), (.5, .94), (1, .90)], n=7.0, tumble=.04, fender=.02, flare=.02, cabn=7.0, cabt=.06,
+                    cab=(.15, .82, .92, [(.15, .56), (.20, .97), (.78, 1.0), (.82, .58)]), nose=.03, tail=.01, wing=None),
+    "pan":     dict(top=[(0, .40), (.10, .46), (.50, .44), (.85, .36), (1, .24)],
+                    hw=[(0, .95), (.5, .97), (1, .90)], n=3.2, tumble=.10, fender=.25, flare=.02,
+                    cab=(.40, .68, .60, [(.40, .44), (.48, .95), (.56, 1.0), (.62, .90), (.68, .42)]), nose=.09, tail=.02, wing="gt"),
+})
+
 # ---------------------------------------------------------------- helpers
 def prof(points, s, smooth=0.035):
     """Linear table -> gaussian-smoothed value at s (array)."""
@@ -150,8 +189,9 @@ def pmat(name, rgb, rough=0.4, metal=0.0, coat=0.0, emit=None):
         b.inputs["Emission Color"].default_value = (*emit, 1); b.inputs["Emission Strength"].default_value = 2.0
     return m
 
-def tex_mat(name, path, rough=0.3, metal=0.0, coat=0.6, inside=(0.02, 0.02, 0.02)):
-    """Image-textured paint; back faces (inside of the shell, seen through arches) dark."""
+def tex_mat(name, path, rough=0.3, metal=0.0, coat=0.6, inside=(0.02, 0.02, 0.02), clear_mask=None):
+    """Image-textured paint; back faces (inside of the shell, seen through arches) dark. clear_mask: image
+    path, white = painted, black = clear polycarbonate (a Lexan body's unpainted windows / panels)."""
     m = bpy.data.materials.new(name); m.use_nodes = True
     nt = m.node_tree; nodes = nt.nodes
     b = nodes["Principled BSDF"]; out = nodes["Material Output"]
@@ -165,8 +205,32 @@ def tex_mat(name, path, rough=0.3, metal=0.0, coat=0.6, inside=(0.02, 0.02, 0.02
     mix = nodes.new("ShaderNodeMixShader")
     nt.links.new(geo.outputs["Backfacing"], mix.inputs["Fac"])
     nt.links.new(b.outputs["BSDF"], mix.inputs[1]); nt.links.new(dif.outputs["BSDF"], mix.inputs[2])
-    nt.links.new(mix.outputs["Shader"], out.inputs["Surface"])
+    if clear_mask:
+        g = nodes.new("ShaderNodeBsdfPrincipled")
+        g.inputs["Base Color"].default_value = (0.95, 0.95, 0.95, 1); g.inputs["Roughness"].default_value = 0.04
+        g.inputs["Transmission Weight"].default_value = 1.0; g.inputs["IOR"].default_value = 1.58
+        mi = bpy.data.images.load(clear_mask); mi.colorspace_settings.name = "Non-Color"
+        mt = nodes.new("ShaderNodeTexImage"); mt.image = mi
+        mix2 = nodes.new("ShaderNodeMixShader")
+        nt.links.new(mt.outputs["Color"], mix2.inputs["Fac"])
+        nt.links.new(g.outputs["BSDF"], mix2.inputs[1]); nt.links.new(mix.outputs["Shader"], mix2.inputs[2])
+        nt.links.new(mix2.outputs["Shader"], out.inputs["Surface"])
+    else:
+        nt.links.new(mix.outputs["Shader"], out.inputs["Surface"])
     return m
+
+KEY = (1.0, 0.0, 1.0)   # paint this colour on a Lexan body = leave it clear
+
+def clear_mask_from(im, path, key_rgb=(255, 0, 255), glass=False):
+    """Mask image (white = paint, black = clear) from the key colour; key pixels themselves turned light grey.
+    glass=True also clears the dark window tint (cabin of a Lexan body). Returns the cleaned image."""
+    a = np.asarray(im).astype(np.int16)
+    clear = (np.abs(a[..., 0] - key_rgb[0]) < 40) & (a[..., 1] < 60) & (np.abs(a[..., 2] - key_rgb[2]) < 40)
+    if glass: clear |= (np.abs(a[..., 0] - 28) < 12) & (np.abs(a[..., 1] - 34) < 12) & (np.abs(a[..., 2] - 43) < 12)   # the window tint
+    m = np.where(clear, 0, 255).astype(np.uint8)
+    Image.fromarray(m).transpose(Image.FLIP_TOP_BOTTOM).filter(ImageFilter.GaussianBlur(1.0)).save(path)
+    a[clear] = (225, 225, 225)
+    return Image.fromarray(a.astype(np.uint8))
 
 def link(o, parent):
     o.parent = parent
@@ -178,6 +242,12 @@ def box(name, size, loc, m, parent, rot=(0, 0, 0), bevel=0.0):
     o.scale = size; o.data.materials.append(m)
     if bevel:
         md = o.modifiers.new("bevel", "BEVEL"); md.width = bevel; md.segments = 2
+    return link(o, parent)
+
+def sph(name, r, loc, m, parent, scale=(1, 1, 1)):
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=r, location=loc, segments=16, ring_count=8)
+    o = bpy.context.active_object; o.name = name; o.scale = scale; o.data.materials.append(m)
+    for p_ in o.data.polygons: p_.use_smooth = True
     return link(o, parent)
 
 def cyl(name, r, depth, loc, m, parent, rot=(0, math.pi / 2, 0), verts=32):
@@ -428,6 +498,34 @@ def paint_body(p, sp, meta, rnd, arches):
         p.poly([(L * .30, -P), (L * .33, -P), (L * .55, 0), (L * .33, P), (L * .30, P), (L * .52, 0)], a2)
     elif lv == "nose":
         pass
+    elif lv == "proc":     # procedural: 2-5 random elements, so no two cars are painted alike
+        cols = [a1, a2, (0.97, 0.97, 0.95), (0.03, 0.03, 0.03)]
+        for _ in range(rnd.randint(2, 5)):
+            c = rnd.choice(cols); kind_ = rnd.choice(["stripe_long", "stripe_cross", "block", "diag", "band", "chevron", "spots", "fade"])
+            if kind_ == "stripe_long":
+                w_ = rnd.uniform(1.5, 10); o = rnd.uniform(0, 12) * rnd.choice([0, 1])
+                for sg in ((-1, 1) if o else (1,)): p.rect(0, sg * o - w_ / 2, L, sg * o + w_ / 2, c)
+            elif kind_ == "stripe_cross":
+                a = rnd.uniform(.1, .9) * L; w_ = rnd.uniform(2, 14); p.rect(a - w_ / 2, -P, a + w_ / 2, P, c)
+            elif kind_ == "block":
+                a0 = rnd.uniform(0, .7) * L; p.rect(a0, -P, a0 + rnd.uniform(.15, .5) * L, P, c)
+            elif kind_ == "diag":
+                a0 = rnd.uniform(.2, .8) * L; d = rnd.uniform(-.3, .3) * L
+                p.poly([(a0 - d, -P), (L if rnd.random() < .5 else 0, -P), (L if rnd.random() < .5 else 0, P), (a0 + d, P)], c)
+            elif kind_ == "band":
+                f = rnd.uniform(.3, .9); w_ = rnd.uniform(1.5, 6)
+                for sg in (-1, 1): p.rect(0, sg * sideA(.5, f), L, sg * (sideA(.5, f) + w_), c)
+            elif kind_ == "chevron":
+                a0 = rnd.uniform(.3, .9) * L; d = rnd.uniform(8, 30); w_ = rnd.uniform(3, 10)
+                p.poly([(a0, 0), (a0 - d, -P), (a0 - d - w_, -P), (a0 - w_, 0), (a0 - d - w_, P), (a0 - d, P)], c)
+            elif kind_ == "spots":
+                r_ = rnd.uniform(1.5, 5)
+                for _ in range(rnd.randint(4, 14)): p.ellipse(rnd.uniform(0, L), rnd.uniform(-P, P) * .6, r_, r_, c)
+            else:   # fade: steps of colour along the car
+                n_ = rnd.randint(4, 8); a0 = rnd.uniform(0, .5) * L
+                for k in range(n_):
+                    t_ = k / n_; cc = tuple(c[i] * (1 - t_) + b0[i] * t_ for i in range(3))
+                    p.rect(a0 + k * L * .05, -P, a0 + (k + 1) * L * .05, P, cc)
     # ---- panel lines (doors, bonnet)
     pl = tuple(c * 0.35 for c in b0) if sum(b0) > 0.3 else (0.12, 0.12, 0.12)
     ra, fa = arches
@@ -573,20 +671,32 @@ def build_car(sp, origin=(0, 0, 0)):
     accm = pmat(f"{name} acc", sp["acc"], rough=0.3, coat=0.5)
     basem = pmat(f"{name} basecol", sp["base"], rough=0.3, coat=0.5)
     if sp["kind"] == "formula":
-        return build_formula(sp, root, rnd, dark, rubber, rimm, carbon, accm, basem)
-    S = SHAPES[sp["kind"]]
+        build_formula(sp, root, rnd, dark, rubber, rimm, carbon, accm, basem)
+        if "driver" in sp.get("rc", []):
+            add_driver(sp, root, 0.0, -L / 2 + 0.43 * L, H * 0.62)
+        return root
+    if sp.get("nobody"):
+        return build_bare(sp, root, rnd, L, W, H, wr, dark, rubber, rimm, carbon)
+    S = sp.get("shape") or SHAPES[sp["kind"]]
     clr = S.get("clearance", 0.006)
-    wb = 0.58 * L if sp["kind"] != "rally" else 0.60 * L
+    lift = sp.get("lift", 0.0) / 100                     # body raised on its suspension (trucks, crawlers)
+    open_w = sp.get("open", False)                       # wheels outside the body (buggies, monsters)
+    Wb = W * sp.get("body_frac", 1.0)                    # body width; W = overall width incl. wheels
+    wb = sp.get("wb", 0.60 if sp["kind"] == "rally" else 0.58) * L
     centre = 0.01 * L
     ra = 0.5 - wb / (2 * L) - centre / L; fa = 0.5 + wb / (2 * L) - centre / L
     archw = (wr * 1.15) / L
+    arch_top = max(clr + 0.002, 2 * wr + 0.0015 - lift)  # wheel top in body coordinates
+    bodyp = bpy.data.objects.new(f"{name}__bodyroot", None); bpy.context.collection.objects.link(bodyp)
+    bodyp.parent = root; bodyp.location = (0, 0, lift)
 
     def F(s):
         s = np.asarray(s, float)
         top = prof(S["top"], s) * H + S["fender"] * 0 * H
-        hw = prof(S["hw"], s) * W / 2 + S["flare"] * W / 2 * (gauss(s, ra, archw * .9) + gauss(s, fa, archw * .9))
-        hw = np.minimum(hw, W / 2)
-        bot = clr + (2 * wr + 0.0015 - clr) * np.clip(1.25 * (np.maximum(gauss(s, ra, archw * .62), gauss(s, fa, archw * .62)) - .2), 0, 1) ** .7
+        hw = prof(S["hw"], s) * Wb / 2 + S["flare"] * Wb / 2 * (gauss(s, ra, archw * .9) + gauss(s, fa, archw * .9))
+        hw = np.minimum(hw, Wb / 2)
+        cut = 0.0 if open_w else 1.0
+        bot = clr + cut * (arch_top - clr) * np.clip(1.25 * (np.maximum(gauss(s, ra, archw * .62), gauss(s, fa, archw * .62)) - .2), 0, 1) ** .7
         bot = np.minimum(bot, top - 0.006)
         fend = S["fender"] * H * (0.35 + 0.65 * np.maximum(gauss(s, ra, archw * 1.1), gauss(s, fa, archw * 1.1)))
         return 0.0, float(hw), float(bot), float(top), S["n"], S["tumble"], float(fend)
@@ -602,55 +712,214 @@ def build_car(sp, origin=(0, 0, 0)):
     v, f, fu, meta = loft(f"{name}__body", -L / 2, L / 2, F, nose_R=S["nose"] * L, tail_R=S["tail"] * L, dents=dents)
     p = Painter(meta, sp["base"])
     paint_body(p, sp, meta, rnd, (ra, fa))
-    if sp["kind"] == "rally":
-        p.im = paint_dirt(p.im, 1.2, rnd); p.d = ImageDraw.Draw(p.im)
-    tpath = f"{TEX_DIR}/{name.replace(' ', '_')}_body.png"; p.save(tpath)
+    if S.get("cab") is None:   # no glass cabin: windows painted on the shell (buggy / truggy bodies)
+        glass = (0.012, 0.016, 0.024)
+        th = top_half(meta, .66)
+        p.poly([(p.L * .56, -th * .7), (p.L * .74, -th * .5), (p.L * .74, th * .5), (p.L * .56, th * .7)], glass)
+        for sg in (-1, 1):
+            p.poly([(p.L * .50, sg * th * .95), (p.L * .70, sg * th * .9), (p.L * .66, sg * th * 1.25), (p.L * .52, sg * th * 1.3)], glass)
+    if sp["kind"] == "rally" or sp.get("dirt"):
+        p.im = paint_dirt(p.im, sp.get("dirt", 1.2), rnd); p.d = ImageDraw.Draw(p.im)
+    lexan = sp.get("lexan", 0)   # 0 = hard body; 1 = clear windows; 2 = + unpainted panels
+    bmask = None
+    if lexan >= 2:
+        for _ in range(rnd.randint(1, 3)):
+            a0 = rnd.uniform(0, .8) * p.L; w_ = rnd.uniform(.08, .3) * p.L
+            if rnd.random() < .5: p.rect(a0, -p.P, a0 + w_, p.P, KEY)
+            else:
+                sg = rnd.choice([-1, 1]); f0 = rnd.uniform(.3, .8)
+                p.rect(a0, sg * side_arc(meta, .5, f0), a0 + w_, sg * p.P, KEY)
+    tpath = f"{TEX_DIR}/{name.replace(' ', '_')}_body.png"
+    if lexan >= 2:
+        bmask = f"{TEX_DIR}/{name.replace(' ', '_')}_bodymask.png"
+        p.im = clear_mask_from(p.im, bmask); p.d = ImageDraw.Draw(p.im)
+    p.save(tpath)
     matte = sp.get("matte", False)
-    bodym = tex_mat(f"{name} body", tpath, rough=0.62 if matte else 0.28, metal=sp.get("metal", 0.0), coat=0 if matte else 0.7)
-    body = mesh_obj(f"{name}__body", v, f, fu, bodym, root)
+    bodym = tex_mat(f"{name} body", tpath, rough=0.62 if matte else 0.28, metal=sp.get("metal", 0.0), coat=0 if matte else 0.7, clear_mask=bmask)
+    body = mesh_obj(f"{name}__body", v, f, fu, bodym, bodyp)
 
     # ---- cabin
-    c0, c1, cw, ctop = S["cab"]
+    has_cab = S.get("cab") is not None
+    c0, c1, cw, ctop = S["cab"] if has_cab else (.4, .6, 0, [])
     def Fc(sc):
         s = c0 + (c1 - c0) * sc
         bt = float(prof(S["top"], s) * H) - 0.005
         tp = float(prof(ctop, s, smooth=0.02) * H)
-        hw = float(prof(S["hw"], s) * W / 2 * cw * (0.92 + 0.08 * math.sin(math.pi * sc)))
+        hw = float(prof(S["hw"], s) * Wb / 2 * cw * (0.92 + 0.08 * math.sin(math.pi * sc)))
         return 0.0, hw, bt, max(tp, bt + 0.002), S.get("cabn", 3.2), S.get("cabt", 0.25), 0.0
-    vc, fc, fuc, metac = loft(f"{name}__cabin", -L / 2 + c0 * L, -L / 2 + c1 * L, Fc, M=40, N=48,
-                              nose_R=0.25 * (c1 - c0) * L, tail_R=0.2 * (c1 - c0) * L)
-    pc = Painter(metac, (0.015, 0.02, 0.03)); paint_cabin(pc, sp, metac, rnd)
-    cpath = f"{TEX_DIR}/{name.replace(' ', '_')}_cabin.png"; pc.save(cpath)
-    cabm = tex_mat(f"{name} cabin", cpath, rough=0.08 if not matte else 0.3, coat=0.8 if not matte else 0)
-    mesh_obj(f"{name}__cabin", vc, fc, fuc, cabm, root)
+    if has_cab:
+        vc, fc, fuc, metac = loft(f"{name}__cabin", -L / 2 + c0 * L, -L / 2 + c1 * L, Fc, M=40, N=48,
+                                  nose_R=0.25 * (c1 - c0) * L, tail_R=0.2 * (c1 - c0) * L)
+        pc = Painter(metac, (0.015, 0.02, 0.03)); paint_cabin(pc, sp, metac, rnd)
+        cpath = f"{TEX_DIR}/{name.replace(' ', '_')}_cabin.png"
+        cmask = None
+        if lexan >= 1:
+            cmask = f"{TEX_DIR}/{name.replace(' ', '_')}_cabinmask.png"
+            pc.im = clear_mask_from(pc.im, cmask, glass=True); pc.d = ImageDraw.Draw(pc.im)
+        pc.save(cpath)
+        cabm = tex_mat(f"{name} cabin", cpath, rough=0.08 if not matte else 0.3, coat=0.8 if not matte else 0, clear_mask=cmask)
+        mesh_obj(f"{name}__cabin", vc, fc, fuc, cabm, bodyp)
 
     # ---- chassis plate, wheels
-    box(f"{name}__chassis", (W * 0.78, L * 0.86, 0.003), (0, -centre, clr * 0.6 + 0.0015), dark, root)
-    track = W / 2 - 0.0045
-    ww = {"drift": 0.0115, "group5": 0.0115, "rally": 0.010}.get(sp["kind"], 0.0095)
+    ww = sp["ww"] / 100 if sp.get("ww") else {"drift": 0.0115, "group5": 0.0115, "rally": 0.010}.get(sp["kind"], 0.0095)
+    if lift > 0 or open_w:
+        box(f"{name}__chassis", (min(Wb, W * 0.5) * 0.8, L * 0.86, 0.003), (0, -centre, max(clr * 0.6 + 0.0015, wr * 0.55)), dark, root)
+    else:
+        box(f"{name}__chassis", (W * 0.78, L * 0.86, 0.003), (0, -centre, clr * 0.6 + 0.0015), dark, root)
+    track = (W / 2 - ww / 2 * 0.2) if open_w else W / 2 - 0.0045
+    spokes = sp.get("spokes", 5 if sp["seed"] % 2 else 6)
+    knobs = sp.get("knobs", 0)
     for sg_x in (-1, 1):
-        for (sa, wwid) in ((ra, ww * 1.12), (fa, ww)):
+        for (sa, wwid, rr) in ((ra, ww * sp.get("rear_ww", 1.12), wr), (fa, ww * sp.get("front_ww", 1.0), wr * sp.get("front_r", 1.0))):
             y = -L / 2 + sa * L
             x = sg_x * (track - wwid / 2 + 0.0008)
-            add_wheel(name, root, (x, y, wr), wr, wwid, sg_x, rubber, rimm, dark, spokes=5 if sp["seed"] % 2 else 6,
-                      camber=0.12 if sp["kind"] == "drift" else 0.0)
+            add_wheel(name, root, (x, y, rr), rr, wwid, sg_x, rubber, rimm, dark, spokes=spokes,
+                      camber=sp.get("camber", 0.12 if sp["kind"] == "drift" else 0.0), knobs=knobs)
     # ---- mirrors
-    sm = c0 + (c1 - c0) * 0.80
-    for sg in (-1, 1):
-        y = -L / 2 + sm * L
-        hw_ = float(prof(S["hw"], sm) * W / 2 * cw)
-        z = float(prof(S["top"], sm) * H) + 0.006
-        box(f"{name}__mirror", (0.007, 0.004, 0.0045), (sg * (hw_ + 0.004), y, z), basem, root, bevel=0.001)
+    if has_cab and not open_w:
+        sm = c0 + (c1 - c0) * 0.80
+        for sg in (-1, 1):
+            y = -L / 2 + sm * L
+            hw_ = float(prof(S["hw"], sm) * Wb / 2 * cw)
+            z = float(prof(S["top"], sm) * H) + 0.006
+            box(f"{name}__mirror", (0.007, 0.004, 0.0045), (sg * (hw_ + 0.004), y, z), basem, bodyp, bevel=0.001)
     # ---- aero
-    add_aero(sp, S, root, L, W, H, ra, fa, carbon, accm, basem, dark, rnd)
+    add_aero(sp, S, bodyp, L, Wb if not open_w else W * 0.85, H, ra, fa, carbon, accm, basem, dark, rnd)
     if sp.get("tape"):   # a strip of fluorescent tape across the roof (seen from above)
-        cab = S.get("cab", (.4, .6))
+        cab = S.get("cab") or (.4, .6)
         tm = pmat(f"{name} tape", sp["tape"], rough=0.5, emit=tuple(x * 0.35 for x in sp["tape"]))
-        box(f"{name}__tape", (W * 0.62, 0.024, 0.0012), (0, -L / 2 + (cab[0] + cab[1]) / 2 * L, H + 0.0008), tm, root)
+        box(f"{name}__tape", (Wb * 0.62, 0.024, 0.0012), (0, -L / 2 + (cab[0] + cab[1]) / 2 * L, H + 0.0008), tm, bodyp)
+    # ---- RC hardware (shock towers, shocks, arms, antenna, body clips, bumpers, rails, spare, light bar)
+    if sp.get("rc"):
+        add_rc(sp, root, L, W, Wb, H, wr, ww, ra, fa, track, lift, clr, dark, carbon, rnd)
     return root
 
-def add_wheel(name, root, loc, r, w, side, rubber, rimm, dark, spokes=5, camber=0.0):
-    t = cyl(f"{name}__tyre", r, w, loc, rubber, root, rot=(0, math.pi / 2 + side * camber, 0), verts=40)
+def add_driver(sp, root, x, y, z):
+    """Helmet + shoulders (a scale driver figure); from above it's the round helmet that shows."""
+    name = sp["name"]
+    hc = sp.get("helmet", (0.95, 0.95, 0.95))
+    r = sp["H"] / 100 * 0.16
+    sph(f"{name}__helmet", r, (x, y, z + r * 1.4), pmat(f"{name} helmet", hc, 0.25, coat=0.8), root)
+    box(f"{name}__visor", (r * 1.3, r * 0.5, r * 0.5), (x, y + r * 0.6, z + r * 1.4), pmat(f"{name} visor", (0.02, 0.02, 0.03), 0.05), root)
+    sph(f"{name}__shoulders", r * 1.4, (x, y - r * 0.2, z + r * 0.2), pmat(f"{name} suit", sp.get("suit", (0.8, 0.1, 0.1)), 0.6), root, scale=(1.3, 0.8, 0.6))
+
+def build_bare(sp, root, rnd, L, W, H, wr, dark, rubber, rimm, carbon):
+    """No body: the chassis as raced without a shell (crawler comps, practice, a lost body) – plate, battery,
+    motor, ESC, receiver, servo, wires, plus wheels and the RC hardware."""
+    name = sp["name"]
+    open_w = True; lift = sp.get("lift", 0.0) / 100; clr = 0.006
+    wb = sp.get("wb", 0.6) * L; ra = 0.5 - wb / (2 * L); fa = 0.5 + wb / (2 * L)
+    ww = sp.get("ww", wr * 80) / 100
+    Wb = W * sp.get("body_frac", 0.6)
+    track = W / 2 - ww / 2 * 0.2
+    zc = max(0.006, wr * 0.55)
+    box(f"{name}__plate", (Wb * 0.7, L * 0.9, 0.003), (0, 0, zc), carbon if rnd.random() < 0.5 else pmat(f"{name} alu plate", (0.6, 0.62, 0.66), 0.3, 0.9), root)
+    bat = rnd.choice([(0.05, 0.05, 0.05), (0.1, 0.25, 0.8), (0.8, 0.1, 0.1), (0.95, 0.7, 0.05), (0.2, 0.2, 0.22)])
+    sx = rnd.choice([-1, 1]) * Wb * 0.15
+    box(f"{name}__battery", (Wb * 0.28, L * 0.42, 0.014), (sx, -L * 0.02, zc + 0.008), pmat(f"{name} bat", bat, 0.4), root, bevel=0.001)
+    box(f"{name}__batlabel", (Wb * 0.2, L * 0.18, 0.0004), (sx, -L * 0.02, zc + 0.0152), pmat(f"{name} label", rnd.choice([(0.95, 0.95, 0.95), (0.95, 0.8, 0.1), (0.1, 0.8, 0.9)]), 0.5), root)
+    mc = rnd.choice([(0.1, 0.25, 0.8), (0.75, 0.1, 0.1), (0.05, 0.05, 0.05), (0.85, 0.55, 0.1), (0.5, 0.5, 0.55)])
+    cyl(f"{name}__motor", 0.0085, 0.022, (-sx * 0.8, -L * 0.28, zc + 0.01), pmat(f"{name} motor", mc, 0.3, 0.8), root, rot=(math.pi / 2, 0, 0), verts=20)
+    box(f"{name}__esc", (0.016, 0.02, 0.012), (-sx, L * 0.05, zc + 0.007), dark, root, bevel=0.001)
+    cyl(f"{name}__fan", 0.006, 0.002, (-sx, L * 0.05, zc + 0.014), pmat(f"{name} fan", (0.15, 0.15, 0.17), 0.4), root, rot=(0, 0, 0), verts=16)
+    box(f"{name}__rx", (0.012, 0.016, 0.007), (-sx, L * 0.22, zc + 0.005), pmat(f"{name} rx", rnd.choice([(0.05, 0.05, 0.05), (0.9, 0.9, 0.9), (0.8, 0.1, 0.1)]), 0.5), root)
+    box(f"{name}__servo", (0.02, 0.01, 0.012), (0, L * 0.32, zc + 0.007), dark, root)
+    wire = [pmat(f"{name} wr", (0.8, 0.05, 0.05), 0.5), pmat(f"{name} wb", (0.02, 0.02, 0.02), 0.5)]
+    for k in range(2):
+        _cyl_between(f"{name}__wire", (sx + (k - .5) * 0.004, L * 0.18, zc + 0.012), (-sx + (k - .5) * 0.004, L * 0.06, zc + 0.012), 0.0012, wire[k], root, verts=6)
+    for sg_x in (-1, 1):
+        for sa in (ra, fa):
+            add_wheel(name, root, (sg_x * (track - ww / 2 + 0.0008), -L / 2 + sa * L, wr), wr, ww, sg_x, rubber, rimm, dark,
+                      spokes=sp.get("spokes", 6), knobs=sp.get("knobs", 0))
+    if sp.get("rc"):
+        add_rc(sp, root, L, W, Wb, H * 0.6, wr, ww, ra, fa, track, lift, clr, dark, carbon, rnd)
+    return root
+
+def _cyl_between(name, a, b, r, m, parent, verts=12):
+    """A cylinder from point a to point b."""
+    from mathutils import Vector
+    a, b = Vector(a), Vector(b); d = b - a
+    if d.length < 1e-5: return None
+    rot = Vector((0, 0, 1)).rotation_difference(d.normalized()).to_euler()
+    return cyl(name, r, d.length, tuple((a + b) / 2), m, parent, rot=tuple(rot), verts=verts)
+
+def add_rc(sp, root, L, W, Wb, H, wr, ww, ra, fa, track, lift, clr, dark, carbon, rnd):
+    """The parts that make an RC car look like an RC car from above and from the side."""
+    name = sp["name"]; parts = set(sp["rc"])
+    metal = pmat(f"{name} alu", sp.get("alu", (0.55, 0.57, 0.62)), rough=0.3, metal=0.9)
+    plast = pmat(f"{name} parts", sp.get("parts_col", (0.03, 0.03, 0.03)), rough=0.5)
+    body_top = lift + H * 0.62
+    for sa in (ra, fa):
+        y = -L / 2 + sa * L
+        axle_z = wr
+        tower_top = max(body_top - 0.004, axle_z + wr * 0.9) if "towers" in parts else axle_z + wr * 0.8
+        if "towers" in parts:
+            box(f"{name}__tower", (min(Wb, W * 0.55) * 0.75, 0.0025, tower_top - wr * 0.6), (0, y + (0.006 if sa < 0.5 else -0.006), (tower_top + wr * 0.6) / 2), carbon, root)
+        if "arms" in parts:
+            inner = min(Wb, W * 0.5) * 0.35
+            for sg in (-1, 1):
+                ln = abs(track) - inner
+                box(f"{name}__arm", (ln, 0.007, 0.0025), (sg * (inner + ln / 2), y, axle_z * 0.85), plast, root)
+                cyl(f"{name}__hex", wr * 0.22, 0.004, (sg * (abs(track) - ww * 0.3), y, axle_z), metal, root, verts=6)
+        if "shocks" in parts:
+            for sg in (-1, 1):
+                a = (sg * min(Wb, W * 0.55) * 0.3, y, tower_top - 0.002)
+                b = (sg * (abs(track) - ww * 0.9), y, axle_z * 0.9)
+                _cyl_between(f"{name}__shock", a, b, 0.0028, pmat(f"{name} shock", sp.get("shock_col", (0.85, 0.65, 0.1)), rough=0.25, metal=0.8), root)
+                _cyl_between(f"{name}__spring", a, b, 0.0036, pmat(f"{name} spring", sp.get("spring_col", (0.9, 0.1, 0.1)), rough=0.4), root, verts=8)
+    if "antenna" in parts:
+        ha = rnd.uniform(0.6, 1.4) * H
+        sg = rnd.choice([-1, 1])
+        cyl(f"{name}__antenna", 0.0011, ha, (sg * Wb * 0.22, -L * rnd.uniform(0.05, 0.3), body_top + ha / 2 - 0.004),
+            pmat(f"{name} ant", sp.get("ant_col", (0.05, 0.05, 0.05)), rough=0.6), root, rot=(0, 0, 0), verts=8)
+    if "clips" in parts:
+        for sy in (ra + 0.04, fa - 0.06):
+            for sg in (-1, 1):
+                cyl(f"{name}__post", 0.0013, 0.007, (sg * Wb * 0.14, -L / 2 + sy * L, body_top + 0.001), dark, root, rot=(0, 0, 0), verts=8)
+                cyl(f"{name}__clip", 0.0024, 0.0006, (sg * Wb * 0.14 + 0.002, -L / 2 + sy * L, body_top + 0.003), metal, root, rot=(math.pi / 2, 0, 0), verts=10)
+    if "bumpers" in parts:
+        bz = max(0.006, wr * 0.7)
+        box(f"{name}__bumper_f", (Wb * rnd.uniform(0.45, 0.8), 0.008, 0.007), (0, L / 2 + 0.002, bz), plast, root, bevel=0.0015)
+        box(f"{name}__bumper_r", (Wb * rnd.uniform(0.4, 0.7), 0.006, 0.006), (0, -L / 2 - 0.001, bz), plast, root, bevel=0.0015)
+    if "rails" in parts:
+        for sg in (-1, 1):
+            box(f"{name}__rail", (0.003, L * 0.9, 0.008), (sg * W * 0.13, 0, wr * 1.05), metal, root)
+        for sa in (ra, fa):   # solid axles of a crawler
+            _cyl_between(f"{name}__axle", (-abs(track) * 0.85, -L / 2 + sa * L, wr), (abs(track) * 0.85, -L / 2 + sa * L, wr), 0.004, metal, root)
+            cyl(f"{name}__diff", 0.009, 0.012, (0, -L / 2 + sa * L, wr), metal, root, rot=(math.pi / 2, 0, 0), verts=16)
+    if "spare" in parts:
+        cyl(f"{name}__spare", wr * 0.85, ww * 0.8, (0, -L * 0.30, lift + H * 0.62 + ww * 0.4), pmat(f"{name} sparetyre", (0.025, 0.025, 0.025), rough=0.85), root, rot=(0, 0, 0), verts=32)
+    if "lightbar" in parts:
+        cab = (sp.get("shape") or SHAPES[sp["kind"]]).get("cab") or (.4, .6)
+        yl = -L / 2 + cab[1] * L - 0.01
+        box(f"{name}__lightbar", (Wb * 0.6, 0.006, 0.005), (0, yl, lift + H + 0.004), dark, root)
+        for k in range(5):
+            cyl(f"{name}__lamp", 0.0022, 0.002, (-Wb * 0.24 + k * Wb * 0.12, yl + 0.0032, lift + H + 0.004), pmat("lamp", (1, 1, .9), .1, emit=(1, 1, .85)), root, rot=(math.pi / 2, 0, 0), verts=12)
+    if "driver" in parts:
+        cab = (sp.get("shape") or SHAPES[sp["kind"]]).get("cab") or (.4, .6)
+        add_driver(sp, root, -Wb * 0.12 if sp.get("rhd") else Wb * 0.12, -L / 2 + (cab[0] + cab[1]) / 2 * L, lift + H * 0.55)
+    if "wheelie" in parts:   # drag car wheelie bar with two small wheels
+        for sg in (-1, 1):
+            _cyl_between(f"{name}__wbar", (sg * 0.006, -L / 2, wr * 0.8), (sg * 0.012, -L / 2 - L * 0.28, 0.006), 0.0014, metal, root, verts=8)
+            cyl(f"{name}__wbwheel", 0.005, 0.004, (sg * 0.014, -L / 2 - L * 0.28, 0.005), dark, root, verts=16)
+    if "underglow" in parts:
+        c = sp.get("glow", (0.1, 0.6, 1.0))
+        box(f"{name}__glow", (Wb * 0.8, L * 0.7, 0.001), (0, 0, max(0.003, lift + clr * 0.5)), pmat(f"{name} glow", c, 0.5, emit=c), root)
+    if "cage" in parts:   # roll cage tubes over a crawler / sct cab
+        cab = (sp.get("shape") or SHAPES[sp["kind"]]).get("cab") or (.4, .6)
+        for sg in (-1, 1):
+            _cyl_between(f"{name}__cage", (sg * Wb * 0.4, -L / 2 + cab[0] * L, lift + H * 0.6), (sg * Wb * 0.35, -L / 2 + cab[1] * L, lift + H * 1.02), 0.0012, metal, root, verts=8)
+
+def add_wheel(name, root, loc, r, w, side, rubber, rimm, dark, spokes=5, camber=0.0, knobs=0):
+    t = cyl(f"{name}__tyre", r * (0.93 if knobs else 1.0), w, loc, rubber, root, rot=(0, math.pi / 2 + side * camber, 0), verts=40)
+    if knobs:   # off-road tread: blocks round the tyre, two staggered rows
+        x0, y0, z0 = loc
+        for k in range(knobs):
+            a = 2 * math.pi * k / knobs
+            for row in (-1, 1):
+                aa = a + (math.pi / knobs if row > 0 else 0)
+                box(f"{name}__knob", (w * 0.38, r * 0.16, r * 0.12),
+                    (x0 + row * w * 0.22, y0 + math.sin(aa) * r * 0.97, z0 + math.cos(aa) * r * 0.97), rubber, root, rot=(-aa, 0, 0))
     md = t.modifiers.new("bevel", "BEVEL"); md.width = r * 0.22; md.segments = 4; md.limit_method = "ANGLE"
     for p_ in t.data.polygons: p_.use_smooth = True
     x, y, z = loc
@@ -676,7 +945,12 @@ def add_aero(sp, S, root, L, W, H, ra, fa, carbon, accm, basem, dark, rnd):
                     box(f"{name}__post", (0.0015, 0.004, z - deck + 0.004), (sg * span * 0.22, y - chord * .1, zz + 0.002), dark, root)
                 else:
                     box(f"{name}__post", (0.0012, 0.004, z - deck), (sg * span * 0.30, y + chord * .1, zz), dark, root)
-    if kind == "gt":
+    if kind is None or kind == "none":
+        pass
+    elif kind == "buggy":   # big flat RC wing on two posts over the rear
+        chord = L * rnd.uniform(0.18, 0.28)
+        wing(W * rnd.uniform(0.75, 1.0), chord, H * rnd.uniform(1.05, 1.35), -L / 2 + chord * 0.35, tilt=rnd.uniform(0.12, 0.35), plate_h=rnd.uniform(0.008, 0.02))
+    elif kind == "gt":
         wing(W * 0.90, 0.018, H * 1.0, y_r, tilt=0.15)
         box(f"{name}__splitter", (W * 0.86, 0.006, 0.0012), (0, L / 2 - S["nose"] * L * 0.45 - 0.003, 0.0045), carbon, root)
     elif kind == "lmp":

@@ -16,3 +16,6 @@ iosApp/*.xcodeproj
 iosApp/build/
 xcuserdata/
 DerivedData/
+
+# ML pipeline outputs (tools/ml) live outside the repo
+tools/ml/**/__pycache__/
