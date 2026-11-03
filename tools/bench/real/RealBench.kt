@@ -144,6 +144,11 @@ fun main(args: Array<String>) {
         println("  calibrated %-14s %d passes%s".format(car, views.size, if (tpl != null) ", top-down picture (zoom %.2f)".format(tpl.zoom) else ""))
     }
 
+    // calibration look-alikes (what the app's look-alike warning and the audit's twin groups see)
+    val pairs = racers.filter { it.fingerprint != null }.let { rs -> rs.flatMap { a -> rs.filter { it.id > a.id }.map { b -> Triple(a.id, b.id, Fingerprint.similarity(a.fingerprint!!, b.fingerprint!!)) } } }
+        .filter { it.third >= 0.75f }.sortedByDescending { it.third }
+    println("  look-alikes ≥ 0.75: " + (pairs.takeIf { it.isNotEmpty() }?.joinToString { "%s~%s %.2f".format(it.first, it.second, it.third) } ?: "none"))
+
     // ---- 2. race
     System.err.println("race pass")
     val ev = runClip(clip, video, AnalyzerConfig(line = clip.line, racers = racers, sizeHints = hints, minMatch = FrameAnalyzer.MIN_MATCH, zoomToLine = !whole))
@@ -171,12 +176,10 @@ fun main(args: Array<String>) {
         LapSolver.In(e.timestampNs, if (e.accepted) e.racerId?.takeIf { it in ids } else null, e.candidates.filter { it.first in ids }, e.confidence, e.split, e.rescue,
             gated = !e.accepted && !e.rescue, sizeRatio = e.sizeRatio, fitted = e.quad != null && e.racerId != null)
     }
-    val fps = racers.filter { it.fingerprint != null }
-    val twins = ArrayList<List<String>>(); val seen = HashSet<String>()
-    for (a in fps) { if (a.id in seen) continue
-        val g = fps.filter { b -> b.id !in seen && (b.id == a.id || Fingerprint.similarity(a.fingerprint!!, b.fingerprint!!) >= 0.88f) }.map { it.id }
-        if (g.size >= 2) { twins += g.take(3); seen += g.take(3) } }
-    val outs = LapSolver.solve(ins, ids, clip.start?.let { (it * 1e9).toLong() }, 2_500_000_000L, (clip.scoreUntil * 1e9).toLong(), twins.filter { g -> ins.count { it.named in g } <= 40 })
+    // look-alike groups exactly as RaceEngine.twinGroups (calibration similarity ≥ 0.88, up to Twins.MAX_GROUP)
+    val twins = app.anylap.engine.Twins.groupsOf(racers.filter { it.fingerprint != null }.map { it.id to it.fingerprint!! }, 0.88f)
+    println("look-alike groups for the audit: " + (twins.takeIf { it.isNotEmpty() }?.joinToString { it.joinToString("/") } ?: "none"))
+    val outs = LapSolver.solve(ins, ids, clip.start?.let { (it * 1e9).toLong() }, 2_500_000_000L, (clip.scoreUntil * 1e9).toLong(), twins)
     val counted = outs.filter { it.racer != null && it.ns / 1e9 >= clip.scoreFrom - 0.2 }.filter { it.ns / 1e9 >= clip.scoreFrom || truth.any { x -> abs(x.t - it.ns / 1e9) < 0.2 } }
     val ma = pair(truth, counted, { it.ns / 1e9 }, { null })
     var aRight = 0; var aWrong = 0; var aNot = 0

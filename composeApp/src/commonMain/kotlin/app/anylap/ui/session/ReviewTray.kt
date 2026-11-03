@@ -319,7 +319,7 @@ private fun explanation(s: Session, item: ReviewItem): String {
         ReviewKind.NOT_COUNTED -> tr("Not counted: it was named after a car that had just crossed, and no other car fitted – so nobody got the lap.")
         ReviewKind.AUDIT_LAP -> tr("Lap added: after the race, lap timing found this car's lap overdue and this crossing near the expected time looks like it – so it was counted.")
         ReviewKind.TWIN_UNSURE -> tr("Look-alikes: two cars look the same from above, so lap timing decided – and it was close. Tap the car if it is the other one.")
-        ReviewKind.TWIN_WHICH -> tr("Look-alikes at the same pace: the camera can't tell these two apart and neither can lap timing – their names may be the wrong way round for the whole race. One tap swaps them. A strip of bright tape on one car fixes this next time.")
+        ReviewKind.TWIN_WHICH -> tr("Look-alikes at the same pace: the camera can't tell these two apart and neither can lap timing – their names may be the wrong way round for the whole race. One tap swaps them. A small bright patch on one car (1 × 1 cm is enough) fixes this next time.")
     }
     val ghosts = if (item.frameMs > 0f) tr(" The faint outlines show each car between the two frames, at its own speed; the solid one is when it reached the line.") else ""
     val timing = when (s.config.finishEdge) {

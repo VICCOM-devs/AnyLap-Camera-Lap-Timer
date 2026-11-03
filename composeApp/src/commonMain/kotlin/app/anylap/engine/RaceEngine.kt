@@ -659,7 +659,7 @@ class RaceEngine(
                 locked = l.locked, fitted = e.quad != null && e.racerId != null,
             )
         }
-        val twins = twinGroups(racers).filter { g -> ins.count { x -> x.named in g || (x.cands.firstOrNull()?.let { it.first in g && it.second >= Twins.GROUP_MIN } == true) } <= TWIN_MAX_CROSSINGS }
+        val twins = twinGroups(racers)
         val outs = try {
             LapSolver.solve(ins, ids, if (isRace) startNs else null, minLapNs, if (endNs > 0) endNs else Platform.monotonicNanos(), twins)
         } catch (t: Throwable) { return }
@@ -743,20 +743,12 @@ class RaceEngine(
         const val START_LIGHTS = 5
         /** Cars whose calibration looks at least this alike are solved as look-alike twins over the whole race (bench: 0.88). */
         const val TWIN_SIM = 0.88f
-        /** The twin solver is exhaustive: beyond this many crossings of one group it would take too long on a phone. */
-        const val TWIN_MAX_CROSSINGS = 40
-
-        /** Look-alike groups (2–3 cars) by calibration similarity ≥ [TWIN_SIM]; a car is in at most one group. */
-        fun twinGroups(racers: List<Racer>, threshold: Float = TWIN_SIM): List<List<String>> {
-            val fp = racers.filter { it.fingerprint.isNotEmpty() }.associate { it.id to it.fingerprint.toFloatArray() }
-            val seen = HashSet<String>(); val out = ArrayList<List<String>>()
-            for (a in racers) {
-                if (a.id in seen || a.id !in fp) continue
-                val g = racers.filter { b -> b.id !in seen && b.id in fp && (b.id == a.id || Fingerprint.similarity(fp[a.id]!!, fp[b.id]!!) >= threshold) }.map { it.id }
-                if (g.size >= 2) { out += g.take(3); seen += g.take(3) }
-            }
-            return out
-        }
+        /**
+         * Look-alike groups (2–[Twins.MAX_GROUP] cars) by calibration similarity ≥ [TWIN_SIM]; a car is in at most one
+         * group. No crossing cap since Nov 2026 – the twin solver is a beam search now (whole races, groups of 4).
+         */
+        fun twinGroups(racers: List<Racer>, threshold: Float = TWIN_SIM): List<List<String>> =
+            Twins.groupsOf(racers.filter { it.fingerprint.isNotEmpty() }.map { it.id to it.fingerprint.toFloatArray() }, threshold)
 
         /** Every look-alike pair with its similarity (for the warning after calibration). */
         fun lookAlikes(racers: List<Racer>, threshold: Float = TWIN_SIM): List<Triple<Racer, Racer, Float>> {
