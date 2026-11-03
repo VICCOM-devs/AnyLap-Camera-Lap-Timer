@@ -38,14 +38,18 @@ def curve_svg(log):
     xmax = max(p[0] for p in pts)
     X = lambda s: P + (W - 2 * P) * s / xmax; Y = lambda v: H - P - (H - 2 * P) * v / 100
     acc = " ".join(f"{X(s):.1f},{Y(a):.1f}" for s, a, _ in pts)
+    trn = " ".join(f"{X(m['step']):.1f},{Y(m['train_cars_accuracy']):.1f}" for m in log if "step" in m and "train_cars_accuracy" in m)
     intr = " ".join(f"{X(s):.1f},{Y(i):.1f}" for s, _, i in pts if i is not None)
     grid = "".join(f"<line x1={P} x2={W - P} y1={Y(v)} y2={Y(v)} stroke='#333'/><text x=4 y={Y(v) + 4} fill='#888' font-size=11>{v}%</text>" for v in (0, 25, 50, 75, 100))
     return (f"<svg width={W} height={H} style='background:#141516;border-radius:10px'>{grid}"
             f"<polyline points='{acc}' fill=none stroke='#2bb673' stroke-width=2.5/>"
             f"<polyline points='{intr}' fill=none stroke='#e34' stroke-width=2 stroke-dasharray='5 4'/>"
+            + (f"<polyline points='{trn}' fill=none stroke='#5aa9e6' stroke-width=2/>" if trn else "") +
             f"<text x={W - P - 150} y=18 fill='#2bb673' font-size=12>naming accuracy</text>"
             f"<text x={W - P - 150} y=34 fill='#e34' font-size=12>intruders called a car</text>"
-            f"<text x={W - P} y={H - 8} fill='#888' font-size=11 text-anchor=end>training step {xmax}</text></svg>")
+            + (f"<text x={W - P - 150} y=50 fill='#5aa9e6' font-size=12>training cars (memorising check)</text>" if trn else "") +
+            f"<text x={W - P} y={H - 8} fill='#888' font-size=11 text-anchor=end>training step {xmax}</text></svg>"
+            + "<p class=note>Unseen (green) close to training cars (blue) = learning, more training helps; blue far above green = memorising, more and more varied cars help.</p>")
 
 @torch.no_grad()
 def examples(net, ds, dev, rng, grid=8, k_cal=6, n_query=4):
@@ -102,6 +106,8 @@ def main():
         return "".join(cells)
     intr_html = "".join(f"<div class='ex {'bad' if i['car'] else 'ok'}'><img src='{png64(i['img'])}'><div class=cap>{i['kind']}: {'called a car ✗' if i['car'] else 'not a car ✓'}</div></div>" for i in intr)
 
+    t_acc = next((x["train_cars_accuracy"] for x in reversed(log) if "train_cars_accuracy" in x), None)
+    train_tile = ("<div class=tiles><div class=tile><b>%.1f %%</b><span>training cars named right<br>(last check – compare with the unseen cars above)</span></div></div>" % t_acc) if t_acc is not None else ""
     body = f"""
 <h1>AnyLap car recognition · {html.escape(os.path.basename(os.path.normpath(a.run)))}</h1>
 <p class=note>Network: <b>{html.escape(ck.get('backbone', 'carnet'))}</b>{' (pretrained on real photos, then trained on our cars)' if ck.get('backbone', 'carnet') != 'carnet' else ' (our own, trained from scratch)'} · input {size} px</p>
@@ -115,6 +121,7 @@ Step {ck.get('step')} of training. Pictures are composed: random ground, light, 
  <div class=tile><b>{m['count_accuracy']:.1f} %</b><span>"one / two / no car" right</span></div>
  <div class=tile><b>{m['nose_err_px_median']:.1f} px</b><span>nose position error<br>(median, 64 px crop)</span></div>
 </div>
+{train_tile}
 <h2>Learning curve</h2>{curve_svg(log)}
 <div class=cols>
 <div>{bar_table("By camera angle (elevation)", m['by_elevation'], "90° = straight down, 20–30° = low tripod at the barrier")}</div>
