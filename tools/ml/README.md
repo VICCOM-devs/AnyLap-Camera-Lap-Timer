@@ -70,6 +70,25 @@ python tools\ml\export\export.py runs\v2\best.pt --out D:\anylap-ml\export\v2 --
 Upload `carnet.tflite` to a public place (GitHub release of the repo is fine), then one row in `anylap_models`
 (name `signature`, platform `android`, version, url, sha256, bytes, min_app_build) – the app downloads it on launch.
 
+On Windows `tools\ml\windows\export.bat <run name> <version>` does the export (into `C:\anylap-ml\export\v<version>`)
+and prints the SQL for the row; `carnet.json` holds the sha256 and the byte count. Example row:
+```sql
+insert into public.anylap_models (name, platform, version, url, sha256, bytes, min_app_build, notes) values
+  ('signature', 'android', 1,
+   'https://github.com/VICCOM-devs/AnyLap-Camera-Lap-Timer/releases/download/model-v1/carnet.tflite',
+   '<sha256 from carnet.json>', <bytes>, 1008, 'effnet_lite0 1 h, 79 % unseen (run 2)');
+```
+
+**What the app does with it (0.5.0, "shadow mode").** `learn/CarModel.kt` downloads the newest row for its platform and build,
+checks the sha256, loads it with LiteRT (`platform/SignatureRunner.android.kt`) and builds one prototype per racer from the
+calibration pass pictures (mean signature). Every crossing with a picture is scored (nearest prototype, cosine) and the verdict
+goes into the crossing log and the shared-crop meta (`"ml": {model, carP, ranked}`), so training can compare it with the truth.
+The engine takes the model's word only as a **tie-breaker**: an unknown crossing gets the model's clear favourite
+(score ≥ 0.60, margin ≥ 0.10, filed as a Check card), and a close call between two colours switches to the runner-up when the
+model says so by ≥ 0.15. The colour match + lap timing still decide everything else. Flipping the model to decider later is an
+engine constant, not a new pipeline. Crops are cut like `real_crops.py` (1.6 × the box, square) from the analysis snapshot
+(480 px wide, zoomed to the line – a Mini-Z ≈ 25–40 px); the full-resolution crop is still to do.
+
 ## Design notes
 - **Signature, not classifier.** The net maps a crop to 64 numbers; a race compares crossings with the calibrated cars' signatures.
   Nothing is trained per user, and a car it has never seen works the same way – that's what held-out evaluation measures.
