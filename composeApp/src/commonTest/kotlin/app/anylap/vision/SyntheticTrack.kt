@@ -31,6 +31,8 @@ object SyntheticTrack {
         val tag: List<Yuv> = emptyList(),
         val lengthCm: Float = 17f,
         val widthCm: Float = 8f,
+        /** Tag size (length × width, cm): 6 × 2 = a tape strip, 1 × 1 = a small patch on the roof. */
+        val tagCm: Pair<Float, Float> = 6f to 2f,
     )
 
     /** One pass across the line: x(t) = lineX + v · (t − tCross). */
@@ -126,8 +128,12 @@ object SyntheticTrack {
             fill(x0, y0, x1, y0 + wid * 0.14f, dark)
             fill(x0, y1 - wid * 0.14f, x1, y1, dark)
             fill(cx - len * 0.12f, y0 + wid * 0.2f, cx + len * 0.12f, y1 - wid * 0.2f, Yuv((car.body.y * 0.6f).toInt(), car.body.u, car.body.v))
-            if (car.tag.isNotEmpty()) { // 6 × 2 cm strip along the side
-                val tl = 6f * pxPerCm; val tw = 2f * pxPerCm
+            if (car.tag.isNotEmpty() && car.tagCm.first < 3f) { // small patch: on the roof, behind the windscreen
+                val tl = car.tagCm.first * pxPerCm; val tw = car.tagCm.second * pxPerCm
+                val px = cx - len * 0.25f
+                fill(px - tl / 2, cy - tw / 2, px + tl / 2, cy + tw / 2, car.tag[0])
+            } else if (car.tag.isNotEmpty()) { // 6 × 2 cm strip along the side
+                val tl = car.tagCm.first * pxPerCm; val tw = car.tagCm.second * pxPerCm
                 val ty0 = y0 + wid * 0.2f; val ty1 = ty0 + tw
                 if (car.tag.size == 1) fill(cx - tl / 2, ty0, cx + tl / 2, ty1, car.tag[0])
                 else { fill(cx - tl / 2, ty0, cx, ty1, car.tag[0]); fill(cx, ty0, cx + tl / 2, ty1, car.tag[1]) }

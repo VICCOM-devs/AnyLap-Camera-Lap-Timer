@@ -4,6 +4,7 @@ import app.anylap.engine.LapSolver.In
 import app.anylap.engine.LapSolver.Why
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class LapSolverTest {
     private val cars = listOf("A", "B", "C")
@@ -71,5 +72,42 @@ class LapSolverTest {
         assertEquals((1..8).map { s(18.0 * it) }, got["T1"])
         assertEquals((1..8).map { s(1.0 + 18.6 * it) }, got["T2"])
         assertEquals(8, got["C"]?.size)
+    }
+
+    /**
+     * Four identical cars over a whole race (50 laps, 200 crossings in the group): only lap rhythm can sort them.
+     * Before Nov 2026 the exhaustive solver was capped at 40 crossings and 3 cars, so a real race was never solved.
+     * Paces 9.40 / 9.55 / 9.70 / 9.85 s with ±1 % lap noise, 3 % of crossings missed, the camera's names random.
+     * Which chain is "Q1" can't be known (they look the same) – scored up to that permutation.
+     */
+    @Test fun fourIdenticalCarsOverAWholeRaceAreSortedByLapRhythm() {
+        val rnd = kotlin.random.Random(7)
+        val q = listOf("Q1", "Q2", "Q3", "Q4"); val pace = listOf(9.40, 9.55, 9.70, 9.85)
+        val truth = HashMap<Long, String>(); val xs = ArrayList<In>()
+        for ((i, c) in q.withIndex()) {
+            var t = 3.0 + 0.3 * i
+            repeat(50) {
+                t += pace[i] * (1 + (rnd.nextDouble() - 0.5) * 0.02)
+                if (rnd.nextDouble() < 0.03) return@repeat                       // the camera missed this one
+                val ns = s(t); truth[ns] = c
+                xs += In(ns, if (rnd.nextDouble() < 0.5) q[rnd.nextInt(4)] else null, q.map { it to 0.95f }, 0.0f)
+            }
+        }
+        for (k in 1..50) xs += In(s(5.0 + 9.6 * k), "C", listOf("C" to 0.95f, "Q1" to 0.5f), 0.4f)
+        xs.sortBy { it.ns }
+        val t0 = kotlin.time.TimeSource.Monotonic.markNow()
+        val o = LapSolver.solve(xs, q + "C", 0L, 2_500_000_000L, s(600.0), twins = listOf(q))
+        val took = t0.elapsedNow().inWholeMilliseconds
+        val got = LapSolver.counted(o)
+        // best mapping solver car → true car (by most shared crossings)
+        var right = 0
+        for (c in q) {
+            val mine = got[c] ?: emptyList()
+            right += mine.groupingBy { truth[it] }.eachCount().filterKeys { it != null }.maxOfOrNull { it.value } ?: 0
+        }
+        val total = truth.size
+        assertTrue(right >= 0.97 * total, "sorted $right of $total by lap rhythm")
+        assertEquals(50, got["C"]?.size)
+        assertTrue(took < 20_000, "solver took $took ms")
     }
 }

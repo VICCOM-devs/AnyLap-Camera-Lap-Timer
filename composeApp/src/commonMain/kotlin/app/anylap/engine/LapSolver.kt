@@ -70,7 +70,7 @@ object LapSolver {
         val order = xs.indices.sortedBy { xs[it].ns }
         val twinDec = HashMap<Int, Out>()
         val twinCars = HashSet<String>()
-        for (g in twins) if (g.size in 2..3 && g.all { it in racers }) { twinDec.putAll(Twins.solve(xs, g, startNs, minLapNs)); twinCars += g }
+        for (g in twins) if (g.size in 2..Twins.MAX_GROUP && g.all { it in racers }) { twinDec.putAll(Twins.solve(xs, g, startNs, minLapNs)); twinCars += g }
         val times = racers.associateWith { ArrayList<Pair<Long, Int>>() }.toMutableMap() // (ns, input index)
         val dec = HashMap<Int, Out>()
         val extra = ArrayList<Out>()
@@ -234,7 +234,32 @@ internal fun fx(v: Number, digits: Int): String {
  * little) is still counted for the likelier car but flagged for the Check tray.
  */
 object Twins {
+    /**
+     * Largest look-alike group solved together. 4 since Nov 2026 (real-video bench: four identical white
+     * touring cars); the search is a beam over each car's last crossing, so it stays fast for whole races.
+     */
+    const val MAX_GROUP = 4
+    /** Partial answers kept per crossing (beam) – whole race, and in the local "how sure" re-solve. */
+    const val BEAM = 1200
+    const val WINDOW_BEAM = 150
+    /** Crossings either side of one crossing re-solved to see how sure its name is (× group size). */
+    const val WINDOW_PER_CAR = 3
     const val GROUP_MIN = 0.7f
+
+    /**
+     * Look-alike groups from calibration fingerprints: cars whose fingerprints are ≥ [threshold] alike,
+     * most alike first, at most [MAX_GROUP] per group; a car is in at most one group.
+     */
+    fun groupsOf(fps: List<Pair<String, FloatArray>>, threshold: Float): List<List<String>> {
+        val seen = HashSet<String>(); val out = ArrayList<List<String>>()
+        for ((a, fa) in fps) {
+            if (a in seen) continue
+            val g = listOf(a) + fps.filter { (b, fb) -> b != a && b !in seen && app.anylap.vision.Fingerprint.similarity(fa, fb) >= threshold }
+                .sortedByDescending { (_, fb) -> app.anylap.vision.Fingerprint.similarity(fa, fb) }.map { it.first }
+            if (g.size >= 2) { val k = g.take(MAX_GROUP); out += k; seen += k }
+        }
+        return out
+    }
     const val DROP = 6.0
     const val MISS = 6.0
     const val LAP_CAP = 4.0
@@ -292,29 +317,44 @@ object Twins {
             return minOf(err * err, LAP_CAP) + MISS * (m - 1)
         }
 
+        // a partial answer = each car's last slot, 16 bits per car in one Long (0xFFFF = none yet)
+        fun lastOf(key: Long, c: Int): Int = ((key ushr (16 * c)) and 0xFFFF).toInt().let { if (it == 0xFFFF) -1 else it }
+        fun withLast(key: Long, c: Int, v: Int): Long = (key and (0xFFFFL shl (16 * c)).inv()) or ((v.toLong() and 0xFFFF) shl (16 * c))
+        val none = (0 until g.size).fold(0L) { k, c -> withLast(k, c, 0xFFFF) }
+        /** Keeps the [cap] cheapest partial answers. */
+        fun prune(m: HashMap<Long, Double>, cap: Int): HashMap<Long, Double> {
+            if (m.size <= cap) return m
+            val cut = m.values.toDoubleArray().also { it.sort() }[cap - 1]
+            val out = HashMap<Long, Double>(cap * 2); for ((k, v) in m) if (v <= cut && out.size < cap) out[k] = v
+            return out
+        }
+
         /** DP over (last slot of each car); [force] = slot → car index (-1 = nobody) to price alternatives. */
         fun run(force: Pair<Int, Int>?): Pair<Double, IntArray> {
-            val start = IntArray(g.size) { -1 }.toList()
-            var cur = hashMapOf(start to 0.0)
-            val back = ArrayList<HashMap<List<Int>, Pair<List<Int>, Int>>>()
+            var cur = hashMapOf(none to 0.0)
+            val back = ArrayList<HashMap<Long, Long>>()   // state → previous state; the car is the one whose last slot is s
             for (s in 0 until n) {
-                val nxt = HashMap<List<Int>, Double>(); val bk = HashMap<List<Int>, Pair<List<Int>, Int>>()
+                val nxt = HashMap<Long, Double>(); val bk = HashMap<Long, Long>()
                 for ((st, c0) in cur) {
                     for (a in -1 until g.size) {
                         if (force != null && force.first == s && force.second != a) continue
                         val c = if (a < 0) c0 + DROP else {
-                            val lc = lapCost(a, st[a], s); if (lc.isInfinite()) continue
+                            val lc = lapCost(a, lastOf(st, a), s); if (lc.isInfinite()) continue
                             c0 + lc + APPEAR_W * (best[s] - sc(slots[s], g[a]))
                         }
-                        val ns = if (a < 0) st else st.toMutableList().also { it[a] = s }
-                        if (c < (nxt[ns] ?: Double.POSITIVE_INFINITY)) { nxt[ns] = c; bk[ns] = st to a }
+                        val ns = if (a < 0) st else withLast(st, a, s)
+                        if (c < (nxt[ns] ?: Double.POSITIVE_INFINITY)) { nxt[ns] = c; bk[ns] = st }
                     }
                 }
-                cur = nxt; back += bk
+                cur = prune(nxt, BEAM); back += bk
             }
             val end = cur.minByOrNull { it.value } ?: return Double.POSITIVE_INFINITY to IntArray(n) { -1 }
             val asg = IntArray(n); var st = end.key
-            for (s in n - 1 downTo 0) { val (p, a) = back[s][st]!!; asg[s] = a; st = p }
+            for (s in n - 1 downTo 0) {
+                val p = back[s][st]!!
+                asg[s] = (0 until g.size).firstOrNull { c -> lastOf(st, c) == s && lastOf(p, c) != s } ?: -1
+                st = p
+            }
             return end.value to asg
         }
 
@@ -334,17 +374,45 @@ object Twins {
             val gain = (0 until n).sumOf { s -> when (asg[s]) { a -> sc(slots[s], g[a]) - sc(slots[s], g[b]); b -> sc(slots[s], g[b]) - sc(slots[s], g[a]); else -> 0f }.toDouble() } * APPEAR_W
             if (gain < WHICH_MIN) { which += a; which += b }
         }
+        /**
+         * Best cost of the crossings around slot [s] (± [WINDOW_PER_CAR] × group size) with slot s given to car
+         * [force] (null = free), everything outside the window as in the answer: each car's next crossing after the
+         * window is priced from wherever the window left it.
+         */
+        fun window(s: Int, force: Int?): Double {
+            val k = WINDOW_PER_CAR * g.size
+            val lo = maxOf(0, s - k); val hi = minOf(n - 1, s + k)
+            val init = (0 until g.size).fold(none) { key, c -> withLast(key, c, (lo - 1 downTo 0).firstOrNull { asg[it] == c } ?: 0xFFFF) }
+            var cur = hashMapOf(init to 0.0)
+            for (q in lo..hi) {
+                val nxt = HashMap<Long, Double>()
+                for ((st, c0) in cur) for (b in -1 until g.size) {
+                    if (q == s && force != null && b != force) continue
+                    val c = if (b < 0) c0 + DROP else {
+                        val lc = lapCost(b, lastOf(st, b), q); if (lc.isInfinite()) continue
+                        c0 + lc + APPEAR_W * (best[q] - sc(slots[q], g[b]))
+                    }
+                    val ns = if (b < 0) st else withLast(st, b, q)
+                    if (c < (nxt[ns] ?: Double.POSITIVE_INFINITY)) nxt[ns] = c
+                }
+                cur = prune(nxt, WINDOW_BEAM)
+            }
+            val nextOf = IntArray(g.size) { c -> (hi + 1 until n).firstOrNull { asg[it] == c } ?: -1 }
+            return cur.minOfOrNull { (st, c0) ->
+                c0 + g.indices.sumOf { c -> val nx = nextOf[c]; if (nx < 0) 0.0 else lapCost(c, lastOf(st, c), nx).let { if (it.isInfinite()) 1e6 else it } }
+            } ?: Double.POSITIVE_INFINITY
+        }
         val firstOf = g.indices.associateWith { c -> (0 until n).firstOrNull { asg[it] == c } }
         val out = HashMap<Int, LapSolver.Out>()
         for (s in 0 until n) {
             val i = slots[s]; val a = asg[s]
             // how much worse is the best answer with this crossing given to someone else?
-            val alt = (-1 until g.size).filter { it != a }.minOf { run(s to it).first }
+            val alt = (-1 until g.size).filter { it != a }.minOf { window(s, it) } - window(s, null)
             val who = if (a >= 0) g[a] else null
             val others = g.filter { it != who }.joinToString(" or ")
             out[i] = if (who == null) LapSolver.Out(i, t[s], null, LapSolver.Why.NOT_COUNTED, "looks like ${g.joinToString(" / ")}, fits neither car's lap rhythm")
             else if (a in which && firstOf[a] == s) LapSolver.Out(i, t[s], who, LapSolver.Why.TWIN_WHICH, "$who or $others? They look the same and drive the same pace – which is which can't be told; one answer sets the whole race")
-            else if (alt - cost < UNSURE) LapSolver.Out(i, t[s], who, LapSolver.Why.TWIN_UNSURE, "$who or $others? They look the same from above; lap timing slightly favours $who")
+            else if (alt < UNSURE) LapSolver.Out(i, t[s], who, LapSolver.Why.TWIN_UNSURE, "$who or $others? They look the same from above; lap timing slightly favours $who")
             else LapSolver.Out(i, t[s], who, LapSolver.Why.TWIN_TIMING, "$who by lap timing (looks the same as $others from above)")
         }
         for (i in dropped) out[i] = LapSolver.Out(i, xs[i].ns, null, LapSolver.Why.NOT_COUNTED, "a second piece of a car counted at the same moment")
